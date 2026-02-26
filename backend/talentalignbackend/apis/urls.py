@@ -1,0 +1,196 @@
+# from django.urls import path
+# from .views import (
+#     LoginView,
+#     AddUserView,
+#     UploadAddExcelView,
+#     UserListView,
+#     EditUserView,
+#     DeleteUserView,
+#     ToggleUserStatusView,
+#     ResetPasswordView,
+#     UploadBulkDeleteUsersView,
+#     UploadBulkActivateUsersView,
+#     UploadBulkDeactivateUsersView,
+#     JobListView,
+#     JobDetailView,
+#     ToggleJobStatusView,
+#     UploadExcelView,
+#     UploadWordView,
+#     DownloadExcelTemplateView,
+#     DownloadWordTemplateView,
+#     ProfileListCreateAPIView,
+#     ProfileDetailAPIView,
+#     BulkUploadProfilesAPIView,
+#     recommendation_list_create, 
+#     recommendation_detail,
+#     RunMatchingEngineView,
+#     JobMatchListView,
+#     TraineeMatchListView,
+#     UserInfoDetailAPIView,
+#     UserInfoMappingUpdateAPIView,
+#   )
+
+# urlpatterns = [
+
+#     # 🔐 Auth
+#     path('login/', LoginView.as_view(), name='login'),
+
+#     # 👤 User Management
+#     path('users/add/', AddUserView.as_view(), name='add-user'),
+#     path('users/upload-excel/', UploadAddExcelView.as_view(), name='upload-users-excel'),
+#     path('users/', UserListView.as_view(), name='list-users'),
+#      path("users/bulk-delete-upload/", UploadBulkDeleteUsersView.as_view()),
+#     path("users/bulk-activate-upload/", UploadBulkActivateUsersView.as_view()),
+#     path("users/bulk-deactivate-upload/", UploadBulkDeactivateUsersView.as_view()),
+#     # ✏️ Edit / Delete
+#     path('users/<int:user_id>/edit/', EditUserView.as_view(), name='edit-user'),
+#     path('users/<int:user_id>/delete/', DeleteUserView.as_view(), name='delete-user'),
+
+#     # 🔁 Activate / Deactivate
+#     path('users/<int:user_id>/toggle-status/', ToggleUserStatusView.as_view(), name='toggle-user-status'),
+
+#     # 🔐 Password Reset
+#     path('users/<int:user_id>/reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+#     path('jobs/', JobListView.as_view(), name='job-list'),
+#     path('jobs/<int:pk>/', JobDetailView.as_view(), name='job-detail'),
+#     path('jobs/<int:pk>/toggle-status/', ToggleJobStatusView.as_view(), name='toggle-job-status'),
+#     path('jobs/upload-excel/', UploadExcelView.as_view(), name='upload-excel'),
+#     path('jobs/upload-word/', UploadWordView.as_view(), name='upload-word'),
+#     path('jobs/download-excel-template/', DownloadExcelTemplateView.as_view(), name='download-excel-template'),
+#     path('jobs/download-word-template/', DownloadWordTemplateView.as_view(), name='download-word-template'),
+#     path('api/profiles/', ProfileListCreateAPIView.as_view(), name='profiles-list-create'),
+#     # Change the URL pattern parameter from pk to userId
+#     path('api/profiles/<str:userId>/', ProfileDetailAPIView.as_view(), name='profiles-detail'),
+#     path('profiles/bulk-upload/', BulkUploadProfilesAPIView.as_view(), name='profiles-bulk-upload'),
+#     path('jobs/recommendations/', recommendation_list_create, name='recommendation-list-create'),
+#     path('jobs/recommendations/<int:pk>/', recommendation_detail, name='recommendation-detail'),
+#     #llm
+#     path('run-matching/',RunMatchingEngineView.as_view(),name='run_matching'),
+#     path('matches/<int:job_id>/', JobMatchListView.as_view(),name='job_matches'),
+#      #retrieve trainee with matched jobs
+#     path('trainee-matches/<int:trainee_id>/', TraineeMatchListView.as_view(), name='trainee_matches'),
+#     path('api/userinfo/<str:userId>/', UserInfoDetailAPIView.as_view(), name='userinfo-detail'),
+#     path('api/userinfo/<str:userId>/update-mapping/', UserInfoMappingUpdateAPIView.as_view(), name='userinfo-update-mapping'),
+# ]
+
+
+# urls.py – full version with ViewSet integration
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+from .views import (
+    # 🔐 Auth
+    LoginView,
+
+    # 👤 User Management
+    AddUserView,
+    UploadAddExcelView,
+    UserListView,
+    UploadBulkDeleteUsersView,
+    UploadBulkActivateUsersView,
+    UploadBulkDeactivateUsersView,
+    EditUserView,
+    DeleteUserView,
+    ToggleUserStatusView,
+    ResetPasswordView,
+
+    # 💼 Job Management (existing class-based views)
+    JobListView,
+    JobDetailView,
+    ToggleJobStatusView,
+    UploadExcelView,
+    UploadWordView,
+    DownloadExcelTemplateView,
+    DownloadWordTemplateView,
+
+    # 🧑‍🎓 Profiles & Trainees
+    ProfileListCreateAPIView,
+    ProfileDetailAPIView,
+    BulkUploadProfilesAPIView,
+
+    # 🔗 Recommendations
+    recommendation_list_create,
+    recommendation_detail,
+
+    # 🤖 Matching Engine
+    RunMatchingEngineView,
+    JobMatchListView,
+    TraineeMatchListView,
+
+    # ℹ️ UserInfo & Mapping
+    UserInfoDetailAPIView,
+    UserInfoMappingUpdateAPIView,
+
+    # ========== NEW: ViewSets ==========
+    JobViewSet,
+    InterviewLockViewSet,
+)
+
+# Router for InterviewLockViewSet – automatically generates:
+# /interview-locks/ (GET, POST)
+# /interview-locks/{pk}/ (GET, PUT, PATCH, DELETE)
+# /interview-locks/bulk_create/ (POST)
+# /interview-locks/dashboard/ (GET)
+# /interview-locks/report/ (GET)
+router = DefaultRouter()
+router.register(r'interview-locks', InterviewLockViewSet, basename='interview-lock')
+
+urlpatterns = [
+    # 🔐 Auth
+    path('login/', LoginView.as_view(), name='login'),
+
+    # 👤 User Management
+    path('users/add/', AddUserView.as_view(), name='add-user'),
+    path('users/upload-excel/', UploadAddExcelView.as_view(), name='upload-users-excel'),
+    path('users/', UserListView.as_view(), name='list-users'),
+    path('users/bulk-delete-upload/', UploadBulkDeleteUsersView.as_view(), name='bulk-delete-users'),
+    path('users/bulk-activate-upload/', UploadBulkActivateUsersView.as_view(), name='bulk-activate-users'),
+    path('users/bulk-deactivate-upload/', UploadBulkDeactivateUsersView.as_view(), name='bulk-deactivate-users'),
+
+    # ✏️ Edit / Delete
+    path('users/<int:user_id>/edit/', EditUserView.as_view(), name='edit-user'),
+    path('users/<int:user_id>/delete/', DeleteUserView.as_view(), name='delete-user'),
+
+    # 🔁 Activate / Deactivate
+    path('users/<int:user_id>/toggle-status/', ToggleUserStatusView.as_view(), name='toggle-user-status'),
+
+    # 🔐 Password Reset
+    path('users/<int:user_id>/reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+
+    # 💼 Jobs (existing CRUD)
+    path('jobs/', JobListView.as_view(), name='job-list'),
+    path('jobs/<int:pk>/', JobDetailView.as_view(), name='job-detail'),
+    path('jobs/<int:pk>/toggle-status/', ToggleJobStatusView.as_view(), name='toggle-job-status'),
+
+    # 📤 Job uploads & templates
+    path('jobs/upload-excel/', UploadExcelView.as_view(), name='upload-excel'),
+    path('jobs/upload-word/', UploadWordView.as_view(), name='upload-word'),
+    path('jobs/download-excel-template/', DownloadExcelTemplateView.as_view(), name='download-excel-template'),
+    path('jobs/download-word-template/', DownloadWordTemplateView.as_view(), name='download-word-template'),
+
+    # ===== NEW: Job visibility endpoint (using JobViewSet action) =====
+    path('jobs/<int:pk>/set-visibility/', JobViewSet.as_view({'patch': 'set_visibility'}), name='set-job-visibility'),
+
+    # 🧑‍🎓 Profiles
+    path('api/profiles/', ProfileListCreateAPIView.as_view(), name='profiles-list-create'),
+    path('api/profiles/<str:userId>/', ProfileDetailAPIView.as_view(), name='profiles-detail'),
+    path('profiles/bulk-upload/', BulkUploadProfilesAPIView.as_view(), name='profiles-bulk-upload'),
+
+    # 🔗 Recommendations
+    path('jobs/recommendations/', recommendation_list_create, name='recommendation-list-create'),
+    path('jobs/recommendations/<int:pk>/', recommendation_detail, name='recommendation-detail'),
+
+    # 🤖 Matching Engine
+    path('run-matching/', RunMatchingEngineView.as_view(), name='run_matching'),
+    path('matches/<int:job_id>/', JobMatchListView.as_view(), name='job_matches'),
+    path('trainee-matches/<int:trainee_id>/', TraineeMatchListView.as_view(), name='trainee_matches'),
+
+    # ℹ️ UserInfo & Mapping
+    path('api/userinfo/<str:userId>/', UserInfoDetailAPIView.as_view(), name='userinfo-detail'),
+    path('api/userinfo/<str:userId>/update-mapping/', UserInfoMappingUpdateAPIView.as_view(), name='userinfo-update-mapping'),
+
+    # ========== NEW: Interview Lock endpoints (via router) ==========
+    path('', include(router.urls)),
+]
+
