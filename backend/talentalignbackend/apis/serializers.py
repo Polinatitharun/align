@@ -410,27 +410,66 @@ class UserInfoMappingSerializer(serializers.ModelSerializer):
 
 
 # serializers.py
+# from rest_framework import serializers
+# from .models import Job, InterviewLock
+
+# class JobSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Job
+#         fields = '__all__'
+
+# class InterviewLockSerializer(serializers.ModelSerializer):
+#     trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
+#     job_title = serializers.CharField(source='job.title', read_only=True)
+#     locked_by_name = serializers.CharField(source='locked_by.username', read_only=True)
+
+#     class Meta:
+#         model = InterviewLock
+#         fields = '__all__'
+
+# class InterviewLockCreateSerializer(serializers.Serializer):
+#     """For creating multiple locks at once"""
+#     trainee_ids = serializers.ListField(child=serializers.IntegerField())
+#     job_id = serializers.IntegerField()
+#     interview_datetime = serializers.DateTimeField()
+#     comments = serializers.CharField(required=False, allow_blank=True)
+
+
+
+# serializers.py
 from rest_framework import serializers
-from .models import Job, InterviewLock
+from .models import Job, InterviewLock, InterviewFeedback
 
 class JobSerializer(serializers.ModelSerializer):
     class Meta:
         model = Job
         fields = '__all__'
 
+
+class InterviewFeedbackSerializer(serializers.ModelSerializer):
+    interviewer_name = serializers.CharField(source='interviewer.username', read_only=True)
+
+    class Meta:
+        model = InterviewFeedback
+        fields = '__all__'
+        read_only_fields = ('lock', 'interviewer') 
+
+
 class InterviewLockSerializer(serializers.ModelSerializer):
     trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
     job_title = serializers.CharField(source='job.title', read_only=True)
     locked_by_name = serializers.CharField(source='locked_by.username', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True)
+    feedback = InterviewFeedbackSerializer(read_only=True)
 
     class Meta:
         model = InterviewLock
         fields = '__all__'
 
+
 class InterviewLockCreateSerializer(serializers.Serializer):
-    """For creating multiple locks at once"""
     trainee_ids = serializers.ListField(child=serializers.IntegerField())
     job_id = serializers.IntegerField()
     interview_datetime = serializers.DateTimeField()
     comments = serializers.CharField(required=False, allow_blank=True)
-
+    assigned_to = serializers.IntegerField(required=False, allow_null=True)

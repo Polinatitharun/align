@@ -22,9 +22,11 @@ const ProtectedRoute = ({ children, allowedRoles, userRole }) => {
       case 'ta':
         return <Navigate to="/teamlead-dashboard" replace />;
       case 'trainee':
-        return <Navigate to="/trainee-dashboard" replace />;
+        return <Navigate to="/associate-dashboard" replace />;
       case 'admin':
         return <Navigate to="/admin-dashboard" replace />;
+      case 'interviewer':
+        return <Navigate to="/interviewer-dashboard" replace />;
       default:
         return <Navigate to="/login" replace />;
     }

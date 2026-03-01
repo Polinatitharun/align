@@ -9,6 +9,7 @@ class User(AbstractUser):
         ('manager', 'Manager'),
         ('hr', 'HR'),
         ('admin', 'Admin'),
+        ('interviewer','Interviewer')
     )
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
@@ -75,7 +76,7 @@ class UserInfo(models.Model):
     isMapped = models.BooleanField(default = False)
     projectId = models.CharField(max_length=255, null=True, blank=True,default=None)
     projectName = models.CharField(max_length=255, null=True, blank=True,default=None)
-
+    email = models.EmailField(null=True, blank=True)
     # link back to parent via OneToOne (enforced in ProfileRecord)
     # Created implicitly via OneToOne in ProfileRecord
 
@@ -187,7 +188,7 @@ class Match(models.Model):
     def __str__(self):
         return f"{self.trainee_name} -> {self.job_title} ({self.bucket})"
 
-# models.py
+        # models.py
 from django.db import models
 from django.contrib.auth import get_user_model
 
@@ -202,8 +203,15 @@ class InterviewLock(models.Model):
     ]
 
     trainee = models.ForeignKey('ProfileRecord', on_delete=models.CASCADE, related_name='interview_locks')
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name='interview_locks')
+    job = models.ForeignKey('Job', on_delete=models.CASCADE, related_name='interview_locks')
     locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='locked_interviews')
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_interviews'
+    )
     interview_datetime = models.DateTimeField()
     comments = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='locked')
@@ -211,5 +219,40 @@ class InterviewLock(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('trainee', 'job')  # prevent duplicate locks for same (trainee, job)
+        unique_together = ('trainee', 'job')
         ordering = ['-created_at']
+
+
+class InterviewFeedback(models.Model):
+    lock = models.OneToOneField(
+        InterviewLock,
+        on_delete=models.CASCADE,
+        related_name='feedback'
+    )
+    interviewer = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='given_feedbacks'
+    )
+    feedback_date = models.DateTimeField(auto_now_add=True)
+
+    questions_asked = models.PositiveIntegerField(default=0)
+    questions_answered = models.PositiveIntegerField(default=0)
+    attitude_rating = models.PositiveSmallIntegerField(
+        choices=[(i, i) for i in range(1, 6)],
+        help_text="Rating from 1 (poor) to 5 (excellent)"
+    )
+    behaviour_notes = models.TextField(blank=True)
+    technical_skills_assessed = models.JSONField(default=list)
+    strengths = models.TextField(blank=True)
+    weaknesses = models.TextField(blank=True)
+    upskill_needed = models.TextField(blank=True)
+    overall_comments = models.TextField(blank=True)
+    recommendation = models.CharField(
+        max_length=10,
+        choices=[('selected', 'Selected'), ('rejected', 'Rejected')]
+    )
+
+    def __str__(self):
+        return f"Feedback for {self.lock.trainee.userInfo.name} - {self.recommendation}"
