@@ -90,7 +90,7 @@ AUTH_USER_MODEL = 'apis.User'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'talentaligndb',
+        'NAME': 'newversiontalentalign',
         'USER': 'postgres',
         'PASSWORD': 'root',
         'HOST': 'localhost',

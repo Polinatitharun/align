@@ -1,5 +1,4248 @@
 
-// // // DashboardHR.js – Full version with Job Visibility & Interview Locking
+
+// // // // DashboardHR.js – Fully corrected version
+// // // import React, { useState, useEffect } from 'react';
+// // // import { Toaster, toast } from 'sonner';
+// // // import {
+// // //   LayoutDashboard,
+// // //   Briefcase,
+// // //   Users,
+// // //   BarChart2,
+// // //   FileText,
+// // //   ExternalLink,
+// // //   Lightbulb,
+// // //   BarChart3,
+// // //   LogOut,
+// // //   TrendingUp,
+// // //   CheckCircle,
+// // //   Clock,
+// // //   MapPin,
+// // //   DollarSign,
+// // //   Calendar,
+// // //   Edit,
+// // //   Trash2,
+// // //   Eye,
+// // //   Search,
+// // //   Filter,
+// // //   X,
+// // //   ChevronRight,
+// // //   User,
+// // //   Mail,
+// // //   Star,
+// // //   Award,
+// // //   Target,
+// // //   PieChart,
+// // //   Download,
+// // //   Bell,
+// // //   Settings,
+// // //   Plus,
+// // //   ArrowLeft,
+// // //   Check,
+// // //   AlertCircle,
+// // //   Link,
+// // //   GraduationCap,
+// // //   BriefcaseBusiness,
+// // //   Building,
+// // //   DollarSign as Dollar,
+// // //   CalendarDays,
+// // //   BookOpen,
+// // //   Brain,
+// // //   Sparkles,
+// // //   Zap,
+// // //   ThumbsUp,
+// // //   TrendingDown,
+// // //   FileSpreadsheet,
+// // //   File,
+// // //   Upload,
+// // //   Users2,
+// // //   Lock,
+// // //   XCircle,
+// // // } from 'lucide-react';
+// // // import Sidebar from './Sidebar';
+// // // import api from '../api/axios';
+// // // import './styles/HrDashboard.css';
+
+// // // function DashboardHR({ userData, onLogout }) {
+// // //   // ==================== Core State ====================
+// // //   const [activeTab, setActiveTab] = useState('dashboard');
+// // //   const [selectedJob, setSelectedJob] = useState(null);
+// // //   const [selectedTrainee, setSelectedTrainee] = useState(null);
+// // //   const [isEditMode, setIsEditMode] = useState(false);
+// // //   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
+// // //   const [showWordTemplate, setShowWordTemplate] = useState(false);
+// // //   const [techSkills, setTechSkills] = useState([]);
+// // //   const [softSkills, setSoftSkills] = useState([]);
+// // //   const [loading, setLoading] = useState(false);
+// // //   const [error, setError] = useState(null);
+
+// // //   // Search & filter
+// // //   const [searchQuery, setSearchQuery] = useState('');
+// // //   const [locationFilter, setLocationFilter] = useState('');
+
+// // //   // Data
+// // //   const [jobs, setJobs] = useState([]);
+// // //   const [trainees, setTrainees] = useState([]);
+// // //   const [allTrainees, setAllTrainees] = useState([]);
+// // //   const [skillTrends, setSkillTrends] = useState({ tech: [], soft: [] });
+
+// // //   // Match data
+// // //   const [jobMatches, setJobMatches] = useState(null);
+// // //   const [jobMatchesLoading, setJobMatchesLoading] = useState(false);
+// // //   const [traineeMatches, setTraineeMatches] = useState(null);
+// // //   const [traineeMatchesLoading, setTraineeMatchesLoading] = useState(false);
+
+// // //   // Open Pool
+// // //   const [traineesWithNoMatches, setTraineesWithNoMatches] = useState([]);
+// // //   const [checkingMatches, setCheckingMatches] = useState(false);
+
+// // //   // Interview Locking
+// // //   const [selectedTraineeIds, setSelectedTraineeIds] = useState([]);
+// // //   const [showLockModal, setShowLockModal] = useState(false);
+// // //   const [lockInterviewDatetime, setLockInterviewDatetime] = useState('');
+// // //   const [lockComments, setLockComments] = useState('');
+// // //   const [assignedToId, setAssignedToId] = useState('');
+// // //   const [interviewers, setInterviewers] = useState([]);
+
+// // //   const [interviewLocks, setInterviewLocks] = useState([]);
+// // //   const [lockStats, setLockStats] = useState(null);
+// // //   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
+
+// // //   // Selected & Rejected lists
+// // //   const [selectedLocks, setSelectedLocks] = useState([]);
+// // //   const [rejectedLocks, setRejectedLocks] = useState([]);
+// // //   const [viewingFeedback, setViewingFeedback] = useState(null); // for feedback modal
+
+// // //   // New Job State
+// // //   const [newJob, setNewJob] = useState({
+// // //     title: '',
+// // //     department: '',
+// // //     location: [''],
+// // //     openings: 1,
+// // //     requirements: '',
+// // //     techSkills: [],
+// // //     softSkills: [],
+// // //     description: '',
+// // //     salary: '',
+// // //     expiryDate: '',
+// // //     is_public: true,
+// // //   });
+
+// // //   // ==================== Helper Functions ====================
+// // //   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
+
+// // //   // ==================== API Calls ====================
+// // //   const jobAPI = {
+// // //     getAllJobs: async () => (await api.get('/jobs/')).data,
+// // //     getJobById: async (id) => (await api.get(`/jobs/${id}/`)).data,
+// // //     createJob: async (jobData) => (await api.post('/jobs/', jobData)).data,
+// // //     updateJob: async (id, jobData) => (await api.put(`/jobs/${id}/`, jobData)).data,
+// // //     deleteJob: async (id) => (await api.delete(`/jobs/${id}/`)).data,
+// // //     toggleJobStatus: async (id) => (await api.patch(`/jobs/${id}/toggle-status/`)).data,
+// // //     uploadExcel: async (file) => {
+// // //       const formData = new FormData();
+// // //       formData.append('excel_file', file);
+// // //       return (await api.post('/jobs/upload-excel/', formData)).data;
+// // //     },
+// // //     uploadWord: async (file) => {
+// // //       const formData = new FormData();
+// // //       formData.append('wordFile', file);
+// // //       return (await api.post('/jobs/upload-word/', formData)).data;
+// // //     },
+// // //     downloadExcelTemplate: async () => (await api.get('/jobs/download-excel-template/', { responseType: 'blob' })).data,
+// // //     downloadWordTemplate: async () => (await api.get('/jobs/download-word-template/', { responseType: 'blob' })).data,
+// // //   };
+
+// // //   const mappingAPI = {
+// // //     updateMapping: async (userId, mappingData) =>
+// // //       (await api.patch(`/api/userinfo/${userId}/update-mapping/`, mappingData)).data,
+// // //     getMapping: async (userId) => (await api.get(`/api/userinfo/${userId}/`)).data,
+// // //   };
+
+// // //   // Fetch trainees
+// // //   const fetchTrainees = async () => {
+// // //     setLoading(true);
+// // //     setError(null);
+// // //     try {
+// // //       const response = await api.get('/api/profiles/');
+// // //       const transformed = response.data.map((trainee) => {
+// // //         const userInfo = trainee.userInfo || {};
+// // //         const skills = [
+// // //           ...(trainee.strengths?.map((s) => s.courseName) || []),
+// // //           ...(trainee.weaknesses?.map((w) => w.courseName) || []),
+// // //         ];
+// // //         const avgScore = userInfo.averageScore || 0;
+// // //         return {
+// // //           id: trainee.id,
+// // //           userId: userInfo.userId || trainee.id,
+// // //           name: userInfo.name || 'Unknown',
+// // //           email: `${userInfo.employeeId || 'EMP' + trainee.id}@example.com`,
+// // //           skills,
+// // //           score: Math.round(avgScore),
+// // //           location: (userInfo.location || 'unknown').toLowerCase(),
+// // //           matchedJobs: [],
+// // //           certifications: trainee.certificates ? [trainee.certificates] : [],
+// // //           preferredLocation: userInfo.location || 'Unknown',
+// // //           isMapped: userInfo.isMapped || false,
+// // //           projectId: userInfo.projectId || '',
+// // //           projectName: userInfo.projectName || '',
+// // //           traineeData: trainee,
+// // //         };
+// // //       });
+// // //       setTrainees(transformed);
+// // //       setAllTrainees(transformed);
+// // //       setTraineesWithNoMatches([]);
+// // //     } catch (err) {
+// // //       setError('Failed to fetch trainees.');
+// // //       setTrainees([]);
+// // //       setAllTrainees([]);
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch jobs
+// // //   const fetchJobs = async () => {
+// // //     setLoading(true);
+// // //     setError(null);
+// // //     try {
+// // //       const response = await jobAPI.getAllJobs();
+// // //       setJobs(response);
+// // //     } catch (err) {
+// // //       setError('Failed to fetch jobs.');
+// // //       setJobs([]);
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Check Open Pool
+// // //   const checkTraineesForOpenPool = async () => {
+// // //     if (allTrainees.length === 0) return;
+// // //     setCheckingMatches(true);
+// // //     try {
+// // //       const noMatchTrainees = [];
+// // //       const unmapped = allTrainees.filter((t) => !t.isMapped);
+// // //       for (const trainee of unmapped) {
+// // //         try {
+// // //           const response = await api.get(`/trainee-matches/${trainee.id}/`);
+// // //           const data = response.data;
+// // //           const hasNoMatch =
+// // //             (data.total_matches >= 0 &&
+// // //               data.no_match?.length > 0 &&
+// // //               !data.perfect_match?.length &&
+// // //               !data.skills_only?.length &&
+// // //               !data.location_only?.length &&
+// // //               !data.nearby?.length) ||
+// // //             data.total_matches === 0;
+// // //           if (hasNoMatch) {
+// // //             noMatchTrainees.push({
+// // //               ...trainee,
+// // //               trainee_id: trainee.id,
+// // //               trainee_name: trainee.name,
+// // //               trainee_location: trainee.location,
+// // //               total_matches: data.total_matches,
+// // //               no_match_count: data.no_match?.length || 0,
+// // //             });
+// // //           }
+// // //         } catch (error) {
+// // //           noMatchTrainees.push({ ...trainee, total_matches: 0, no_match_count: 0 });
+// // //         }
+// // //       }
+// // //       setTraineesWithNoMatches(noMatchTrainees);
+// // //     } catch (err) {
+// // //       toast.error('Failed to check Open Pool');
+// // //     } finally {
+// // //       setCheckingMatches(false);
+// // //     }
+// // //   };
+
+// // //   // Update job vacancies after mapping
+// // //   const updateJobVacancies = async (job) => {
+// // //     try {
+// // //       const newFilled = (job.filled || 0) + 1;
+// // //       const newOpenings = Math.max(0, (job.openings || 0) - 1);
+// // //       const updated = { ...job, filled: newFilled, openings: newOpenings };
+// // //       await jobAPI.updateJob(job.id, updated);
+// // //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //       if (selectedJob?.id === job.id) setSelectedJob(updated);
+// // //       if (newOpenings === 0) await checkAndAutoDeactivateJob(updated);
+// // //       return updated;
+// // //     } catch (error) {
+// // //       toast.error('Failed to update job vacancies');
+// // //       throw error;
+// // //     }
+// // //   };
+
+// // //   const checkAndAutoDeactivateJob = async (job) => {
+// // //     if (job.openings <= 0) {
+// // //       const updated = { ...job, status: 'inactive' };
+// // //       await jobAPI.updateJob(job.id, updated);
+// // //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //       toast.success(`Job "${job.title}" auto‑deactivated.`);
+// // //     }
+// // //   };
+
+// // //   // Map trainee to project
+// // //   const handleMapToProject = async (trainee, job) => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const mappingData = {
+// // //         isMapped: true,
+// // //         projectId: job.id.toString(),
+// // //         projectName: job.title,
+// // //       };
+// // //       let userId = null;
+// // //       if (trainee.traineeData) {
+// // //         userId = trainee.traineeData.userInfo.userId;
+// // //       } else {
+// // //         const found = allTrainees.find(
+// // //           (t) =>
+// // //             t.traineeData.userInfo.name === trainee.trainee_name &&
+// // //             t.traineeData.userInfo.location === trainee.trainee_location
+// // //         );
+// // //         if (found) userId = found.traineeData.userInfo.userId;
+// // //       }
+// // //       if (!userId) {
+// // //         toast.error('Could not find user ID');
+// // //         return;
+// // //       }
+// // //       await mappingAPI.updateMapping(userId, mappingData);
+// // //       await updateJobVacancies(job);
+
+// // //       // Remove from open pool
+// // //       setTraineesWithNoMatches((prev) =>
+// // //         prev.filter((t) => t.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
+// // //       );
+
+// // //       // Update local trainee lists
+// // //       const updateTrainee = (t) => {
+// // //         if (trainee.traineeData) {
+// // //           return t.traineeData.userInfo.name === trainee.traineeData.userInfo.name
+// // //             ? { ...t, ...mappingData }
+// // //             : t;
+// // //         } else {
+// // //           return t.traineeData.userInfo.name === trainee.trainee_name ? { ...t, ...mappingData } : t;
+// // //         }
+// // //       };
+// // //       setAllTrainees((prev) => prev.map(updateTrainee));
+// // //       setTrainees((prev) => prev.filter(updateTrainee));
+
+// // //       // Update jobMatches if open
+// // //       if (jobMatches) {
+// // //         const bucket = Object.keys(jobMatches).find((key) =>
+// // //           jobMatches[key]?.some((m) => m.trainee_name === (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
+// // //         );
+// // //         if (bucket) {
+// // //           setJobMatches((prev) => ({
+// // //             ...prev,
+// // //             [bucket]: prev[bucket].filter(
+// // //               (m) => m.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
+// // //             ),
+// // //             total_matches: prev.total_matches - 1,
+// // //           }));
+// // //         }
+// // //       }
+// // //       toast.success(`Mapped ${trainee.traineeData?.userInfo?.name || trainee.trainee_name} to ${job.title}`);
+// // //     } catch (err) {
+// // //       toast.error('Failed to map trainee');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleUnmapFromProject = async (trainee) => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const unmappingData = { isMapped: false, projectId: '', projectName: '' };
+// // //       await mappingAPI.updateMapping(trainee.userId, unmappingData);
+// // //       const jobId = trainee.projectId;
+// // //       if (jobId) {
+// // //         const job = jobs.find((j) => j.id.toString() === jobId);
+// // //         if (job) {
+// // //           const updated = {
+// // //             ...job,
+// // //             filled: Math.max(0, (job.filled || 0) - 1),
+// // //             openings: (job.openings || 0) + 1,
+// // //           };
+// // //           if (job.status === 'inactive' && updated.openings > 0) updated.status = 'active';
+// // //           await jobAPI.updateJob(job.id, updated);
+// // //           setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //           if (selectedJob?.id === job.id) setSelectedJob(updated);
+// // //         }
+// // //       }
+// // //       setAllTrainees((prev) => prev.map((t) => (t.id === trainee.id ? { ...t, ...unmappingData } : t)));
+// // //       if (['mapped', 'unmapped', 'trainees', 'openPool'].includes(activeTab)) fetchTrainees();
+// // //       if (selectedTrainee?.id === trainee.id) setSelectedTrainee({ ...selectedTrainee, ...unmappingData });
+// // //       toast.success(`Unmapped ${trainee.name}`);
+// // //     } catch (err) {
+// // //       toast.error('Failed to unmap trainee');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Get mapped trainee names (project mapping)
+// // //   const getMappedTraineeNames = () => {
+// // //     return allTrainees.filter((t) => t.isMapped).map((t) => t.traineeData?.userInfo?.name || t.name);
+// // //   };
+
+// // //   // Fetch job matches (backend now filters out locked/selected)
+// // //   const fetchJobMatches = async (jobId) => {
+// // //     setJobMatchesLoading(true);
+// // //     try {
+// // //       const response = await api.get(`/matches/${jobId}/`);
+// // //       setJobMatches(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch job matches');
+// // //     } finally {
+// // //       setJobMatchesLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch trainee matches
+// // //   const fetchTraineeMatches = async (traineeId) => {
+// // //     setTraineeMatchesLoading(true);
+// // //     try {
+// // //       const response = await api.get(`/trainee-matches/${traineeId}/`);
+// // //       setTraineeMatches(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch trainee matches');
+// // //     } finally {
+// // //       setTraineeMatchesLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleViewTraineeProfileFromJob = (match) => {
+// // //     const trainee = allTrainees.find((at) => at.traineeData.userInfo.name === match.trainee_name);
+// // //     if (trainee) {
+// // //       setSelectedTrainee(trainee);
+// // //       setJobMatches(null);
+// // //       setSelectedJob(null);
+// // //       fetchTraineeMatches(trainee.id);
+// // //     } else {
+// // //       toast.error('Trainee not found');
+// // //     }
+// // //   };
+
+// // //   const handleViewJobMatches = (job) => {
+// // //     setSelectedJob(job);
+// // //     fetchJobMatches(job.id);
+// // //   };
+
+// // //   const handleViewTraineeProfile = (trainee) => {
+// // //     setSelectedTrainee(trainee);
+// // //     fetchTraineeMatches(trainee.id);
+// // //   };
+
+// // //   const toggleJobStatus = async (jobId) => {
+// // //     try {
+// // //       await jobAPI.toggleJobStatus(jobId);
+// // //       setJobs((jobs) =>
+// // //         jobs.map((job) =>
+// // //           job.id === jobId ? { ...job, status: job.status === 'active' ? 'inactive' : 'active' } : job
+// // //         )
+// // //       );
+// // //       toast.success('Job status updated!');
+// // //     } catch (err) {
+// // //       toast.error('Failed to update job status');
+// // //     }
+// // //   };
+
+// // //   const handleDeleteJob = async (jobId) => {
+// // //     if (!window.confirm('Delete this job?')) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.deleteJob(jobId);
+// // //       setJobs(jobs.filter((j) => j.id !== jobId));
+// // //       toast.success('Job deleted');
+// // //     } catch (err) {
+// // //       toast.error('Failed to delete job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Create job
+// // //   const handleCreateJob = async () => {
+// // //     if (!newJob.title || !newJob.department || !newJob.description || !newJob.requirements) {
+// // //       toast.error('Please fill all required fields');
+// // //       return;
+// // //     }
+// // //     try {
+// // //       setLoading(true);
+// // //       const jobData = {
+// // //         ...newJob,
+// // //         location: newJob.location.filter((loc) => loc.trim() !== ''),
+// // //         techSkills,
+// // //         softSkills,
+// // //         status: 'active',
+// // //         filled: 0,
+// // //         matches: 0,
+// // //         postedDate: new Date().toISOString().split('T')[0],
+// // //         is_public: newJob.is_public,
+// // //       };
+// // //       await jobAPI.createJob(jobData);
+// // //       await fetchJobs();
+// // //       setNewJob({
+// // //         title: '',
+// // //         department: '',
+// // //         location: [''],
+// // //         openings: 1,
+// // //         requirements: '',
+// // //         techSkills: [],
+// // //         softSkills: [],
+// // //         description: '',
+// // //         salary: '',
+// // //         expiryDate: '',
+// // //         is_public: true,
+// // //       });
+// // //       setTechSkills([]);
+// // //       setSoftSkills([]);
+// // //       setActiveTab('jobs');
+// // //       toast.success('Job created');
+// // //     } catch (err) {
+// // //       toast.error('Failed to create job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleUpdateJob = async (updatedJob) => {
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.updateJob(updatedJob.id, updatedJob);
+// // //       await fetchJobs();
+// // //       setSelectedJob(null);
+// // //       setIsEditMode(false);
+// // //       setActiveTab('jobs');
+// // //       setTechSkills([]);
+// // //       setSoftSkills([]);
+// // //       toast.success('Job updated');
+// // //     } catch (err) {
+// // //       toast.error('Failed to update job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Skill handlers
+// // //   const handleTechSkillAdd = (e) => {
+// // //     if (e.key === 'Enter' || e.key === ',') {
+// // //       e.preventDefault();
+// // //       const skill = e.target.value.trim();
+// // //       if (skill && !techSkills.includes(skill)) {
+// // //         const updated = [...techSkills, skill];
+// // //         setTechSkills(updated);
+// // //         if (selectedJob && isEditMode) {
+// // //           setSelectedJob({ ...selectedJob, techSkills: updated });
+// // //         } else {
+// // //           setNewJob({ ...newJob, techSkills: updated });
+// // //         }
+// // //         e.target.value = '';
+// // //       }
+// // //     }
+// // //   };
+// // //   const handleSoftSkillAdd = (e) => {
+// // //     if (e.key === 'Enter' || e.key === ',') {
+// // //       e.preventDefault();
+// // //       const skill = e.target.value.trim();
+// // //       if (skill && !softSkills.includes(skill)) {
+// // //         const updated = [...softSkills, skill];
+// // //         setSoftSkills(updated);
+// // //         if (selectedJob && isEditMode) {
+// // //           setSelectedJob({ ...selectedJob, softSkills: updated });
+// // //         } else {
+// // //           setNewJob({ ...newJob, softSkills: updated });
+// // //         }
+// // //         e.target.value = '';
+// // //       }
+// // //     }
+// // //   };
+// // //   const removeTechSkill = (index) => {
+// // //     const updated = techSkills.filter((_, i) => i !== index);
+// // //     setTechSkills(updated);
+// // //     if (selectedJob && isEditMode) {
+// // //       setSelectedJob({ ...selectedJob, techSkills: updated });
+// // //     } else {
+// // //       setNewJob({ ...newJob, techSkills: updated });
+// // //     }
+// // //   };
+// // //   const removeSoftSkill = (index) => {
+// // //     const updated = softSkills.filter((_, i) => i !== index);
+// // //     setSoftSkills(updated);
+// // //     if (selectedJob && isEditMode) {
+// // //       setSelectedJob({ ...selectedJob, softSkills: updated });
+// // //     } else {
+// // //       setNewJob({ ...newJob, softSkills: updated });
+// // //     }
+// // //   };
+
+// // //   // Location fields
+// // //   const addLocationField = () => setNewJob({ ...newJob, location: [...newJob.location, ''] });
+// // //   const removeLocationField = (index) => setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
+// // //   const updateLocationField = (index, value) => {
+// // //     const newLocs = [...newJob.location];
+// // //     newLocs[index] = value;
+// // //     setNewJob({ ...newJob, location: newLocs });
+// // //   };
+
+// // //   // Stats
+// // //   const calculateStatistics = () => {
+// // //     const totalTrainees = allTrainees.length;
+// // //     const totalJobs = jobs.length;
+// // //     const mappedTrainees = allTrainees.filter((t) => t.isMapped).length;
+// // //     const unmappedTrainees = allTrainees.filter((t) => !t.isMapped).length;
+// // //     const activeJobs = jobs.filter((j) => j.status === 'active').length;
+// // //     const filledPositions = jobs.reduce((sum, job) => sum + (job.filled || 0), 0);
+// // //     const totalOpenings = jobs.reduce((sum, job) => sum + (job.openings || 0), 0);
+// // //     const fillRate = totalOpenings ? Math.round((filledPositions / totalOpenings) * 100) : 0;
+// // //     return { totalTrainees, totalJobs, mappedTrainees, unmappedTrainees, activeJobs, filledPositions, totalOpenings, fillRate };
+// // //   };
+// // //   const stats = calculateStatistics();
+
+// // //   // Interview Lock Functions
+// // //   const fetchInterviewLocks = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       let url = '/interview-locks/';
+// // //       const params = new URLSearchParams();
+// // //       if (lockFilter.status) params.append('status', lockFilter.status);
+// // //       if (lockFilter.job) params.append('job', lockFilter.job);
+// // //       if (params.toString()) url += '?' + params.toString();
+// // //       const response = await api.get(url);
+// // //       setInterviewLocks(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch interview locks');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const fetchLockStats = async () => {
+// // //     try {
+// // //       const response = await api.get('/interview-locks/dashboard/');
+// // //       setLockStats(response.data);
+// // //     } catch (err) {
+// // //       console.error('Failed to fetch lock stats', err);
+// // //     }
+// // //   };
+
+// // //   const updateLockStatus = async (lockId, newStatus) => {
+// // //     try {
+// // //       await api.patch(`/interview-locks/${lockId}/`, { status: newStatus });
+// // //       toast.success('Status updated');
+// // //       fetchInterviewLocks();
+// // //       fetchLockStats();
+// // //       if (activeTab === 'selected') fetchSelectedLocks();
+// // //       if (activeTab === 'rejected') fetchRejectedLocks();
+// // //     } catch (err) {
+// // //       toast.error('Failed to update status');
+// // //     }
+// // //   };
+
+// // //   const downloadLockReport = (status = '') => {
+// // //     let url = `${api.defaults.baseURL}/interview-locks/report/`;
+// // //     if (status) url += `?status=${status}`;
+// // //     window.open(url, '_blank');
+// // //   };
+
+// // //   const downloadReport = (type) => {
+// // //     window.open(`${api.defaults.baseURL}/reports/${type}/`, '_blank');
+// // //   };
+
+// // //   const fetchInterviewers = async () => {
+// // //     try {
+// // //       const res = await api.get('/users/?role=interviewer');
+// // //       setInterviewers(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to load interviewers');
+// // //     }
+// // //   };
+
+// // //   const fetchSelectedLocks = async () => {
+// // //     try {
+// // //       const res = await api.get('/interview-locks/?status=selected');
+// // //       setSelectedLocks(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch selected candidates');
+// // //     }
+// // //   };
+
+// // //   const fetchRejectedLocks = async () => {
+// // //     try {
+// // //       const res = await api.get('/interview-locks/?status=rejected');
+// // //       setRejectedLocks(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch rejected candidates');
+// // //     }
+// // //   };
+
+// // //   const handleLockForInterview = async () => {
+// // //     if (selectedTraineeIds.length === 0) {
+// // //       toast.error('Select at least one trainee');
+// // //       return;
+// // //     }
+// // //     if (!lockInterviewDatetime) {
+// // //       toast.error('Select interview date and time');
+// // //       return;
+// // //     }
+// // //     if (!assignedToId) {
+// // //       toast.error('Select an interviewer');
+// // //       return;
+// // //     }
+// // //     try {
+// // //       setLoading(true);
+// // //       await api.post('/interview-locks/bulk_create/', {
+// // //         trainee_ids: selectedTraineeIds,
+// // //         job_id: selectedJob.id,
+// // //         interview_datetime: lockInterviewDatetime,
+// // //         comments: lockComments,
+// // //         assigned_to: assignedToId,
+// // //       });
+// // //       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
+// // //       setShowLockModal(false);
+// // //       setSelectedTraineeIds([]);
+// // //       setLockInterviewDatetime('');
+// // //       setLockComments('');
+// // //       setAssignedToId('');
+// // //       // Refresh job matches to remove locked trainees
+// // //       if (selectedJob) fetchJobMatches(selectedJob.id);
+// // //     } catch (err) {
+// // //       toast.error('Failed to lock trainees');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // ==================== Effects ====================
+// // //   useEffect(() => {
+// // //     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
+// // //       fetchTrainees();
+// // //     }
+// // //   }, [activeTab]);
+
+// // //   useEffect(() => {
+// // //     if (['dashboard', 'jobs', 'createJob'].includes(activeTab)) fetchJobs();
+// // //   }, [activeTab]);
+
+// // //   useEffect(() => {
+// // //     if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool();
+// // //   }, [allTrainees, activeTab]);
+
+// // //   useEffect(() => {
+// // //     setSkillTrends(computeSkillTrends(jobs));
+// // //   }, [jobs]);
+
+// // //   // Fetch lock stats when dashboard loads
+// // //   useEffect(() => {
+// // //     if (activeTab === 'dashboard') fetchLockStats();
+// // //   }, [activeTab]);
+
+// // //   // Filter trainees
+// // //   useEffect(() => {
+// // //     let filtered = [...allTrainees];
+// // //     if (searchQuery) {
+// // //       filtered = filtered.filter(
+// // //         (t) =>
+// // //           t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+// // //           t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+// // //           t.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
+// // //       );
+// // //     }
+// // //     if (locationFilter) {
+// // //       filtered = filtered.filter((t) => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
+// // //     }
+// // //     if (activeTab === 'mapped') filtered = filtered.filter((t) => t.isMapped);
+// // //     else if (activeTab === 'unmapped') filtered = filtered.filter((t) => !t.isMapped);
+// // //     else if (activeTab === 'openPool') {
+// // //       const noMatchIds = traineesWithNoMatches.map((t) => t.id || t.trainee_id);
+// // //       filtered = filtered.filter((t) => !t.isMapped && noMatchIds.includes(t.id));
+// // //     }
+// // //     setTrainees(filtered);
+// // //   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
+
+// // //   // Fetch locks when tab changes
+// // //   useEffect(() => {
+// // //     if (activeTab === 'interviewLocks') {
+// // //       fetchInterviewLocks();
+// // //       fetchLockStats();
+// // //     }
+// // //   }, [activeTab, lockFilter]);
+
+// // //   useEffect(() => {
+// // //     if (activeTab === 'selected') fetchSelectedLocks();
+// // //     if (activeTab === 'rejected') fetchRejectedLocks();
+// // //   }, [activeTab]);
+
+// // //   // Compute skill trends
+// // //   const computeSkillTrends = (jobs) => {
+// // //     const techMap = new Map();
+// // //     const softMap = new Map();
+// // //     const WEIGHTS = {
+// // //       basePerJob: 1,
+// // //       openingsWeight: 0.5,
+// // //       matchesWeight: 0.25,
+// // //       inactivePenalty: 0.4,
+// // //       unfilledBonus: 0.3,
+// // //     };
+// // //     for (const job of jobs || []) {
+// // //       const isActive = job?.status === 'active';
+// // //       const openings = Number(job?.openings ?? 0);
+// // //       const filled = Number(job?.filled ?? 0);
+// // //       const matches = Number(job?.matches ?? 0);
+// // //       const unfilled = Math.max(0, openings - filled);
+// // //       const jobWeight =
+// // //         WEIGHTS.basePerJob +
+// // //         openings * WEIGHTS.openingsWeight +
+// // //         matches * WEIGHTS.matchesWeight +
+// // //         unfilled * WEIGHTS.unfilledBonus;
+// // //       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
+
+// // //       (job?.techSkills || []).forEach((raw) => {
+// // //         const skill = normalizeSkill(raw);
+// // //         if (!skill) return;
+// // //         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// // //         techMap.set(skill, {
+// // //           jobs: cur.jobs + 1,
+// // //           openings: cur.openings + openings,
+// // //           matches: cur.matches + matches,
+// // //           demand: cur.demand + effectiveWeight,
+// // //         });
+// // //       });
+
+// // //       (job?.softSkills || []).forEach((raw) => {
+// // //         const skill = normalizeSkill(raw);
+// // //         if (!skill) return;
+// // //         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// // //         softMap.set(skill, {
+// // //           jobs: cur.jobs + 1,
+// // //           openings: cur.openings + openings,
+// // //           matches: cur.matches + matches,
+// // //           demand: cur.demand + effectiveWeight,
+// // //         });
+// // //       });
+// // //     }
+
+// // //     const toSortedArray = (map) => {
+// // //       const arr = Array.from(map.entries()).map(([name, stats]) => ({
+// // //         name,
+// // //         jobs: stats.jobs,
+// // //         openings: stats.openings,
+// // //         matches: stats.matches,
+// // //         demandRaw: stats.demand,
+// // //       }));
+// // //       const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
+// // //       return arr
+// // //         .map((a) => ({
+// // //           ...a,
+// // //           demand: Math.round((a.demandRaw / maxDemand) * 100),
+// // //         }))
+// // //         .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
+// // //         .slice(0, 5);
+// // //     };
+// // //     return { tech: toSortedArray(techMap), soft: toSortedArray(softMap) };
+// // //   };
+
+// // //   // ==================== Render Helpers ====================
+// // //   const renderHiddenFileInputs = () => (
+// // //     <>
+// // //       <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
+// // //       <input type="file" id="wordUpload" accept=".doc,.docx" style={{ display: 'none' }} onChange={handleWordUpload} />
+// // //     </>
+// // //   );
+
+// // //   const handleExcelUpload = async (event) => {
+// // //     const file = event.target.files[0];
+// // //     if (!file) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.uploadExcel(file);
+// // //       await fetchJobs();
+// // //       toast.success('Excel uploaded');
+// // //     } catch (err) {
+// // //       toast.error('Upload failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //       event.target.value = '';
+// // //     }
+// // //   };
+
+// // //   const handleWordUpload = async (event) => {
+// // //     const file = event.target.files[0];
+// // //     if (!file) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.uploadWord(file);
+// // //       await fetchJobs();
+// // //       toast.success('Word uploaded');
+// // //     } catch (err) {
+// // //       toast.error('Upload failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //       event.target.value = '';
+// // //     }
+// // //   };
+
+// // //   const handleDownloadExcelTemplate = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const blob = await jobAPI.downloadExcelTemplate();
+// // //       const url = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = url;
+// // //       a.download = 'job_template.xlsx';
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(url);
+// // //       document.body.removeChild(a);
+// // //       toast.success('Template downloaded');
+// // //     } catch (err) {
+// // //       toast.error('Download failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleDownloadWordTemplate = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const blob = await jobAPI.downloadWordTemplate();
+// // //       const url = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = url;
+// // //       a.download = 'job_template.docx';
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(url);
+// // //       document.body.removeChild(a);
+// // //       toast.success('Template downloaded');
+// // //     } catch (err) {
+// // //       toast.error('Download failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Modals
+// // //   const renderExcelTemplateModal = () => {
+// // //     if (!showExcelTemplate) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowExcelTemplate(false)}>
+// // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><FileSpreadsheet size={24} /><h2>Excel Upload Template</h2></div>
+// // //             <button className="modal-close" onClick={() => setShowExcelTemplate(false)}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <h3>Download the template, fill it, and upload.</h3>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}>
+// // //               <Download size={18} /> Download Template
+// // //             </button>
+// // //             <button className="btn-primary" onClick={() => { document.getElementById('excelUpload').click(); setShowExcelTemplate(false); }} disabled={loading}>
+// // //               <Upload size={18} /> Upload Excel
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   const renderWordTemplateModal = () => {
+// // //     if (!showWordTemplate) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowWordTemplate(false)}>
+// // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><File size={24} /><h2>Word Template</h2></div>
+// // //             <button className="modal-close" onClick={() => setShowWordTemplate(false)}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <h3>Download the Word template, fill it, and upload.</h3>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}>
+// // //               <Download size={18} /> Download Template
+// // //             </button>
+// // //             <button className="btn-primary" onClick={() => { document.getElementById('wordUpload').click(); setShowWordTemplate(false); }} disabled={loading}>
+// // //               <Upload size={18} /> Upload Word
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Dashboard render
+// // //   const renderDashboard = () => (
+// // //     <div className="dashboard-content">
+// // //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// // //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //       <div className="stats-grid">
+// // //         <div className="stat-card"><div className="stat-icon"><Users /></div><div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><BriefcaseBusiness /></div><div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><CheckCircle /></div><div className="stat-content"><h3>Mapped</h3><div className="stat-value">{stats.mappedTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><AlertCircle /></div><div className="stat-content"><h3>Unmapped</h3><div className="stat-value">{stats.unmappedTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
+// // //       </div>
+
+// // //       {/* Lock Stats */}
+// // //       {lockStats && (
+// // //         <div className="stats-grid small" style={{ marginTop: '1rem' }}>
+// // //           <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// // //           <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// // //           <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+// // //         </div>
+// // //       )}
+
+// // //       <h2 className="section-title">Top Skills in Demand</h2>
+// // //       <div className="skills-section">
+// // //         <div className="content-card">
+// // //           <div className="card-header"><h3><Target size={20} /> Technical Skills</h3></div>
+// // //           <div className="hr-skills-list">
+// // //             {skillTrends.tech.map((skill) => (
+// // //               <div key={`tech-${skill.name}`} className="skill-item">
+// // //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
+// // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#3b82f6' }} /></div>
+// // //               </div>
+// // //             ))}
+// // //             {skillTrends.tech.length === 0 && <div className="no-data">No technical skills found.</div>}
+// // //           </div>
+// // //         </div>
+// // //         <div className="content-card">
+// // //           <div className="card-header"><h3><Star size={20} /> Soft Skills</h3></div>
+// // //           <div className="hr-skills-list">
+// // //             {skillTrends.soft.map((skill) => (
+// // //               <div key={`soft-${skill.name}`} className="skill-item">
+// // //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
+// // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#10b981' }} /></div>
+// // //               </div>
+// // //             ))}
+// // //             {skillTrends.soft.length === 0 && <div className="no-data">No soft skills found.</div>}
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Job Management
+// // //   const renderJobManagement = () => (
+// // //     <div className="job-management">
+// // //       <div className="section-header">
+// // //         <div className="header-title"><h2><Briefcase size={24} /> Job Profiles</h2><p className="subtitle">Manage all job positions</p></div>
+// // //         <div className="header-actions">
+// // //           <div className="upload-buttons">
+// // //             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}><FileSpreadsheet size={18} /> Upload Excel</button>
+// // //             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}><File size={18} /> Upload Word</button>
+// // //           </div>
+// // //           <button className="btn-primary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }} disabled={loading}><Plus size={18} /> Create New Job</button>
+// // //         </div>
+// // //       </div>
+// // //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading jobs...</p></div>}
+// // //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //       {jobs.length === 0 && !loading && !error && (
+// // //         <div className="no-data"><Briefcase size={48} /><h3>No Jobs Found</h3><p>Create your first job profile or upload via Excel/Word</p></div>
+// // //       )}
+// // //       {jobs.length > 0 && (
+// // //         <div className="table-container">
+// // //           <table className="data-table">
+// // //             <thead><tr><th>Job Title</th><th>Department</th><th>Location(s)</th><th>Openings</th><th>Filled</th><th>Status</th><th>Actions</th></tr></thead>
+// // //             <tbody>
+// // //               {jobs.map((job) => (
+// // //                 <tr key={job.id}>
+// // //                   <td><div className="job-title-cell"><div className="job-icon"><BriefcaseBusiness size={16} /></div><span className="font-medium">{job.title}</span></div></td>
+// // //                   <td><div className="department-cell"><Building size={14} />{job.department}</div></td>
+// // //                   <td><div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div></td>
+// // //                   <td><div className="openings-cell">{job.openings}</div></td>
+// // //                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
+// // //                   <td><button className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`} onClick={() => toggleJobStatus(job.id)} disabled={loading}>{job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}</button></td>
+// // //                   <td><div className="action-buttons">
+// // //                     <button className="btn-icon btn-icon-view" onClick={() => handleViewJobMatches(job)} disabled={loading}><Eye size={16} /></button>
+// // //                     <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading}><Edit size={16} /></button>
+// // //                     <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
+// // //                   </div></td>
+// // //                 </tr>
+// // //               ))}
+// // //             </tbody>
+// // //           </table>
+// // //         </div>
+// // //       )}
+// // //     </div>
+// // //   );
+
+// // //   // Create/Edit Job Form – keep your existing implementation
+// // //   const renderCreateJob = () => {
+// // //     const jobToEdit = selectedJob || newJob;
+// // //     const isEditing = !!selectedJob && isEditMode;
+
+// // //     const handleSubmit = async (e) => {
+// // //       e.preventDefault();
+// // //       if (isEditing) {
+// // //         await handleUpdateJob(jobToEdit);
+// // //       } else {
+// // //         await handleCreateJob();
+// // //       }
+// // //     };
+
+// // //     return (
+// // //       <div className="create-job">
+// // //         <div className="section-header">
+// // //           <div className="header-title">
+// // //             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
+// // //             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
+// // //           </div>
+// // //           <button className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
+// // //         </div>
+// // //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating...' : 'Creating...'}</p></div>}
+// // //         <div className="form-card">
+// // //           <form onSubmit={handleSubmit}>
+// // //             <div className="form-section">
+// // //               <h3 className="form-section-title"><Briefcase size={20} /> Basic Information</h3>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Job Title</label>
+// // //                   <input type="text" className="form-control" value={jobToEdit.title} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })} required placeholder="e.g., Senior Frontend Developer" disabled={loading} />
+// // //                 </div>
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Department</label>
+// // //                   <select className="form-control" value={jobToEdit.department} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })} required disabled={loading}>
+// // //                     <option value="">Select Department</option>
+// // //                     <option value="Technology">Technology</option>
+// // //                     <option value="Analytics">Analytics</option>
+// // //                     <option value="Design">Design</option>
+// // //                     <option value="Operations">Operations</option>
+// // //                     <option value="Marketing">Marketing</option>
+// // //                     <option value="Sales">Sales</option>
+// // //                   </select>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label>Visibility</label>
+// // //                   <select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}>
+// // //                     <option value="public">Public</option>
+// // //                     <option value="private">Private</option>
+// // //                   </select>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple)</span></label>
+// // //                 {jobToEdit.location.map((loc, index) => (
+// // //                   <div key={index} className="location-input-group">
+// // //                     <input type="text" className="form-control" value={loc} onChange={(e) => { if (isEditing) { const newLocs = [...jobToEdit.location]; newLocs[index] = e.target.value; setSelectedJob({ ...jobToEdit, location: newLocs }); } else updateLocationField(index, e.target.value); }} required={index === 0} placeholder="e.g., Hyderabad" disabled={loading} />
+// // //                     {jobToEdit.location.length > 1 && <button type="button" className="btn-icon" onClick={() => { if (isEditing) { const newLocs = jobToEdit.location.filter((_, i) => i !== index); setSelectedJob({ ...jobToEdit, location: newLocs }); } else removeLocationField(index); }} disabled={loading}><X size={16} /></button>}
+// // //                   </div>
+// // //                 ))}
+// // //                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}><Plus size={16} /> Add Another</button>
+// // //               </div>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Openings</label>
+// // //                   <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
+// // //                 </div>
+// // //                 <div className="form-group">
+// // //                   <label><Calendar size={16} /> Expiry Date</label>
+// // //                   <input type="date" className="form-control" value={jobToEdit.expiryDate} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })} disabled={loading} />
+// // //                 </div>
+// // //               </div>
+// // //             </div>
+// // //             <div className="form-section">
+// // //               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Technical Skills</label>
+// // //                 <div className="skills-input">
+// // //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleTechSkillAdd} disabled={loading} />
+// // //                   <div className="skills-tags">
+// // //                     {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
+// // //                       <span key={index} className="skill-tag tech-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button></span>
+// // //                     ))}
+// // //                   </div>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label>Soft Skills</label>
+// // //                 <div className="skills-input">
+// // //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleSoftSkillAdd} disabled={loading} />
+// // //                   <div className="skills-tags">
+// // //                     {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
+// // //                       <span key={index} className="skill-tag soft-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button></span>
+// // //                     ))}
+// // //                   </div>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Job Description</label>
+// // //                 <textarea className="form-control" rows="4" value={jobToEdit.description} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })} placeholder="Describe the role..." required disabled={loading} />
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Requirements</label>
+// // //                 <textarea className="form-control" rows="4" value={jobToEdit.requirements} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })} placeholder="List required qualifications..." required disabled={loading} />
+// // //               </div>
+// // //             </div>
+// // //             <div className="form-actions">
+// // //               <button type="button" className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}>Cancel</button>
+// // //               <button type="submit" className="btn-primary" disabled={loading}>
+// // //                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job'}</>}
+// // //               </button>
+// // //             </div>
+// // //           </form>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Trainees List
+// // //   const renderTraineesList = () => {
+// // //     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
+// // //     const openPoolCount = traineesWithNoMatches.length;
+// // //     return (
+// // //       <div className="trainees-list">
+// // //         <div className="section-header">
+// // //           <div className="header-title"><h2><Users size={24} /> Trainees</h2><p className="subtitle">Manage all trainees</p></div>
+// // //           <div className="view-options">
+// // //             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All</button>
+// // //             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
+// // //             <button className={`btn-view-option ${activeTab === 'unmapped' ? 'active' : ''}`} onClick={() => setActiveTab('unmapped')}><AlertCircle size={16} /> Unmapped ({stats.unmappedTrainees})</button>
+// // //             <button className={`btn-view-option ${activeTab === 'openPool' ? 'active' : ''}`} onClick={() => setActiveTab('openPool')}><Users2 size={16} /> Open Pool ({openPoolCount})</button>
+// // //           </div>
+// // //         </div>
+// // //         <div className="search-filter">
+// // //           <div className="search-box"><input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+// // //           <div className="filter-group">
+// // //             <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+// // //               <option value="">All Locations</option>
+// // //               {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>)}
+// // //             </select>
+// // //             <button className="btn-icon" onClick={() => { setSearchQuery(''); setLocationFilter(''); }}><X size={18} /></button>
+// // //           </div>
+// // //         </div>
+// // //         {checkingMatches && activeTab === 'openPool' && <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking Open Pool...</p></div>}
+// // //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// // //         {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //         {trainees.length === 0 && !loading && !checkingMatches && (
+// // //           <div className="no-data"><Users size={48} /><h3>No Trainees Found</h3><p>No trainees match your criteria.</p>
+// // //             {activeTab === 'openPool' && <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}><Search size={18} /> Re-check Open Pool</button>}
+// // //           </div>
+// // //         )}
+// // //         <div className="trainees-grid">
+// // //           {trainees.map((trainee) => (
+// // //             <div key={trainee.id} className="trainee-card">
+// // //               <div className="trainee-header">
+// // //                 <div className="trainee-info-main">
+// // //                   <div className="trainee-avatar">{trainee.name.charAt(0)}</div>
+// // //                   <div className="trainee-info"><h4>{trainee.name}</h4><div className="trainee-meta"><span className="trainee-email"><Mail size={14} /> {trainee.email}</span><span className="trainee-location"><MapPin size={14} /> {trainee.location}</span></div></div>
+// // //                 </div>
+// // //                 <div className={`mapping-indicator ${trainee.isMapped ? 'mapped' : 'unmapped'}`}>
+// // //                   {trainee.isMapped ? <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</> : <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>}
+// // //                 </div>
+// // //               </div>
+// // //               <div className="trainee-skills">
+// // //                 {trainee.skills.slice(0, 4).map((skill) => <span key={skill} className="skill-tag">{skill}</span>)}
+// // //                 {trainee.skills.length > 4 && <span className="skill-tag-more">+{trainee.skills.length - 4}</span>}
+// // //               </div>
+// // //               <div className="trainee-stats">
+// // //                 <div className="trainee-stat"><span className="stat-label">Avg Score</span><div className="score-progress"><div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div><span className="score-value">{trainee.score}%</span></div></div>
+// // //               </div>
+// // //               <div className="trainee-actions">
+// // //                 <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}><User size={16} /> View Profile</button>
+// // //               </div>
+// // //             </div>
+// // //           ))}
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Job Modal (view details)
+// // //   const renderJobModal = () => {
+// // //     if (!selectedJob || isEditMode) return null;
+// // //     const handleDelete = async () => {
+// // //       if (window.confirm('Delete this job?')) { await handleDeleteJob(selectedJob.id); setSelectedJob(null); }
+// // //     };
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
+// // //         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+// // //           <div className="modal-header"><div className="modal-title"><Briefcase size={24} /><h2>{selectedJob.title}</h2></div><button className="modal-close" onClick={() => setSelectedJob(null)} disabled={loading}><X size={24} /></button></div>
+// // //           <div className="modal-body">
+// // //             {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// // //             <div className="job-details-grid">
+// // //               <div className="detail-item"><Building size={16} /><div><span className="detail-label">Department</span><span className="detail-value">{selectedJob.department}</span></div></div>
+// // //               <div className="detail-item"><MapPin size={16} /><div><span className="detail-label">Location</span><span className="detail-value">{Array.isArray(selectedJob.location) ? selectedJob.location.join(', ') : selectedJob.location}</span></div></div>
+// // //               <div className="detail-item"><BriefcaseBusiness size={16} /><div><span className="detail-label">Openings</span><span className="detail-value">{selectedJob.openings} ({selectedJob.filled} filled)</span></div></div>
+// // //               <div className="detail-item"><Dollar size={16} /><div><span className="detail-label">Salary</span><span className="detail-value">{selectedJob.salary}</span></div></div>
+// // //               <div className="detail-item"><div className={`status-badge status-${selectedJob.status}`}>{selectedJob.status === 'active' ? 'Active' : 'Inactive'}</div></div>
+// // //               <div className="detail-item"><CalendarDays size={16} /><div><span className="detail-label">Posted</span><span className="detail-value">{selectedJob.postedDate}</span></div></div>
+// // //               <div className="detail-item"><Calendar size={16} /><div><span className="detail-label">Expires</span><span className="detail-value">{selectedJob.expiryDate}</span></div></div>
+// // //             </div>
+// // //             <div className="job-section"><h3>Description</h3><p>{selectedJob.description}</p></div>
+// // //             <div className="job-section"><h3>Requirements</h3><p>{selectedJob.requirements}</p></div>
+// // //             <div className="job-section"><h3>Technical Skills</h3><div className="skills-list">{selectedJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}</div></div>
+// // //             <div className="job-section"><h3>Soft Skills</h3><div className="skills-list">{selectedJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}</div></div>
+// // //             <div className="modal-actions">
+// // //               <button className="btn-secondary" onClick={() => setSelectedJob(null)} disabled={loading}>Close</button>
+// // //               <button className="btn-danger" onClick={handleDelete} disabled={loading}><Trash2 size={18} /> Delete</button>
+// // //               <button className="btn-primary" onClick={() => { setIsEditMode(true); setActiveTab('createJob'); setTechSkills(selectedJob.techSkills || []); setSoftSkills(selectedJob.softSkills || []); }} disabled={loading}><Edit size={18} /> Edit</button>
+// // //             </div>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Job Matches Modal (with checkboxes)
+// // //   const renderJobMatchesModal = () => {
+// // //     if (!selectedJob || jobMatches === null) return null;
+// // //     const bucketConfig = {
+// // //       perfect_match: { title: 'Perfect Match', color: 'bucket-perfect' },
+// // //       skills_only: { title: 'Skills Only', color: 'bucket-skills' },
+// // //       location_only: { title: 'Location Only', color: 'bucket-location' },
+// // //       nearby: { title: 'Nearby', color: 'bucket-nearby' },
+// // //       no_match: { title: 'No Match', color: 'bucket-no-match' },
+// // //     };
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>
+// // //         <div className="modal-content job-matches-modal" onClick={(e) => e.stopPropagation()}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><Users size={24} /><div><h2>{jobMatches.job_title} - Matches</h2><p className="subtitle">Total Matches: {jobMatches.total_matches}</p></div></div>
+// // //             <button className="modal-close" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             {jobMatchesLoading ? <div className="loading-state">...</div> : (
+// // //               <>
+// // //                 <div className="modal-actions" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
+// // //                   <span>Selected: {selectedTraineeIds.length}</span>
+// // //                   <button className="btn-primary" onClick={() => { fetchInterviewers(); setShowLockModal(true); }} disabled={selectedTraineeIds.length === 0}>
+// // //                     <Lock size={18} /> Lock for Interview ({selectedTraineeIds.length})
+// // //                   </button>
+// // //                 </div>
+// // //                 <div className="job-matches-content">
+// // //                   {Object.entries(bucketConfig).map(([bucketKey, config]) => {
+// // //                     const bucketData = jobMatches[bucketKey];
+// // //                     if (!bucketData || bucketData.length === 0) return null;
+// // //                     return (
+// // //                       <div key={bucketKey} className={`bucket-section ${config.color}`}>
+// // //                         <h3 className="bucket-title">{config.title} ({bucketData.length})</h3>
+// // //                         <div className="bucket-grid">
+// // //                           {bucketData.map((match) => (
+// // //                             <div key={match.id || match.trainee_id} className="trainee-match-card">
+// // //                               <input type="checkbox" className="trainee-checkbox" checked={selectedTraineeIds.includes(match.trainee_id)} onChange={(e) => {
+// // //                                 if (e.target.checked) setSelectedTraineeIds([...selectedTraineeIds, match.trainee_id]);
+// // //                                 else setSelectedTraineeIds(selectedTraineeIds.filter(id => id !== match.trainee_id));
+// // //                               }} />
+// // //                               <div className="match-percentage">{match.total_percentage.toFixed(1)}%</div>
+// // //                               <div className="bucket-tag">{match.bucket?.replace('_', ' ') || config.title}</div>
+// // //                               <h4>{match.trainee_name}</h4>
+// // //                               <div className="match-breakdown"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span></div>
+// // //                               <p className="location-info"><MapPin size={14} /> {match.trainee_location}</p>
+// // //                               <div className="match-actions">
+// // //                                 <button className="view-trainee-btn" onClick={() => handleViewTraineeProfileFromJob(match)}><User size={16} /> Profile</button>
+// // //                                 <button className="map-to-project-btn" onClick={() => {
+// // //                                   if (selectedJob.openings <= 0) { toast.error('No openings'); return; }
+// // //                                   handleMapToProject(match, selectedJob);
+// // //                                 }} disabled={selectedJob.openings <= 0}><Link size={16} /> {selectedJob.openings <= 0 ? 'Job Full' : 'Map'}
+// // //                                 </button>
+// // //                               </div>
+// // //                             </div>
+// // //                           ))}
+// // //                         </div>
+// // //                       </div>
+// // //                     );
+// // //                   })}
+// // //                 </div>
+// // //               </>
+// // //             )}
+// // //           </div>
+// // //           <div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>Close</button></div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Trainee Profile Modal – keep your existing implementation
+// // //   const renderTraineeModal = () => {
+// // //     if (!selectedTrainee) return null;
+// // //     const traineeData = selectedTrainee.traineeData || selectedTrainee;
+// // //     const userInfo = traineeData.userInfo || {};
+
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>
+// // //         <div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div>
+// // //             <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             {traineeMatchesLoading ? (
+// // //               <div className="loading-state"><div className="loading-spinner"></div><p>Loading trainee matches...</p></div>
+// // //             ) : (
+// // //               <>
+// // //                 <div className="trainee-details-section">
+// // //                   <div className="mapping-status-section">
+// // //                     <h4>Project Mapping</h4>
+// // //                     <div className={`mapping-status ${selectedTrainee.isMapped ? 'mapped' : 'unmapped'}`}>
+// // //                       <div className="status-indicator">
+// // //                         {selectedTrainee.isMapped ? (
+// // //                           <><CheckCircle size={20} /><div><strong>Mapped to Project</strong><p>{selectedTrainee.projectName || 'Unknown Project'}</p><small>Project ID: {selectedTrainee.projectId || 'N/A'}</small></div></>
+// // //                         ) : (
+// // //                           <><AlertCircle size={20} /><div><strong>Not Assigned</strong><p>This trainee is available for project assignment</p></div></>
+// // //                         )}
+// // //                       </div>
+// // //                       {selectedTrainee.isMapped ? (
+// // //                         <button className="btn-danger" onClick={() => handleUnmapFromProject(selectedTrainee)} disabled={loading}>
+// // //                           <X size={18} /> Unmap
+// // //                         </button>
+// // //                       ) : (
+// // //                         <div className="available-for-mapping"><p>Available for mapping</p></div>
+// // //                       )}
+// // //                     </div>
+// // //                   </div>
+// // //                   <div className="profile-header">
+// // //                     <div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div>
+// // //                     <div className="profile-info">
+// // //                       <h3>{userInfo.name || selectedTrainee.name}</h3>
+// // //                       <div className="profile-role">TRAINEE</div>
+// // //                       <div className="profile-meta">
+// // //                         <span className="profile-meta-item"><MapPin size={16} /> {userInfo.location || selectedTrainee.location}</span>
+// // //                         <span className="profile-meta-item"><Mail size={16} /> {selectedTrainee.email}</span>
+// // //                         <span className="profile-meta-item"><Target size={16} /> DPI: {traineeData.dpi || 'N/A'}</span>
+// // //                         <span className="profile-meta-item"><BarChart2 size={16} /> Score: {userInfo.averageScore || selectedTrainee.score}%</span>
+// // //                       </div>
+// // //                     </div>
+// // //                   </div>
+// // //                   <div className="trainee-details-grid">
+// // //                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Avg Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
+// // //                   </div>
+// // //                   <div className="skills-section">
+// // //                     <h4>Strengths</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.strengths?.map((strength, index) => (
+// // //                         <span key={index} className="skill-tag tech-tag">{strength.courseName} ({strength.avgScore}%)</span>
+// // //                       )) || <span className="no-data">None</span>}
+// // //                     </div>
+// // //                     <h4>Weaknesses</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.weaknesses?.map((weakness, index) => (
+// // //                         <span key={index} className="skill-tag soft-tag">{weakness.courseName} ({weakness.avgScore}%)</span>
+// // //                       )) || <span className="no-data">None</span>}
+// // //                     </div>
+// // //                     <h4>Certificates</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">None</span>}
+// // //                     </div>
+// // //                   </div>
+// // //                 </div>
+// // //                 {!selectedTrainee.isMapped && (
+// // //                   <div className="projects-section">
+// // //                     <div className="projects-header">
+// // //                       <h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3>
+// // //                     </div>
+// // //                     {traineeMatches ? (
+// // //                       <>
+// // //                         {traineeMatches.total_matches === 0 ? (
+// // //                           <div className="no-matches open-pool-message">
+// // //                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p>
+// // //                             <div className="open-pool-info"><p><strong>Open Pool</strong></p>
+// // //                               <button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button>
+// // //                             </div>
+// // //                           </div>
+// // //                         ) : (
+// // //                           <>
+// // //                             {traineeMatches.perfect_match?.length > 0 && (
+// // //                               <div className="bucket-section bucket-perfect">
+// // //                                 <h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3>
+// // //                                 <div className="projects-grid">
+// // //                                   {traineeMatches.perfect_match.map((match) => {
+// // //                                     const job = jobs.find(j => j.id === match.job_id);
+// // //                                     if (job && job.openings <= 0) return null;
+// // //                                     return (
+// // //                                       <div key={match.match_id} className="project-match-card">
+// // //                                         <div className="match-card-header">
+// // //                                           <div className="project-title">
+// // //                                             <h4>{match.job_title}</h4>
+// // //                                             <div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div>
+// // //                                           </div>
+// // //                                           <div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div>
+// // //                                         </div>
+// // //                                         <div className="match-details">
+// // //                                           <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
+// // //                                           <span>Location: {match.location_percentage.toFixed(1)}%</span>
+// // //                                           <span><Calendar size={14} /> Posted: {match.posted_date}</span>
+// // //                                         </div>
+// // //                                         <div className="project-actions">
+// // //                                           <button className="map-to-project-btn" onClick={() => {
+// // //                                             const job = jobs.find(j => j.id === match.job_id);
+// // //                                             if (job) {
+// // //                                               if (job.openings <= 0) { toast.error('No openings'); return; }
+// // //                                               handleMapToProject(selectedTrainee, job);
+// // //                                             }
+// // //                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Full' : 'Map'}</button>
+// // //                                         </div>
+// // //                                       </div>
+// // //                                     );
+// // //                                   })}
+// // //                                 </div>
+// // //                               </div>
+// // //                             )}
+// // //                             {/* Similar for skills_only, location_only, nearby, no_match – keep your existing code */}
+// // //                           </>
+// // //                         )}
+// // //                       </>
+// // //                     ) : (
+// // //                       <div className="no-matches-data">
+// // //                         <Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p>
+// // //                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+// // //                       </div>
+// // //                     )}
+// // //                   </div>
+// // //                 )}
+// // //               </>
+// // //             )}
+// // //           </div>
+// // //           <div className="modal-footer">
+// // //             <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
+// // //             {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
+// // //               <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+// // //             )}
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Interview Locks Tab
+// // //   const renderInterviewLocks = () => {
+// // //     return (
+// // //       <div className="interview-locks">
+// // //         <div className="section-header">
+// // //           <div className="header-title"><h2><Lock size={24} /> Interview Locks</h2><p className="subtitle">Track locked candidates</p></div>
+// // //           <div className="header-actions">
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport()}><Download size={18} /> All</button>
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><CheckCircle size={18} /> Selected</button>
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><XCircle size={18} /> Rejected</button>
+// // //           </div>
+// // //         </div>
+// // //         {lockStats && (
+// // //           <div className="stats-grid small">
+// // //             <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// // //             <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// // //             <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+// // //           </div>
+// // //         )}
+// // //         <div className="search-filter">
+// // //           <div className="filter-group">
+// // //             <select className="filter-select" value={lockFilter.status} onChange={(e) => setLockFilter({ ...lockFilter, status: e.target.value })}>
+// // //               <option value="">All Status</option>
+// // //               <option value="locked">Locked</option>
+// // //               <option value="selected">Selected</option>
+// // //               <option value="rejected">Rejected</option>
+// // //               <option value="cancelled">Cancelled</option>
+// // //             </select>
+// // //             <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// // //               <option value="">All Jobs</option>
+// // //               {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// // //             </select>
+// // //             <button className="btn-icon" onClick={() => setLockFilter({ status: '', job: '' })}><X size={18} /></button>
+// // //           </div>
+// // //         </div>
+// // //         {loading ? <div className="loading-overlay"><div className="loading-spinner"></div></div> : (
+// // //           <div className="table-container">
+// // //             <table className="data-table">
+// // //               <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Date/Time</th><th>Status</th><th>Comments</th><th>Locked By</th><th>Actions</th></tr></thead>
+// // //               <tbody>
+// // //                 {interviewLocks.map(lock => (
+// // //                   <tr key={lock.id}>
+// // //                     <td><span className="font-medium">{lock.trainee_name}</span></td>
+// // //                     <td>{lock.job_title}</td>
+// // //                     <td>{lock.assigned_to_name || '-'}</td>
+// // //                     <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                     <td>
+// // //                       <select value={lock.status} onChange={(e) => updateLockStatus(lock.id, e.target.value)} className={`status-badge status-${lock.status}`}>
+// // //                         <option value="locked">Locked</option>
+// // //                         <option value="selected">Selected</option>
+// // //                         <option value="rejected">Rejected</option>
+// // //                         <option value="cancelled">Cancelled</option>
+// // //                       </select>
+// // //                     </td>
+// // //                     <td>{lock.comments || '-'}</td>
+// // //                     <td>{lock.locked_by_name}</td>
+// // //                     <td>
+// // //                       <button className="btn-icon btn-icon-view" onClick={() => {
+// // //                         const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                         if (trainee) handleViewTraineeProfile(trainee);
+// // //                       }}><Eye size={16} /></button>
+// // //                     </td>
+// // //                   </tr>
+// // //                 ))}
+// // //                 {interviewLocks.length === 0 && <tr><td colSpan="8" className="no-data">No locks found</td></tr>}
+// // //               </tbody>
+// // //             </table>
+// // //           </div>
+// // //         )}
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Selected Tab
+// // //   const renderSelected = () => (
+// // //     <div className="selected-tab">
+// // //       <div className="section-header">
+// // //         <h2><CheckCircle size={24} /> Selected Candidates</h2>
+// // //         <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><Download size={18} /> Download Selected</button>
+// // //       </div>
+// // //       <div className="table-container">
+// // //         <table className="data-table">
+// // //           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// // //           <tbody>
+// // //             {selectedLocks.map(lock => (
+// // //               <tr key={lock.id}>
+// // //                 <td>{lock.trainee_name}</td>
+// // //                 <td>{lock.job_title}</td>
+// // //                 <td>{lock.assigned_to_name || '-'}</td>
+// // //                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                 <td>
+// // //                   {lock.feedback ? (
+// // //                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+// // //                   ) : '-'}
+// // //                 </td>
+// // //                 <td>
+// // //                   <button className="btn-icon" onClick={() => {
+// // //                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                     if (trainee) handleViewTraineeProfile(trainee);
+// // //                   }}><User size={16} /></button>
+// // //                 </td>
+// // //               </tr>
+// // //             ))}
+// // //             {selectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No selected candidates</td></tr>}
+// // //           </tbody>
+// // //         </table>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Rejected Tab
+// // //   const renderRejected = () => (
+// // //     <div className="rejected-tab">
+// // //       <div className="section-header">
+// // //         <h2><XCircle size={24} /> Rejected Candidates</h2>
+// // //         <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><Download size={18} /> Download Rejected</button>
+// // //       </div>
+// // //       <div className="table-container">
+// // //         <table className="data-table">
+// // //           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// // //           <tbody>
+// // //             {rejectedLocks.map(lock => (
+// // //               <tr key={lock.id}>
+// // //                 <td>{lock.trainee_name}</td>
+// // //                 <td>{lock.job_title}</td>
+// // //                 <td>{lock.assigned_to_name || '-'}</td>
+// // //                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                 <td>
+// // //                   {lock.feedback ? (
+// // //                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+// // //                   ) : '-'}
+// // //                 </td>
+// // //                 <td>
+// // //                   <button className="btn-icon" onClick={() => {
+// // //                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                     if (trainee) handleViewTraineeProfile(trainee);
+// // //                   }}><User size={16} /></button>
+// // //                 </td>
+// // //               </tr>
+// // //             ))}
+// // //             {rejectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No rejected candidates</td></tr>}
+// // //           </tbody>
+// // //         </table>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Feedback Modal
+// // //   const renderFeedbackModal = () => {
+// // //     if (!viewingFeedback) return null;
+// // //     const fb = viewingFeedback;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setViewingFeedback(null)}>
+// // //         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <h3>Interview Feedback</h3>
+// // //             <button className="modal-close" onClick={() => setViewingFeedback(null)}><X /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <p><strong>Interviewer:</strong> {fb.interviewer_name}</p>
+// // //             <p><strong>Date:</strong> {new Date(fb.feedback_date).toLocaleString()}</p>
+// // //             <p><strong>Questions:</strong> {fb.questions_asked} asked, {fb.questions_answered} answered</p>
+// // //             <p><strong>Attitude Rating:</strong> {fb.attitude_rating}/5</p>
+// // //             {fb.behaviour_notes && <p><strong>Behaviour Notes:</strong> {fb.behaviour_notes}</p>}
+// // //             {fb.technical_skills_assessed?.length > 0 && (
+// // //               <div><strong>Skills Assessed:</strong> {fb.technical_skills_assessed.join(', ')}</div>
+// // //             )}
+// // //             {fb.strengths && <p><strong>Strengths:</strong> {fb.strengths}</p>}
+// // //             {fb.weaknesses && <p><strong>Weaknesses:</strong> {fb.weaknesses}</p>}
+// // //             {fb.upskill_needed && <p><strong>Upskilling Needed:</strong> {fb.upskill_needed}</p>}
+// // //             {fb.overall_comments && <p><strong>Overall Comments:</strong> {fb.overall_comments}</p>}
+// // //             <p><strong>Recommendation:</strong> {fb.recommendation === 'selected' ? '✅ Selected' : '❌ Rejected'}</p>
+// // //           </div>
+// // //           <div className="modal-actions"><button className="btn-secondary" onClick={() => setViewingFeedback(null)}>Close</button></div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Lock Interview Modal
+// // //   const renderLockInterviewModal = () => {
+// // //     if (!showLockModal) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowLockModal(false)}>
+// // //         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+// // //           <div className="modal-header">
+// // //             <h3><Lock size={20} /> Lock for Interview</h3>
+// // //             <button className="modal-close" onClick={() => setShowLockModal(false)}><X /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <div className="form-group">
+// // //               <label>Interview Date & Time *</label>
+// // //               <input type="datetime-local" className="form-control" value={lockInterviewDatetime} onChange={(e) => setLockInterviewDatetime(e.target.value)} required />
+// // //             </div>
+// // //             <div className="form-group">
+// // //               <label>Assign to Interviewer *</label>
+// // //               <select className="form-control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} required>
+// // //                 <option value="">Select Interviewer</option>
+// // //                 {interviewers.map(usr => <option key={usr.id} value={usr.id}>{usr.username}</option>)}
+// // //               </select>
+// // //             </div>
+// // //             <div className="form-group">
+// // //               <label>Comments (optional)</label>
+// // //               <textarea className="form-control" rows="3" value={lockComments} onChange={(e) => setLockComments(e.target.value)} placeholder="Add notes..." />
+// // //             </div>
+// // //             <p>Selected trainees: {selectedTraineeIds.length}</p>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={() => setShowLockModal(false)}>Cancel</button>
+// // //             <button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || !assignedToId || loading}>
+// // //               {loading ? 'Locking...' : 'Lock for Interview'}
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Sidebar items
+// // //   const sidebarItems = [
+// // //     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+// // //     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
+// // //     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
+// // //     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
+// // //     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
+// // //     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
+// // //   ];
+
+// // //   const renderContent = () => {
+// // //     switch (activeTab) {
+// // //       case 'dashboard': return renderDashboard();
+// // //       case 'jobs': return renderJobManagement();
+// // //       case 'createJob': return renderCreateJob();
+// // //       case 'trainees':
+// // //       case 'mapped':
+// // //       case 'unmapped':
+// // //       case 'openPool':
+// // //         return renderTraineesList();
+// // //       case 'interviewLocks':
+// // //         return renderInterviewLocks();
+// // //       case 'selected':
+// // //         return renderSelected();
+// // //       case 'rejected':
+// // //         return renderRejected();
+// // //       default: return renderDashboard();
+// // //     }
+// // //   };
+
+// // //   return (
+// // //     <div className="dashboard">
+// // //       <Toaster richColors position="top-right" />
+// // //       <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
+// // //       <div className="main-content">
+// // //         <div className="dashboard-header">
+// // //           <div className="header-title">
+// // //             <h1><LayoutDashboard size={28} /> HR Dashboard</h1>
+// // //             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management</div>
+// // //           </div>
+// // //           <div className="header-actions">
+// // //             {loading && <div className="loading-indicator"><div className="loading-spinner small"></div><span>Processing...</span></div>}
+// // //           </div>
+// // //         </div>
+// // //         {renderContent()}
+// // //       </div>
+// // //       {renderHiddenFileInputs()}
+// // //       {renderExcelTemplateModal()}
+// // //       {renderWordTemplateModal()}
+// // //       {renderJobModal()}
+// // //       {renderJobMatchesModal()}
+// // //       {renderTraineeModal()}
+// // //       {renderLockInterviewModal()}
+// // //       {renderFeedbackModal()}
+// // //     </div>
+// // //   );
+// // // }
+
+// // // export default DashboardHR;
+
+
+
+// // // // DashboardHR.js – Final version with all fixes and enhancements
+// // // import React, { useState, useEffect } from 'react';
+// // // import { Toaster, toast } from 'sonner';
+// // // import {
+// // //   LayoutDashboard,
+// // //   Briefcase,
+// // //   Users,
+// // //   BarChart2,
+// // //   FileText,
+// // //   ExternalLink,
+// // //   Lightbulb,
+// // //   BarChart3,
+// // //   LogOut,
+// // //   TrendingUp,
+// // //   CheckCircle,
+// // //   Clock,
+// // //   MapPin,
+// // //   DollarSign,
+// // //   Calendar,
+// // //   Edit,
+// // //   Trash2,
+// // //   Eye,
+// // //   Search,
+// // //   Filter,
+// // //   X,
+// // //   ChevronRight,
+// // //   User,
+// // //   Mail,
+// // //   Star,
+// // //   Award,
+// // //   Target,
+// // //   PieChart,
+// // //   Download,
+// // //   Bell,
+// // //   Settings,
+// // //   Plus,
+// // //   ArrowLeft,
+// // //   Check,
+// // //   AlertCircle,
+// // //   Link,
+// // //   GraduationCap,
+// // //   BriefcaseBusiness,
+// // //   Building,
+// // //   DollarSign as Dollar,
+// // //   CalendarDays,
+// // //   BookOpen,
+// // //   Brain,
+// // //   Sparkles,
+// // //   Zap,
+// // //   ThumbsUp,
+// // //   TrendingDown,
+// // //   FileSpreadsheet,
+// // //   File,
+// // //   Upload,
+// // //   Users2,
+// // //   Lock,
+// // //   XCircle,
+// // //   Sliders,
+// // //   Grid,
+// // //   List,
+// // //   RefreshCw,
+// // // } from 'lucide-react';
+// // // import Sidebar from './Sidebar';
+// // // import api from '../api/axios';
+// // // import './styles/HrDashboard.css';
+
+// // // function DashboardHR({ userData, onLogout }) {
+// // //   // ==================== Core State ====================
+// // //   const [activeTab, setActiveTab] = useState('dashboard');
+// // //   const [selectedJob, setSelectedJob] = useState(null); // for edit or job details modal
+// // //   const [selectedTrainee, setSelectedTrainee] = useState(null);
+// // //   const [isEditMode, setIsEditMode] = useState(false);
+// // //   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
+// // //   const [showWordTemplate, setShowWordTemplate] = useState(false);
+// // //   const [techSkills, setTechSkills] = useState([]);
+// // //   const [softSkills, setSoftSkills] = useState([]);
+// // //   const [loading, setLoading] = useState(false);
+// // //   const [error, setError] = useState(null);
+
+// // //   // Search & filter
+// // //   const [searchQuery, setSearchQuery] = useState('');
+// // //   const [locationFilter, setLocationFilter] = useState('');
+
+// // //   // Data
+// // //   const [jobs, setJobs] = useState([]);
+// // //   const [trainees, setTrainees] = useState([]);
+// // //   const [allTrainees, setAllTrainees] = useState([]);
+// // //   const [skillTrends, setSkillTrends] = useState({ tech: [], soft: [] });
+
+// // //   // Match data
+// // //   const [jobMatches, setJobMatches] = useState(null);
+// // //   const [jobMatchesLoading, setJobMatchesLoading] = useState(false);
+// // //   const [traineeMatches, setTraineeMatches] = useState(null);
+// // //   const [traineeMatchesLoading, setTraineeMatchesLoading] = useState(false);
+
+// // //   // Open Pool
+// // //   const [traineesWithNoMatches, setTraineesWithNoMatches] = useState([]);
+// // //   const [checkingMatches, setCheckingMatches] = useState(false);
+
+// // //   // Interview Locking
+// // //   const [selectedTraineeIds, setSelectedTraineeIds] = useState([]);
+// // //   const [showLockModal, setShowLockModal] = useState(false);
+// // //   const [lockInterviewDatetime, setLockInterviewDatetime] = useState('');
+// // //   const [lockComments, setLockComments] = useState('');
+// // //   const [assignedToId, setAssignedToId] = useState('');
+// // //   const [interviewers, setInterviewers] = useState([]);
+
+// // //   const [interviewLocks, setInterviewLocks] = useState([]);
+// // //   const [lockStats, setLockStats] = useState(null);
+// // //   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
+
+// // //   // Selected & Rejected lists
+// // //   const [selectedLocks, setSelectedLocks] = useState([]);
+// // //   const [rejectedLocks, setRejectedLocks] = useState([]);
+// // //   const [viewingFeedback, setViewingFeedback] = useState(null);
+
+// // //   // Job Details Modal state (new)
+// // //   const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
+// // //   const [jobDetailsJob, setJobDetailsJob] = useState(null);
+// // //   const [jobDetailsTab, setJobDetailsTab] = useState('overview'); // 'overview', 'mapped', 'rejected'
+// // //   const [mappedTrainees, setMappedTrainees] = useState([]);
+// // //   const [rejectedTrainees, setRejectedTrainees] = useState([]);
+
+// // //   // New Job State
+// // //   const [newJob, setNewJob] = useState({
+// // //     title: '',
+// // //     department: '',
+// // //     location: [''],
+// // //     openings: 1,
+// // //     requirements: '',
+// // //     techSkills: [],
+// // //     softSkills: [],
+// // //     description: '',
+// // //     salary: '',
+// // //     expiryDate: '',
+// // //     is_public: true,
+// // //   });
+
+// // //   // ========== Talent Search Tab State ==========
+// // //   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
+// // //   const [searchJobMatches, setSearchJobMatches] = useState(null);
+// // //   const [searchFilters, setSearchFilters] = useState({
+// // //     bucket: '',
+
+
+
+// // //     location: '',
+// // //     minTotal: 0,
+// // //     skillKeyword: '',
+// // //   });
+// // //   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
+// // //   const [selectAll, setSelectAll] = useState(false);
+
+// // //   // ==================== Helper Functions ====================
+// // //   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
+
+// // //   // ==================== API Calls ====================
+// // //   const jobAPI = {
+// // //     getAllJobs: async () => (await api.get('/jobs/')).data,
+// // //     getJobById: async (id) => (await api.get(`/jobs/${id}/`)).data,
+// // //     createJob: async (jobData) => (await api.post('/jobs/', jobData)).data,
+// // //     updateJob: async (id, jobData) => (await api.put(`/jobs/${id}/`, jobData)).data,
+// // //     deleteJob: async (id) => (await api.delete(`/jobs/${id}/`)).data,
+// // //     toggleJobStatus: async (id) => (await api.patch(`/jobs/${id}/toggle-status/`)).data,
+// // //     uploadExcel: async (file) => {
+// // //       const formData = new FormData();
+// // //       formData.append('excel_file', file);
+// // //       return (await api.post('/jobs/upload-excel/', formData)).data;
+// // //     },
+// // //     uploadWord: async (file) => {
+// // //       const formData = new FormData();
+// // //       formData.append('wordFile', file);
+// // //       return (await api.post('/jobs/upload-word/', formData)).data;
+// // //     },
+// // //     downloadExcelTemplate: async () => (await api.get('/jobs/download-excel-template/', { responseType: 'blob' })).data,
+// // //     downloadWordTemplate: async () => (await api.get('/jobs/download-word-template/', { responseType: 'blob' })).data,
+// // //   };
+
+// // //   const mappingAPI = {
+// // //     updateMapping: async (userId, mappingData) =>
+// // //       (await api.patch(`/api/userinfo/${userId}/update-mapping/`, mappingData)).data,
+// // //     getMapping: async (userId) => (await api.get(`/api/userinfo/${userId}/`)).data,
+// // //   };
+
+// // //   // Fetch trainees
+// // //   const fetchTrainees = async () => {
+// // //     setLoading(true);
+// // //     setError(null);
+// // //     try {
+// // //       const response = await api.get('/api/profiles/');
+// // //       const transformed = response.data.map((trainee) => {
+// // //         const userInfo = trainee.userInfo || {};
+// // //         const skills = [
+// // //           ...(trainee.strengths?.map((s) => s.courseName) || []),
+// // //           ...(trainee.weaknesses?.map((w) => w.courseName) || []),
+// // //         ];
+// // //         const avgScore = userInfo.averageScore || 0;
+// // //         return {
+// // //           id: trainee.id,
+// // //           userId: userInfo.userId || trainee.id,
+// // //           name: userInfo.name || 'Unknown',
+// // //           email: `${userInfo.employeeId || 'EMP' + trainee.id}@example.com`,
+// // //           skills,
+// // //           score: Math.round(avgScore),
+// // //           location: (userInfo.location || 'unknown').toLowerCase(),
+// // //           matchedJobs: [],
+// // //           certifications: trainee.certificates ? [trainee.certificates] : [],
+// // //           preferredLocation: userInfo.location || 'Unknown',
+// // //           isMapped: userInfo.isMapped || false,
+// // //           projectId: userInfo.projectId || '',
+// // //           projectName: userInfo.projectName || '',
+// // //           traineeData: trainee,
+// // //         };
+// // //       });
+// // //       setTrainees(transformed);
+// // //       setAllTrainees(transformed);
+// // //       setTraineesWithNoMatches([]);
+// // //     } catch (err) {
+// // //       setError('Failed to fetch trainees.');
+// // //       setTrainees([]);
+// // //       setAllTrainees([]);
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch jobs
+// // //   const fetchJobs = async () => {
+// // //     setLoading(true);
+// // //     setError(null);
+// // //     try {
+// // //       const response = await jobAPI.getAllJobs();
+// // //       setJobs(response);
+// // //     } catch (err) {
+// // //       setError('Failed to fetch jobs.');
+// // //       setJobs([]);
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Check Open Pool
+// // //   const checkTraineesForOpenPool = async () => {
+// // //     if (allTrainees.length === 0) return;
+// // //     setCheckingMatches(true);
+// // //     try {
+// // //       const noMatchTrainees = [];
+// // //       const unmapped = allTrainees.filter((t) => !t.isMapped);
+// // //       for (const trainee of unmapped) {
+// // //         try {
+// // //           const response = await api.get(`/trainee-matches/${trainee.id}/`);
+// // //           const data = response.data;
+// // //           const hasNoMatch =
+// // //             (data.total_matches >= 0 &&
+// // //               data.no_match?.length > 0 &&
+// // //               !data.perfect_match?.length &&
+// // //               !data.skills_only?.length &&
+// // //               !data.location_only?.length &&
+// // //               !data.nearby?.length) ||
+// // //             data.total_matches === 0;
+// // //           if (hasNoMatch) {
+// // //             noMatchTrainees.push({
+// // //               ...trainee,
+// // //               trainee_id: trainee.id,
+// // //               trainee_name: trainee.name,
+// // //               trainee_location: trainee.location,
+// // //               total_matches: data.total_matches,
+// // //               no_match_count: data.no_match?.length || 0,
+// // //             });
+// // //           }
+// // //         } catch (error) {
+// // //           noMatchTrainees.push({ ...trainee, total_matches: 0, no_match_count: 0 });
+// // //         }
+// // //       }
+// // //       setTraineesWithNoMatches(noMatchTrainees);
+// // //     } catch (err) {
+// // //       toast.error('Failed to check Open Pool');
+// // //     } finally {
+// // //       setCheckingMatches(false);
+// // //     }
+// // //   };
+
+// // //   // Update job vacancies after mapping
+// // //   const updateJobVacancies = async (job) => {
+// // //     try {
+// // //       const newFilled = (job.filled || 0) + 1;
+// // //       const newOpenings = Math.max(0, (job.openings || 0) - 1);
+// // //       const updated = { ...job, filled: newFilled, openings: newOpenings };
+// // //       await jobAPI.updateJob(job.id, updated);
+// // //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //       if (selectedJob?.id === job.id) setSelectedJob(updated);
+// // //       if (newOpenings === 0) await checkAndAutoDeactivateJob(updated);
+// // //       return updated;
+// // //     } catch (error) {
+// // //       toast.error('Failed to update job vacancies');
+// // //       throw error;
+// // //     }
+// // //   };
+
+// // //   const checkAndAutoDeactivateJob = async (job) => {
+// // //     if (job.openings <= 0) {
+// // //       const updated = { ...job, status: 'inactive' };
+// // //       await jobAPI.updateJob(job.id, updated);
+// // //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //       toast.success(`Job "${job.title}" auto‑deactivated.`);
+// // //     }
+// // //   };
+
+// // //   // // Map trainee to project
+// // //   // const handleMapToProject = async (traineeOrMatch, job) => {
+// // //   //   try {
+// // //   //     setLoading(true);
+// // //   //     let userId = null;
+// // //   //     let traineeName = '';
+
+// // //   //     if (traineeOrMatch.traineeData) {
+// // //   //       userId = traineeOrMatch.traineeData.userInfo.userId;
+// // //   //       traineeName = traineeOrMatch.name;
+// // //   //     } else {
+// // //   //       const match = traineeOrMatch;
+// // //   //       const found = allTrainees.find(t => t.userId === match.trainee_id);
+// // //   //       if (found) {
+// // //   //         userId = found.userId;
+// // //   //         traineeName = found.name;
+// // //   //       } else {
+// // //   //         toast.error('Trainee not found');
+// // //   //         return;
+// // //   //       }
+// // //   //     }
+
+// // //   //     if (!userId) {
+// // //   //       toast.error('Could not find user ID');
+// // //   //       return;
+// // //   //     }
+
+// // //   //     const mappingData = {
+// // //   //       isMapped: true,
+// // //   //       projectId: job.id.toString(),
+// // //   //       projectName: job.title,
+// // //   //     };
+// // //   //     await mappingAPI.updateMapping(userId, mappingData);
+// // //   //     await updateJobVacancies(job);
+
+// // //   //     // Remove from open pool
+// // //   //     setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
+
+// // //   //     // Update local trainee lists
+// // //   //     setAllTrainees((prev) =>
+// // //   //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // //   //     );
+// // //   //     setTrainees((prev) =>
+// // //   //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // //   //     );
+
+// // //   //     // Update jobMatches if open
+// // //   //     if (jobMatches) {
+// // //   //       const bucket = Object.keys(jobMatches).find((key) =>
+// // //   //         jobMatches[key]?.some((m) => m.trainee_id === userId)
+// // //   //       );
+// // //   //       if (bucket) {
+// // //   //         setJobMatches((prev) => ({
+// // //   //           ...prev,
+// // //   //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // //   //           total_matches: prev.total_matches - 1,
+// // //   //         }));
+// // //   //       }
+// // //   //     }
+// // //   //     if (searchJobMatches) {
+// // //   //       const bucket = Object.keys(searchJobMatches).find((key) =>
+// // //   //         searchJobMatches[key]?.some((m) => m.trainee_id === userId)
+// // //   //       );
+// // //   //       if (bucket) {
+// // //   //         setSearchJobMatches((prev) => ({
+// // //   //           ...prev,
+// // //   //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // //   //           total_matches: prev.total_matches - 1,
+// // //   //         }));
+// // //   //       }
+// // //   //     }
+
+// // //   //     toast.success(`Mapped ${traineeName} to ${job.title}`);
+// // //   //   } catch (err) {
+// // //   //     toast.error('Failed to map trainee');
+// // //   //   } finally {
+// // //   //     setLoading(false);
+// // //   //   }
+// // //   // };
+// // // //   const handleMapToProject = async (traineeOrMatch, job) => {
+// // // //   try {
+// // // //     setLoading(true);
+// // // //     let userId = null;
+// // // //     let traineeName = '';
+
+// // // //     if (traineeOrMatch.traineeData) {
+// // // //       userId = traineeOrMatch.traineeData.userInfo.userId;
+// // // //       traineeName = traineeOrMatch.name;
+// // // //     } else {
+// // // //       const match = traineeOrMatch;
+// // // //       const found = allTrainees.find(t => t.userId === match.trainee_id);
+// // // //       if (found) {
+// // // //         userId = found.userId;
+// // // //         traineeName = found.name;
+// // // //       } else {
+// // // //         toast.error('Trainee not found in local data');
+// // // //         console.error('Trainee not found for userId:', match.trainee_id);
+// // // //         return;
+// // // //       }
+// // // //     }
+
+// // // //     if (!userId) {
+// // // //       toast.error('Could not find user ID');
+// // // //       return;
+// // // //     }
+
+// // // //     const mappingData = {
+// // // //       isMapped: true,
+// // // //       projectId: job.id.toString(),
+// // // //       projectName: job.title,
+// // // //     };
+// // // //     await mappingAPI.updateMapping(userId, mappingData);
+// // // //     const updatedJob = await updateJobVacancies(job);
+
+// // // //     // Update selectedJobForSearch if it's the same job
+// // // //     if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
+// // // //       setSelectedJobForSearch(updatedJob);
+// // // //     }
+
+// // // //     // Remove from open pool
+// // // //     setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
+
+// // // //     // Update local trainee lists
+// // // //     setAllTrainees((prev) =>
+// // // //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // // //     );
+// // // //     setTrainees((prev) =>
+// // // //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // // //     );
+
+// // // //     // Update jobMatches if open
+// // // //     if (jobMatches) {
+// // // //       const bucket = Object.keys(jobMatches).find((key) =>
+// // // //         jobMatches[key]?.some((m) => m.trainee_id === userId)
+// // // //       );
+// // // //       if (bucket) {
+// // // //         setJobMatches((prev) => ({
+// // // //           ...prev,
+// // // //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // // //           total_matches: prev.total_matches - 1,
+// // // //         }));
+// // // //       }
+// // // //     }
+// // // //     if (searchJobMatches) {
+// // // //       const bucket = Object.keys(searchJobMatches).find((key) =>
+// // // //         searchJobMatches[key]?.some((m) => m.trainee_id === userId)
+// // // //       );
+// // // //       if (bucket) {
+// // // //         setSearchJobMatches((prev) => ({
+// // // //           ...prev,
+// // // //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // // //           total_matches: prev.total_matches - 1,
+// // // //         }));
+// // // //       }
+// // // //     }
+
+// // // //     toast.success(`Mapped ${traineeName} to ${job.title}`);
+// // // //   } catch (err) {
+// // // //     console.error('Mapping error:', err);
+// // // //     toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
+// // // //   } finally {
+// // // //     setLoading(false);
+// // // //   }
+// // // // };
+// // // const handleMapToProject = async (traineeOrMatch, job) => {
+// // //   try {
+// // //     setLoading(true);
+// // //     let userId = null;
+// // //     let traineeName = '';
+
+// // //     if (traineeOrMatch.traineeData) {
+// // //       userId = traineeOrMatch.traineeData.userInfo.userId;
+// // //       traineeName = traineeOrMatch.name;
+// // //     } else {
+// // //       const match = traineeOrMatch;
+// // //       const found = allTrainees.find(t => t.userId === match.trainee_id);
+// // //       if (found) {
+// // //         userId = found.userId;
+// // //         traineeName = found.name;
+// // //       } else {
+// // //         toast.error('Trainee not found in local data');
+// // //         console.error('Trainee not found for userId:', match.trainee_id);
+// // //         return;
+// // //       }
+// // //     }
+
+// // //     if (!userId) {
+// // //       toast.error('Could not find user ID');
+// // //       return;
+// // //     }
+
+// // //     // Check if job still has openings
+// // //     if (job.openings <= 0) {
+// // //       toast.error('No openings left for this job');
+// // //       return;
+// // //     }
+
+// // //     const mappingData = {
+// // //       isMapped: true,
+// // //       projectId: job.id.toString(),
+// // //       projectName: job.title,
+// // //     };
+// // //     await mappingAPI.updateMapping(userId, mappingData);
+// // //     const updatedJob = await updateJobVacancies(job);
+
+// // //     // Update selectedJobForSearch if it's the same job
+// // //     if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
+// // //       setSelectedJobForSearch(updatedJob);
+// // //     }
+
+// // //     // Remove from open pool
+// // //     setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
+
+// // //     // Update local trainee lists
+// // //     setAllTrainees((prev) =>
+// // //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // //     );
+// // //     setTrainees((prev) =>
+// // //       prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// // //     );
+
+// // //     // Update jobMatches if open
+// // //     if (jobMatches) {
+// // //       const bucket = Object.keys(jobMatches).find((key) =>
+// // //         Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
+// // //       );
+// // //       if (bucket) {
+// // //         setJobMatches((prev) => ({
+// // //           ...prev,
+// // //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // //           total_matches: prev.total_matches - 1,
+// // //         }));
+// // //       }
+// // //     }
+
+// // //     // Update searchJobMatches if open
+// // //     if (searchJobMatches) {
+// // //       const bucket = Object.keys(searchJobMatches).find((key) =>
+// // //         Array.isArray(searchJobMatches[key]) && searchJobMatches[key].some((m) => m.trainee_id === userId)
+// // //       );
+// // //       if (bucket) {
+// // //         setSearchJobMatches((prev) => ({
+// // //           ...prev,
+// // //           [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// // //           total_matches: prev.total_matches - 1,
+// // //         }));
+// // //       } else {
+// // //         // Fallback: remove from all buckets if bucket not found
+// // //         const newSearchMatches = { ...searchJobMatches };
+// // //         let removed = false;
+// // //         Object.keys(newSearchMatches).forEach(key => {
+// // //           if (Array.isArray(newSearchMatches[key])) {
+// // //             const filtered = newSearchMatches[key].filter(m => m.trainee_id !== userId);
+// // //             if (filtered.length !== newSearchMatches[key].length) {
+// // //               newSearchMatches[key] = filtered;
+// // //               removed = true;
+// // //             }
+// // //           }
+// // //         });
+// // //         if (removed) {
+// // //           newSearchMatches.total_matches = (newSearchMatches.total_matches || 0) - 1;
+// // //           setSearchJobMatches(newSearchMatches);
+// // //         }
+// // //       }
+// // //     }
+
+// // //     toast.success(`Mapped ${traineeName} to ${job.title}`);
+// // //   } catch (err) {
+// // //     console.error('Mapping error:', err);
+// // //     toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
+// // //   } finally {
+// // //     setLoading(false);
+// // //   }
+// // // };
+// // //   const handleUnmapFromProject = async (trainee) => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const unmappingData = { isMapped: false, projectId: '', projectName: '' };
+// // //       await mappingAPI.updateMapping(trainee.userId, unmappingData);
+// // //       const jobId = trainee.projectId;
+// // //       if (jobId) {
+// // //         const job = jobs.find((j) => j.id.toString() === jobId);
+// // //         if (job) {
+// // //           const updated = {
+// // //             ...job,
+// // //             filled: Math.max(0, (job.filled || 0) - 1),
+// // //             openings: (job.openings || 0) + 1,
+// // //           };
+// // //           if (job.status === 'inactive' && updated.openings > 0) updated.status = 'active';
+// // //           await jobAPI.updateJob(job.id, updated);
+// // //           setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// // //           if (selectedJob?.id === job.id) setSelectedJob(updated);
+// // //         }
+// // //       }
+// // //       setAllTrainees((prev) => prev.map((t) => (t.id === trainee.id ? { ...t, ...unmappingData } : t)));
+// // //       if (['mapped', 'unmapped', 'trainees', 'openPool'].includes(activeTab)) fetchTrainees();
+// // //       if (selectedTrainee?.id === trainee.id) setSelectedTrainee({ ...selectedTrainee, ...unmappingData });
+// // //       toast.success(`Unmapped ${trainee.name}`);
+// // //     } catch (err) {
+// // //       toast.error('Failed to unmap trainee');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch job matches (backend filters out locked/selected)
+// // //   const fetchJobMatches = async (jobId) => {
+// // //     setJobMatchesLoading(true);
+// // //     try {
+// // //       const response = await api.get(`/matches/${jobId}/`);
+// // //       setJobMatches(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch job matches');
+// // //     } finally {
+// // //       setJobMatchesLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch trainee matches
+// // //   const fetchTraineeMatches = async (traineeId) => {
+// // //     setTraineeMatchesLoading(true);
+// // //     try {
+// // //       const response = await api.get(`/trainee-matches/${traineeId}/`);
+// // //       setTraineeMatches(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch trainee matches');
+// // //     } finally {
+// // //       setTraineeMatchesLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Fetch mapped trainees for a job (from UserInfo where projectId matches)
+// // //   const fetchMappedForJob = async (jobId) => {
+// // //     try {
+// // //       const mapped = allTrainees.filter(t => t.isMapped && t.projectId === jobId.toString());
+// // //       setMappedTrainees(mapped);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch mapped trainees');
+// // //     }
+// // //   };
+
+// // //   // Fetch rejected trainees for a job (from InterviewLock with status='rejected')
+// // //   const fetchRejectedForJob = async (jobId) => {
+// // //     try {
+// // //       const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected`);
+// // //       setRejectedTrainees(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch rejected trainees');
+// // //     }
+// // //   };
+
+// // //   const handleViewTraineeProfileFromJob = (match) => {
+// // //     const trainee = allTrainees.find((at) => at.userId === match.trainee_id);
+// // //     if (trainee) {
+// // //       setSelectedTrainee(trainee);
+// // //       setShowJobDetailsModal(false); // close details modal
+// // //       fetchTraineeMatches(trainee.id);
+// // //     } else {
+// // //       toast.error('Trainee not found');
+// // //     }
+// // //   };
+
+// // //   // Open Job Details Modal (new)
+// // //   const handleViewJobDetails = (job) => {
+// // //     setJobDetailsJob(job);
+// // //     setJobDetailsTab('overview');
+// // //     fetchMappedForJob(job.id);
+// // //     fetchRejectedForJob(job.id);
+// // //     setShowJobDetailsModal(true);
+// // //   };
+
+// // //   const handleViewJobMatches = (job) => {
+// // //     setSelectedJob(job);
+// // //     fetchJobMatches(job.id);
+// // //   };
+
+// // //   const handleViewTraineeProfile = (trainee) => {
+// // //     setSelectedTrainee(trainee);
+// // //     fetchTraineeMatches(trainee.id);
+// // //   };
+
+// // //   const toggleJobStatus = async (jobId) => {
+// // //     try {
+// // //       await jobAPI.toggleJobStatus(jobId);
+// // //       setJobs((jobs) =>
+// // //         jobs.map((job) =>
+// // //           job.id === jobId ? { ...job, status: job.status === 'active' ? 'inactive' : 'active' } : job
+// // //         )
+// // //       );
+// // //       toast.success('Job status updated!');
+// // //     } catch (err) {
+// // //       toast.error('Failed to update job status');
+// // //     }
+// // //   };
+
+// // //   const handleDeleteJob = async (jobId) => {
+// // //     if (!window.confirm('Delete this job?')) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.deleteJob(jobId);
+// // //       setJobs(jobs.filter((j) => j.id !== jobId));
+// // //       toast.success('Job deleted');
+// // //     } catch (err) {
+// // //       toast.error('Failed to delete job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Create job
+// // //   const handleCreateJob = async () => {
+// // //     if (!newJob.title || !newJob.department || !newJob.description || !newJob.requirements) {
+// // //       toast.error('Please fill all required fields');
+// // //       return;
+// // //     }
+// // //     try {
+// // //       setLoading(true);
+// // //       const jobData = {
+// // //         ...newJob,
+// // //         location: newJob.location.filter((loc) => loc.trim() !== ''),
+// // //         techSkills,
+// // //         softSkills,
+// // //         status: 'active',
+// // //         filled: 0,
+// // //         matches: 0,
+// // //         postedDate: new Date().toISOString().split('T')[0],
+// // //         is_public: newJob.is_public,
+// // //       };
+// // //       await jobAPI.createJob(jobData);
+// // //       await fetchJobs();
+// // //       setNewJob({
+// // //         title: '',
+// // //         department: '',
+// // //         location: [''],
+// // //         openings: 1,
+// // //         requirements: '',
+// // //         techSkills: [],
+// // //         softSkills: [],
+// // //         description: '',
+// // //         salary: '',
+// // //         expiryDate: '',
+// // //         is_public: true,
+// // //       });
+// // //       setTechSkills([]);
+// // //       setSoftSkills([]);
+// // //       setActiveTab('jobs');
+// // //       toast.success('Job created');
+// // //     } catch (err) {
+// // //       toast.error('Failed to create job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleUpdateJob = async (updatedJob) => {
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.updateJob(updatedJob.id, updatedJob);
+// // //       await fetchJobs();
+// // //       setSelectedJob(null);
+// // //       setIsEditMode(false);
+// // //       setActiveTab('jobs');
+// // //       setTechSkills([]);
+// // //       setSoftSkills([]);
+// // //       toast.success('Job updated');
+// // //     } catch (err) {
+// // //       toast.error('Failed to update job');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Skill handlers
+// // //   const handleTechSkillAdd = (e) => {
+// // //     if (e.key === 'Enter' || e.key === ',') {
+// // //       e.preventDefault();
+// // //       const skill = e.target.value.trim();
+// // //       if (skill && !techSkills.includes(skill)) {
+// // //         const updated = [...techSkills, skill];
+// // //         setTechSkills(updated);
+// // //         if (selectedJob && isEditMode) {
+// // //           setSelectedJob({ ...selectedJob, techSkills: updated });
+// // //         } else {
+// // //           setNewJob({ ...newJob, techSkills: updated });
+// // //         }
+// // //         e.target.value = '';
+// // //       }
+// // //     }
+// // //   };
+// // //   const handleSoftSkillAdd = (e) => {
+// // //     if (e.key === 'Enter' || e.key === ',') {
+// // //       e.preventDefault();
+// // //       const skill = e.target.value.trim();
+// // //       if (skill && !softSkills.includes(skill)) {
+// // //         const updated = [...softSkills, skill];
+// // //         setSoftSkills(updated);
+// // //         if (selectedJob && isEditMode) {
+// // //           setSelectedJob({ ...selectedJob, softSkills: updated });
+// // //         } else {
+// // //           setNewJob({ ...newJob, softSkills: updated });
+// // //         }
+// // //         e.target.value = '';
+// // //       }
+// // //     }
+// // //   };
+// // //   const removeTechSkill = (index) => {
+// // //     const updated = techSkills.filter((_, i) => i !== index);
+// // //     setTechSkills(updated);
+// // //     if (selectedJob && isEditMode) {
+// // //       setSelectedJob({ ...selectedJob, techSkills: updated });
+// // //     } else {
+// // //       setNewJob({ ...newJob, techSkills: updated });
+// // //     }
+// // //   };
+// // //   const removeSoftSkill = (index) => {
+// // //     const updated = softSkills.filter((_, i) => i !== index);
+// // //     setSoftSkills(updated);
+// // //     if (selectedJob && isEditMode) {
+// // //       setSelectedJob({ ...selectedJob, softSkills: updated });
+// // //     } else {
+// // //       setNewJob({ ...newJob, softSkills: updated });
+// // //     }
+// // //   };
+
+// // //   // Location fields
+// // //   const addLocationField = () => setNewJob({ ...newJob, location: [...newJob.location, ''] });
+// // //   const removeLocationField = (index) => setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
+// // //   const updateLocationField = (index, value) => {
+// // //     const newLocs = [...newJob.location];
+// // //     newLocs[index] = value;
+// // //     setNewJob({ ...newJob, location: newLocs });
+// // //   };
+
+// // //   // Stats
+// // //   const calculateStatistics = () => {
+// // //     const totalTrainees = allTrainees.length;
+// // //     const totalJobs = jobs.length;
+// // //     const mappedTrainees = allTrainees.filter((t) => t.isMapped).length;
+// // //     const unmappedTrainees = allTrainees.filter((t) => !t.isMapped).length;
+// // //     const activeJobs = jobs.filter((j) => j.status === 'active').length;
+// // //     const filledPositions = jobs.reduce((sum, job) => sum + (job.filled || 0), 0);
+// // //     const totalOpenings = jobs.reduce((sum, job) => sum + (job.openings || 0), 0);
+// // //     const fillRate = totalOpenings ? Math.round((filledPositions / totalOpenings) * 100) : 0;
+// // //     return { totalTrainees, totalJobs, mappedTrainees, unmappedTrainees, activeJobs, filledPositions, totalOpenings, fillRate };
+// // //   };
+// // //   const stats = calculateStatistics();
+
+// // //   // Interview Lock Functions
+// // //   const fetchInterviewLocks = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       let url = '/interview-locks/';
+// // //       const params = new URLSearchParams();
+// // //       if (lockFilter.status) params.append('status', lockFilter.status);
+// // //       if (lockFilter.job) params.append('job', lockFilter.job);
+// // //       if (params.toString()) url += '?' + params.toString();
+// // //       const response = await api.get(url);
+// // //       setInterviewLocks(response.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch interview locks');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const fetchLockStats = async () => {
+// // //     try {
+// // //       const response = await api.get('/interview-locks/dashboard/');
+// // //       setLockStats(response.data);
+// // //     } catch (err) {
+// // //       console.error('Failed to fetch lock stats', err);
+// // //     }
+// // //   };
+
+// // //   const updateLockStatus = async (lockId, newStatus) => {
+// // //     try {
+// // //       await api.patch(`/interview-locks/${lockId}/`, { status: newStatus });
+// // //       toast.success('Status updated');
+// // //       fetchInterviewLocks();
+// // //       fetchLockStats();
+// // //       if (activeTab === 'selected') fetchSelectedLocks();
+// // //       if (activeTab === 'rejected') fetchRejectedLocks();
+// // //     } catch (err) {
+// // //       toast.error('Failed to update status');
+// // //     }
+// // //   };
+
+// // //   // Download functions (using axios with auth)
+// // //   const downloadLockReport = async (status = '') => {
+// // //     try {
+// // //       let url = '/interview-locks/report/';
+// // //       if (status) url += `?status=${status}`;
+// // //       const response = await api.get(url, { responseType: 'blob' });
+// // //       const blob = new Blob([response.data], { type: 'text/csv' });
+// // //       const downloadUrl = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = downloadUrl;
+// // //       a.download = `interview_locks${status ? '_' + status : ''}.csv`;
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(downloadUrl);
+// // //       document.body.removeChild(a);
+// // //     } catch (err) {
+// // //       toast.error('Failed to download report');
+// // //     }
+// // //   };
+
+// // //   const downloadReport = async (type) => {
+// // //     try {
+// // //       const response = await api.get(`/reports/${type}/`, { responseType: 'blob' });
+// // //       const blob = new Blob([response.data], { type: 'text/csv' });
+// // //       const downloadUrl = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = downloadUrl;
+// // //       a.download = `${type}_report.csv`;
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(downloadUrl);
+// // //       document.body.removeChild(a);
+// // //     } catch (err) {
+// // //       toast.error('Failed to download report');
+// // //     }
+// // //   };
+
+// // //   const fetchInterviewers = async () => {
+// // //     try {
+// // //       const res = await api.get('/users/?role=interviewer');
+// // //       setInterviewers(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to load interviewers');
+// // //     }
+// // //   };
+
+// // //   const fetchSelectedLocks = async () => {
+// // //     try {
+// // //       const res = await api.get('/interview-locks/?status=selected');
+// // //       setSelectedLocks(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch selected candidates');
+// // //     }
+// // //   };
+
+// // //   const fetchRejectedLocks = async () => {
+// // //     try {
+// // //       const res = await api.get('/interview-locks/?status=rejected');
+// // //       setRejectedLocks(res.data);
+// // //     } catch (err) {
+// // //       toast.error('Failed to fetch rejected candidates');
+// // //     }
+// // //   };
+
+// // //   const handleLockForInterview = async () => {
+// // //     if (selectedTraineeIds.length === 0) {
+// // //       toast.error('Select at least one trainee');
+// // //       return;
+// // //     }
+// // //     if (!lockInterviewDatetime) {
+// // //       toast.error('Select interview date and time');
+// // //       return;
+// // //     }
+// // //     if (!assignedToId) {
+// // //       toast.error('Select an interviewer');
+// // //       return;
+// // //     }
+// // //     try {
+// // //       setLoading(true);
+// // //       await api.post('/interview-locks/bulk_create/', {
+// // //         trainee_ids: selectedTraineeIds,
+// // //         job_id: selectedJob.id,
+// // //         interview_datetime: lockInterviewDatetime,
+// // //         comments: lockComments,
+// // //         assigned_to: assignedToId,
+// // //       });
+// // //       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
+// // //       setShowLockModal(false);
+// // //       setSelectedTraineeIds([]);
+// // //       setLockInterviewDatetime('');
+// // //       setLockComments('');
+// // //       setAssignedToId('');
+// // //       if (selectedJob) fetchJobMatches(selectedJob.id);
+// // //     } catch (err) {
+// // //       toast.error('Failed to lock trainees');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // ==================== Talent Search Functions ====================
+// // //   const handleJobSelectForSearch = (jobId) => {
+// // //     const job = jobs.find(j => j.id === parseInt(jobId));
+// // //     setSelectedJobForSearch(job);
+// // //     if (job) {
+// // //       setJobMatchesLoading(true);
+// // //       api.get(`/matches/${job.id}/`)
+// // //         .then(res => {
+// // //           setSearchJobMatches(res.data);
+// // //           setSelectedSearchTraineeIds([]);
+// // //           setSelectAll(false);
+// // //         })
+// // //         .catch(() => toast.error('Failed to fetch matches'))
+// // //         .finally(() => setJobMatchesLoading(false));
+// // //     } else {
+// // //       setSearchJobMatches(null);
+// // //     }
+// // //   };
+
+// // //   const filteredSearchMatches = () => {
+// // //     if (!searchJobMatches) return [];
+// // //     const allMatches = [
+// // //       ...(searchJobMatches.perfect_match || []),
+// // //       ...(searchJobMatches.skills_only || []),
+// // //       ...(searchJobMatches.location_only || []),
+// // //       ...(searchJobMatches.nearby || []),
+// // //       ...(searchJobMatches.no_match || []),
+// // //     ];
+// // //     return allMatches.filter(m => {
+// // //       if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
+// // //       if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
+// // //       if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
+// // //       if (searchFilters.skillKeyword) {
+// // //         const skills = m.matched_skills || [];
+// // //         if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false;
+// // //       }
+// // //       return true;
+// // //     });
+// // //   };
+
+// // //   const handleSelectAllSearch = () => {
+// // //   const baseFiltered = filteredSearchMatches();
+// // //   const filtered = baseFiltered.filter(m => {
+// // //     const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// // //     return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// // //   });
+// // //   if (selectAll) {
+// // //     setSelectedSearchTraineeIds([]);
+// // //   } else {
+// // //     setSelectedSearchTraineeIds(filtered.map(m => m.trainee_id));
+// // //   }
+// // //   setSelectAll(!selectAll);
+// // // };
+
+// // //   const handleLockFromSearch = async () => {
+// // //     if (selectedSearchTraineeIds.length === 0) {
+// // //       toast.error('Select at least one trainee');
+// // //       return;
+// // //     }
+// // //     if (!lockInterviewDatetime) {
+// // //       toast.error('Select interview date and time');
+// // //       return;
+// // //     }
+// // //     if (!assignedToId) {
+// // //       toast.error('Select an interviewer');
+// // //       return;
+// // //     }
+// // //     try {
+// // //       setLoading(true);
+// // //       await api.post('/interview-locks/bulk_create/', {
+// // //         trainee_ids: selectedSearchTraineeIds,
+// // //         job_id: selectedJobForSearch.id,
+// // //         interview_datetime: lockInterviewDatetime,
+// // //         comments: lockComments,
+// // //         assigned_to: assignedToId,
+// // //       });
+// // //       toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
+// // //       setShowLockModal(false);
+// // //       setSelectedSearchTraineeIds([]);
+// // //       setSelectAll(false);
+// // //       setLockInterviewDatetime('');
+// // //       setLockComments('');
+// // //       setAssignedToId('');
+// // //       handleJobSelectForSearch(selectedJobForSearch.id);
+// // //     } catch (err) {
+// // //       toast.error('Failed to lock trainees');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const downloadFilteredSearch = () => {
+// // //       const baseFiltered = filteredSearchMatches();
+// // //     const filtered = baseFiltered.filter(m => {
+// // //       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// // //       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// // //     });
+// // //       if (filtered.length === 0) {
+// // //       toast.error('No data to download');
+// // //       return;
+// // //     }
+// // //     const csvRows = [];
+// // //     csvRows.push(['Trainee Name', 'Location', 'Bucket', 'Skills %', 'Location %', 'Total %', 'Matched Skills'].join(','));
+// // //     filtered.forEach(m => {
+// // //       csvRows.push([
+// // //         `"${m.trainee_name}"`,
+// // //         `"${m.trainee_location || ''}"`,
+// // //         m.bucket,
+// // //         m.skills_percentage,
+// // //         m.location_percentage,
+// // //         m.total_percentage,
+// // //         `"${(m.matched_skills || []).join('; ')}"`,
+// // //       ].join(','));
+// // //     });
+// // //     const csvString = csvRows.join('\n');
+// // //     const blob = new Blob([csvString], { type: 'text/csv' });
+// // //     const url = window.URL.createObjectURL(blob);
+// // //     const a = document.createElement('a');
+// // //     a.href = url;
+// // //     a.download = `job_matches_${selectedJobForSearch?.title}_filtered.csv`;
+// // //     document.body.appendChild(a);
+// // //     a.click();
+// // //     window.URL.revokeObjectURL(url);
+// // //     document.body.removeChild(a);
+// // //   };
+
+// // //   // ==================== Manual Matching Trigger ====================
+// // //   const runMatchingEngine = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       await api.post('/run-matching/');
+// // //       toast.success('Matching engine triggered successfully');
+// // //     } catch (err) {
+// // //       toast.error('Failed to trigger matching engine');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // ==================== Effects ====================
+// // //   useEffect(() => {
+// // //     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
+// // //       fetchTrainees();
+// // //     }
+// // //   }, [activeTab]);
+
+// // //   useEffect(() => {
+// // //     if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
+// // //   }, [activeTab]);
+
+// // //   useEffect(() => {
+// // //     if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool();
+// // //   }, [allTrainees, activeTab]);
+
+// // //   useEffect(() => {
+// // //     setSkillTrends(computeSkillTrends(jobs));
+// // //   }, [jobs]);
+
+// // //   useEffect(() => {
+// // //     if (activeTab === 'dashboard') fetchLockStats();
+// // //   }, [activeTab]);
+
+// // //   // Filter trainees
+// // //   useEffect(() => {
+// // //     let filtered = [...allTrainees];
+// // //     if (searchQuery) {
+// // //       filtered = filtered.filter(
+// // //         (t) =>
+// // //           t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+// // //           t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+// // //           t.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
+// // //       );
+// // //     }
+// // //     if (locationFilter) {
+// // //       filtered = filtered.filter((t) => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
+// // //     }
+// // //     if (activeTab === 'mapped') filtered = filtered.filter((t) => t.isMapped);
+// // //     else if (activeTab === 'unmapped') filtered = filtered.filter((t) => !t.isMapped);
+// // //     else if (activeTab === 'openPool') {
+// // //       const noMatchIds = traineesWithNoMatches.map((t) => t.id || t.trainee_id);
+// // //       filtered = filtered.filter((t) => !t.isMapped && noMatchIds.includes(t.id));
+// // //     }
+// // //     setTrainees(filtered);
+// // //   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
+
+// // //   useEffect(() => {
+// // //     if (activeTab === 'interviewLocks') {
+// // //       fetchInterviewLocks();
+// // //       fetchLockStats();
+// // //     }
+// // //   }, [activeTab, lockFilter]);
+
+// // //   useEffect(() => {
+// // //     if (activeTab === 'selected') fetchSelectedLocks();
+// // //     if (activeTab === 'rejected') fetchRejectedLocks();
+// // //   }, [activeTab]);
+
+// // //   // Compute skill trends
+// // //   const computeSkillTrends = (jobs) => {
+// // //     const techMap = new Map();
+// // //     const softMap = new Map();
+// // //     const WEIGHTS = {
+// // //       basePerJob: 1,
+// // //       openingsWeight: 0.5,
+// // //       matchesWeight: 0.25,
+// // //       inactivePenalty: 0.4,
+// // //       unfilledBonus: 0.3,
+// // //     };
+// // //     for (const job of jobs || []) {
+// // //       const isActive = job?.status === 'active';
+// // //       const openings = Number(job?.openings ?? 0);
+// // //       const filled = Number(job?.filled ?? 0);
+// // //       const matches = Number(job?.matches ?? 0);
+// // //       const unfilled = Math.max(0, openings - filled);
+// // //       const jobWeight =
+// // //         WEIGHTS.basePerJob +
+// // //         openings * WEIGHTS.openingsWeight +
+// // //         matches * WEIGHTS.matchesWeight +
+// // //         unfilled * WEIGHTS.unfilledBonus;
+// // //       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
+
+// // //       (job?.techSkills || []).forEach((raw) => {
+// // //         const skill = normalizeSkill(raw);
+// // //         if (!skill) return;
+// // //         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// // //         techMap.set(skill, {
+// // //           jobs: cur.jobs + 1,
+// // //           openings: cur.openings + openings,
+// // //           matches: cur.matches + matches,
+// // //           demand: cur.demand + effectiveWeight,
+// // //         });
+// // //       });
+
+// // //       (job?.softSkills || []).forEach((raw) => {
+// // //         const skill = normalizeSkill(raw);
+// // //         if (!skill) return;
+// // //         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// // //         softMap.set(skill, {
+// // //           jobs: cur.jobs + 1,
+// // //           openings: cur.openings + openings,
+// // //           matches: cur.matches + matches,
+// // //           demand: cur.demand + effectiveWeight,
+// // //         });
+// // //       });
+// // //     }
+
+// // //     const toSortedArray = (map) => {
+// // //       const arr = Array.from(map.entries()).map(([name, stats]) => ({
+// // //         name,
+// // //         jobs: stats.jobs,
+// // //         openings: stats.openings,
+// // //         matches: stats.matches,
+// // //         demandRaw: stats.demand,
+// // //       }));
+// // //       const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
+// // //       return arr
+// // //         .map((a) => ({
+// // //           ...a,
+// // //           demand: Math.round((a.demandRaw / maxDemand) * 100),
+// // //         }))
+// // //         .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
+// // //         .slice(0, 5);
+// // //     };
+// // //     return { tech: toSortedArray(techMap), soft: toSortedArray(softMap) };
+// // //   };
+
+// // //   // ==================== Render Helpers ====================
+// // //   const renderHiddenFileInputs = () => (
+// // //     <>
+// // //       <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
+// // //       <input type="file" id="wordUpload" accept=".doc,.docx" style={{ display: 'none' }} onChange={handleWordUpload} />
+// // //     </>
+// // //   );
+
+// // //   const handleExcelUpload = async (event) => {
+// // //     const file = event.target.files[0];
+// // //     if (!file) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.uploadExcel(file);
+// // //       await fetchJobs();
+// // //       toast.success('Excel uploaded');
+// // //     } catch (err) {
+// // //       toast.error('Upload failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //       event.target.value = '';
+// // //     }
+// // //   };
+
+// // //   const handleWordUpload = async (event) => {
+// // //     const file = event.target.files[0];
+// // //     if (!file) return;
+// // //     try {
+// // //       setLoading(true);
+// // //       await jobAPI.uploadWord(file);
+// // //       await fetchJobs();
+// // //       toast.success('Word uploaded');
+// // //     } catch (err) {
+// // //       toast.error('Upload failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //       event.target.value = '';
+// // //     }
+// // //   };
+
+// // //   const handleDownloadExcelTemplate = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const blob = await jobAPI.downloadExcelTemplate();
+// // //       const url = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = url;
+// // //       a.download = 'job_template.xlsx';
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(url);
+// // //       document.body.removeChild(a);
+// // //       toast.success('Template downloaded');
+// // //     } catch (err) {
+// // //       toast.error('Download failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleDownloadWordTemplate = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const blob = await jobAPI.downloadWordTemplate();
+// // //       const url = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = url;
+// // //       a.download = 'job_template.docx';
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(url);
+// // //       document.body.removeChild(a);
+// // //       toast.success('Template downloaded');
+// // //     } catch (err) {
+// // //       toast.error('Download failed');
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   // Modals
+// // //   const renderExcelTemplateModal = () => {
+// // //     if (!showExcelTemplate) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowExcelTemplate(false)}>
+// // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><FileSpreadsheet size={24} /><h2>Excel Upload Template</h2></div>
+// // //             <button className="modal-close" onClick={() => setShowExcelTemplate(false)}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <h3>Download the template, fill it, and upload.</h3>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}>
+// // //               <Download size={18} /> Download Template
+// // //             </button>
+// // //             <button className="btn-primary" onClick={() => { document.getElementById('excelUpload').click(); setShowExcelTemplate(false); }} disabled={loading}>
+// // //               <Upload size={18} /> Upload Excel
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   const renderWordTemplateModal = () => {
+// // //     if (!showWordTemplate) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowWordTemplate(false)}>
+// // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><File size={24} /><h2>Word Template</h2></div>
+// // //             <button className="modal-close" onClick={() => setShowWordTemplate(false)}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <h3>Download the Word template, fill it, and upload.</h3>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}>
+// // //               <Download size={18} /> Download Template
+// // //             </button>
+// // //             <button className="btn-primary" onClick={() => { document.getElementById('wordUpload').click(); setShowWordTemplate(false); }} disabled={loading}>
+// // //               <Upload size={18} /> Upload Word
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Dashboard render
+// // //   const renderDashboard = () => (
+// // //     <div className="dashboard-content">
+// // //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// // //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //       <div className="stats-grid">
+// // //         <div className="stat-card"><div className="stat-icon"><Users /></div><div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><BriefcaseBusiness /></div><div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><CheckCircle /></div><div className="stat-content"><h3>Mapped</h3><div className="stat-value">{stats.mappedTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><AlertCircle /></div><div className="stat-content"><h3>Unmapped</h3><div className="stat-value">{stats.unmappedTrainees}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
+// // //         <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
+// // //       </div>
+
+// // //       {lockStats && (
+// // //         <div className="stats-grid small" style={{ marginTop: '1rem' }}>
+// // //           <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// // //           <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// // //           <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+// // //         </div>
+// // //       )}
+
+// // //       <h2 className="section-title">Top Skills in Demand</h2>
+// // //       <div className="skills-section">
+// // //         <div className="content-card">
+// // //           <div className="card-header"><h3><Target size={20} /> Technical Skills</h3></div>
+// // //           <div className="hr-skills-list">
+// // //             {skillTrends.tech.map((skill) => (
+// // //               <div key={`tech-${skill.name}`} className="skill-item">
+// // //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
+// // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#3b82f6' }} /></div>
+// // //               </div>
+// // //             ))}
+// // //             {skillTrends.tech.length === 0 && <div className="no-data">No technical skills found.</div>}
+// // //           </div>
+// // //         </div>
+// // //         <div className="content-card">
+// // //           <div className="card-header"><h3><Star size={20} /> Soft Skills</h3></div>
+// // //           <div className="hr-skills-list">
+// // //             {skillTrends.soft.map((skill) => (
+// // //               <div key={`soft-${skill.name}`} className="skill-item">
+// // //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
+// // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#10b981' }} /></div>
+// // //               </div>
+// // //             ))}
+// // //             {skillTrends.soft.length === 0 && <div className="no-data">No soft skills found.</div>}
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Job Management
+// // //   const renderJobManagement = () => (
+// // //     <div className="job-management">
+// // //       <div className="section-header">
+// // //         <div className="header-title"><h2><Briefcase size={24} /> Job Profiles</h2><p className="subtitle">Manage all job positions</p></div>
+// // //         <div className="header-actions">
+// // //           <button className="btn-primary" onClick={runMatchingEngine} disabled={loading} style={{ marginRight: '1rem' }}>
+// // //             <RefreshCw size={18} /> Generate Matches
+// // //           </button>
+// // //           <div className="upload-buttons">
+// // //             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}><FileSpreadsheet size={18} /> Upload Excel</button>
+// // //             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}><File size={18} /> Upload Word</button>
+// // //           </div>
+// // //           <button className="btn-primary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }} disabled={loading}><Plus size={18} /> Create New Job</button>
+// // //         </div>
+// // //       </div>
+// // //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading jobs...</p></div>}
+// // //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //       {jobs.length === 0 && !loading && !error && (
+// // //         <div className="no-data"><Briefcase size={48} /><h3>No Jobs Found</h3><p>Create your first job profile or upload via Excel/Word</p></div>
+// // //       )}
+// // //       {jobs.length > 0 && (
+// // //         <div className="table-container">
+// // //           <table className="data-table">
+// // //             <thead><tr><th>Job Title</th><th>Department</th><th>Location(s)</th><th>Openings</th><th>Filled</th><th>Status</th><th>Actions</th></tr></thead>
+// // //             <tbody>
+// // //               {jobs.map((job) => (
+// // //                 <tr key={job.id}>
+// // //                   <td><div className="job-title-cell"><div className="job-icon"><BriefcaseBusiness size={16} /></div><span className="font-medium">{job.title}</span></div></td>
+// // //                   <td><div className="department-cell"><Building size={14} />{job.department}</div></td>
+// // //                   <td><div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div></td>
+// // //                   <td><div className="openings-cell">{job.openings}</div></td>
+// // //                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
+// // //                   <td><button className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`} onClick={() => toggleJobStatus(job.id)} disabled={loading}>{job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}</button></td>
+// // //                   <td><div className="action-buttons">
+// // //                     <button className="btn-icon btn-icon-view" onClick={() => handleViewJobDetails(job)} disabled={loading}><Eye size={16} /></button>
+// // //                     <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading}><Edit size={16} /></button>
+// // //                     <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
+// // //                   </div></td>
+// // //                 </tr>
+// // //               ))}
+// // //             </tbody>
+// // //           </table>
+// // //         </div>
+// // //       )}
+// // //     </div>
+// // //   );
+
+// // //   // Create/Edit Job Form – keep your existing implementation
+// // //   const renderCreateJob = () => {
+// // //     const jobToEdit = selectedJob || newJob;
+// // //     const isEditing = !!selectedJob && isEditMode;
+
+// // //     const handleSubmit = async (e) => {
+// // //       e.preventDefault();
+// // //       if (isEditing) {
+// // //         await handleUpdateJob(jobToEdit);
+// // //       } else {
+// // //         await handleCreateJob();
+// // //       }
+// // //     };
+
+// // //     return (
+// // //       <div className="create-job">
+// // //         <div className="section-header">
+// // //           <div className="header-title">
+// // //             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
+// // //             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
+// // //           </div>
+// // //           <button className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
+// // //         </div>
+// // //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating...' : 'Creating...'}</p></div>}
+// // //         <div className="form-card">
+// // //           <form onSubmit={handleSubmit}>
+// // //             <div className="form-section">
+// // //               <h3 className="form-section-title"><Briefcase size={20} /> Basic Information</h3>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Job Title</label>
+// // //                   <input type="text" className="form-control" value={jobToEdit.title} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })} required placeholder="e.g., Senior Frontend Developer" disabled={loading} />
+// // //                 </div>
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Department</label>
+// // //                   <select className="form-control" value={jobToEdit.department} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })} required disabled={loading}>
+// // //                     <option value="">Select Department</option>
+// // //                     <option value="Technology">Technology</option>
+// // //                     <option value="Analytics">Analytics</option>
+// // //                     <option value="Design">Design</option>
+// // //                     <option value="Operations">Operations</option>
+// // //                     <option value="Marketing">Marketing</option>
+// // //                     <option value="Sales">Sales</option>
+// // //                   </select>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label>Visibility</label>
+// // //                   <select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}>
+// // //                     <option value="public">Public</option>
+// // //                     <option value="private">Private</option>
+// // //                   </select>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple)</span></label>
+// // //                 {jobToEdit.location.map((loc, index) => (
+// // //                   <div key={index} className="location-input-group">
+// // //                     <input type="text" className="form-control" value={loc} onChange={(e) => { if (isEditing) { const newLocs = [...jobToEdit.location]; newLocs[index] = e.target.value; setSelectedJob({ ...jobToEdit, location: newLocs }); } else updateLocationField(index, e.target.value); }} required={index === 0} placeholder="e.g., Hyderabad" disabled={loading} />
+// // //                     {jobToEdit.location.length > 1 && <button type="button" className="btn-icon" onClick={() => { if (isEditing) { const newLocs = jobToEdit.location.filter((_, i) => i !== index); setSelectedJob({ ...jobToEdit, location: newLocs }); } else removeLocationField(index); }} disabled={loading}><X size={16} /></button>}
+// // //                   </div>
+// // //                 ))}
+// // //                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}><Plus size={16} /> Add Another</button>
+// // //               </div>
+// // //               <div className="form-row">
+// // //                 <div className="form-group">
+// // //                   <label><span className="required">*</span> Openings</label>
+// // //                   <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
+// // //                 </div>
+// // //                 <div className="form-group">
+// // //                   <label><Calendar size={16} /> Expiry Date</label>
+// // //                   <input type="date" className="form-control" value={jobToEdit.expiryDate} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })} disabled={loading} />
+// // //                 </div>
+// // //               </div>
+// // //             </div>
+// // //             <div className="form-section">
+// // //               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Technical Skills</label>
+// // //                 <div className="skills-input">
+// // //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleTechSkillAdd} disabled={loading} />
+// // //                   <div className="skills-tags">
+// // //                     {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
+// // //                       <span key={index} className="skill-tag tech-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button></span>
+// // //                     ))}
+// // //                   </div>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label>Soft Skills</label>
+// // //                 <div className="skills-input">
+// // //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleSoftSkillAdd} disabled={loading} />
+// // //                   <div className="skills-tags">
+// // //                     {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
+// // //                       <span key={index} className="skill-tag soft-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button></span>
+// // //                     ))}
+// // //                   </div>
+// // //                 </div>
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Job Description</label>
+// // //                 <textarea className="form-control" rows="4" value={jobToEdit.description} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })} placeholder="Describe the role..." required disabled={loading} />
+// // //               </div>
+// // //               <div className="form-group">
+// // //                 <label><span className="required">*</span> Requirements</label>
+// // //                 <textarea className="form-control" rows="4" value={jobToEdit.requirements} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })} placeholder="List required qualifications..." required disabled={loading} />
+// // //               </div>
+// // //             </div>
+// // //             <div className="form-actions">
+// // //               <button type="button" className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}>Cancel</button>
+// // //               <button type="submit" className="btn-primary" disabled={loading}>
+// // //                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job'}</>}
+// // //               </button>
+// // //             </div>
+// // //           </form>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Trainees List
+// // //   const renderTraineesList = () => {
+// // //     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
+// // //     const openPoolCount = traineesWithNoMatches.length;
+// // //     return (
+// // //       <div className="trainees-list">
+// // //         <div className="section-header">
+// // //           <div className="header-title"><h2><Users size={24} /> Trainees</h2><p className="subtitle">Manage all trainees</p></div>
+// // //           <div className="view-options">
+// // //             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All</button>
+// // //             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
+// // //             <button className={`btn-view-option ${activeTab === 'unmapped' ? 'active' : ''}`} onClick={() => setActiveTab('unmapped')}><AlertCircle size={16} /> Unmapped ({stats.unmappedTrainees})</button>
+// // //             <button className={`btn-view-option ${activeTab === 'openPool' ? 'active' : ''}`} onClick={() => setActiveTab('openPool')}><Users2 size={16} /> Open Pool ({openPoolCount})</button>
+// // //           </div>
+// // //         </div>
+// // //         <div className="search-filter">
+// // //           <div className="search-box"><input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+// // //           <div className="filter-group">
+// // //             <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+// // //               <option value="">All Locations</option>
+// // //               {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>)}
+// // //             </select>
+// // //             <button className="btn-icon" onClick={() => { setSearchQuery(''); setLocationFilter(''); }}><X size={18} /></button>
+// // //           </div>
+// // //         </div>
+// // //         {checkingMatches && activeTab === 'openPool' && <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking Open Pool...</p></div>}
+// // //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// // //         {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
+// // //         {trainees.length === 0 && !loading && !checkingMatches && (
+// // //           <div className="no-data"><Users size={48} /><h3>No Trainees Found</h3><p>No trainees match your criteria.</p>
+// // //             {activeTab === 'openPool' && <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}><Search size={18} /> Re-check Open Pool</button>}
+// // //           </div>
+// // //         )}
+// // //         <div className="trainees-grid">
+// // //           {trainees.map((trainee) => (
+// // //             <div key={trainee.id} className="trainee-card">
+// // //               <div className="trainee-header">
+// // //                 <div className="trainee-info-main">
+// // //                   <div className="trainee-avatar">{trainee.name.charAt(0)}</div>
+// // //                   <div className="trainee-info"><h4>{trainee.name}</h4><div className="trainee-meta"><span className="trainee-email"><Mail size={14} /> {trainee.email}</span><span className="trainee-location"><MapPin size={14} /> {trainee.location}</span></div></div>
+// // //                 </div>
+// // //                 <div className={`mapping-indicator ${trainee.isMapped ? 'mapped' : 'unmapped'}`}>
+// // //                   {trainee.isMapped ? <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</> : <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>}
+// // //                 </div>
+// // //               </div>
+// // //               <div className="trainee-skills">
+// // //                 {trainee.skills.slice(0, 4).map((skill) => <span key={skill} className="skill-tag">{skill}</span>)}
+// // //                 {trainee.skills.length > 4 && <span className="skill-tag-more">+{trainee.skills.length - 4}</span>}
+// // //               </div>
+// // //               <div className="trainee-stats">
+// // //                 <div className="trainee-stat"><span className="stat-label">Avg Score</span><div className="score-progress"><div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div><span className="score-value">{trainee.score}%</span></div></div>
+// // //               </div>
+// // //               <div className="trainee-actions">
+// // //                 <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}><User size={16} /> View Profile</button>
+// // //               </div>
+// // //             </div>
+// // //           ))}
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Job Details Modal (new)
+// // //   const renderJobDetailsModal = () => {
+// // //     if (!showJobDetailsModal || !jobDetailsJob) return null;
+
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
+// // //         <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
+// // //           <div className="modal-header">
+// // //             <h2><Briefcase size={24} /> {jobDetailsJob.title}</h2>
+// // //             <button className="modal-close" onClick={() => setShowJobDetailsModal(false)}><X /></button>
+// // //           </div>
+// // //           <div className="modal-tabs">
+// // //             <button className={jobDetailsTab === 'overview' ? 'active' : ''} onClick={() => setJobDetailsTab('overview')}>Overview</button>
+// // //             <button className={jobDetailsTab === 'mapped' ? 'active' : ''} onClick={() => setJobDetailsTab('mapped')}>Mapped ({mappedTrainees.length})</button>
+// // //             <button className={jobDetailsTab === 'rejected' ? 'active' : ''} onClick={() => setJobDetailsTab('rejected')}>Rejected ({rejectedTrainees.length})</button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             {jobDetailsTab === 'overview' && (
+// // //               <div className="job-details">
+// // //                 <p><strong>Department:</strong> {jobDetailsJob.department}</p>
+// // //                 <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
+// // //                 <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
+// // //                 <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
+// // //                 <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
+// // //                 <p><strong>Expires:</strong> {jobDetailsJob.expiryDate}</p>
+// // //                 <p><strong>Salary:</strong> {jobDetailsJob.salary}</p>
+// // //                 <div className="job-section">
+// // //                   <h4>Description</h4>
+// // //                   <p>{jobDetailsJob.description}</p>
+// // //                 </div>
+// // //                 <div className="job-section">
+// // //                   <h4>Requirements</h4>
+// // //                   <p>{jobDetailsJob.requirements}</p>
+// // //                 </div>
+// // //                 <div className="job-section">
+// // //                   <h4>Technical Skills</h4>
+// // //                   <div className="skills-list">
+// // //                     {jobDetailsJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}
+// // //                   </div>
+// // //                 </div>
+// // //                 <div className="job-section">
+// // //                   <h4>Soft Skills</h4>
+// // //                   <div className="skills-list">
+// // //                     {jobDetailsJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}
+// // //                   </div>
+// // //                 </div>
+// // //               </div>
+// // //             )}
+// // //             {jobDetailsTab === 'mapped' && (
+// // //               <div>
+// // //                 {mappedTrainees.length === 0 ? (
+// // //                   <p className="no-data">No trainees mapped to this job.</p>
+// // //                 ) : (
+// // //                   <div className="trainee-list">
+// // //                     {mappedTrainees.map(t => (
+// // //                       <div key={t.id} className="trainee-item">
+// // //                         <User size={18} />
+// // //                         <span>{t.name}</span>
+// // //                         <span className="trainee-location">({t.location})</span>
+// // //                         <button className="btn-icon" onClick={() => { setSelectedTrainee(t); setShowJobDetailsModal(false); fetchTraineeMatches(t.id); }}><Eye size={16} /></button>
+// // //                       </div>
+// // //                     ))}
+// // //                   </div>
+// // //                 )}
+// // //               </div>
+// // //             )}
+// // //             {jobDetailsTab === 'rejected' && (
+// // //               <div>
+// // //                 {rejectedTrainees.length === 0 ? (
+// // //                   <p className="no-data">No rejected trainees for this job.</p>
+// // //                 ) : (
+// // //                   <div className="trainee-list">
+// // //                     {rejectedTrainees.map(lock => (
+// // //                       <div key={lock.id} className="trainee-item">
+// // //                         <User size={18} />
+// // //                         <span>{lock.trainee_name}</span>
+// // //                         <span className="trainee-location">({lock.trainee_location})</span>
+// // //                         {lock.feedback && (
+// // //                           <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><FileText size={16} /></button>
+// // //                         )}
+// // //                         <button className="btn-icon" onClick={() => {
+// // //                           const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                           if (trainee) { setSelectedTrainee(trainee); setShowJobDetailsModal(false); fetchTraineeMatches(trainee.id); }
+// // //                         }}><Eye size={16} /></button>
+// // //                       </div>
+// // //                     ))}
+// // //                   </div>
+// // //                 )}
+// // //               </div>
+// // //             )}
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={() => setShowJobDetailsModal(false)}>Close</button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Trainee Profile Modal – unchanged
+// // //   const renderTraineeModal = () => {
+// // //     if (!selectedTrainee) return null;
+// // //     const traineeData = selectedTrainee.traineeData || selectedTrainee;
+// // //     const userInfo = traineeData.userInfo || {};
+
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>
+// // //         <div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}>
+// // //           <div className="modal-header">
+// // //             <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div>
+// // //             <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             {traineeMatchesLoading ? (
+// // //               <div className="loading-state"><div className="loading-spinner"></div><p>Loading trainee matches...</p></div>
+// // //             ) : (
+// // //               <>
+// // //                 <div className="trainee-details-section">
+// // //                   <div className="mapping-status-section">
+// // //                     <h4>Project Mapping</h4>
+// // //                     <div className={`mapping-status ${selectedTrainee.isMapped ? 'mapped' : 'unmapped'}`}>
+// // //                       <div className="status-indicator">
+// // //                         {selectedTrainee.isMapped ? (
+// // //                           <><CheckCircle size={20} /><div><strong>Mapped to Project</strong><p>{selectedTrainee.projectName || 'Unknown Project'}</p><small>Project ID: {selectedTrainee.projectId || 'N/A'}</small></div></>
+// // //                         ) : (
+// // //                           <><AlertCircle size={20} /><div><strong>Not Assigned</strong><p>This trainee is available for project assignment</p></div></>
+// // //                         )}
+// // //                       </div>
+// // //                       {selectedTrainee.isMapped ? (
+// // //                         <button className="btn-danger" onClick={() => handleUnmapFromProject(selectedTrainee)} disabled={loading}>
+// // //                           <X size={18} /> Unmap
+// // //                         </button>
+// // //                       ) : (
+// // //                         <div className="available-for-mapping"><p>Available for mapping</p></div>
+// // //                       )}
+// // //                     </div>
+// // //                   </div>
+// // //                   <div className="profile-header">
+// // //                     <div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div>
+// // //                     <div className="profile-info">
+// // //                       <h3>{userInfo.name || selectedTrainee.name}</h3>
+// // //                       <div className="profile-role">TRAINEE</div>
+// // //                       <div className="profile-meta">
+// // //                         <span className="profile-meta-item"><MapPin size={16} /> {userInfo.location || selectedTrainee.location}</span>
+// // //                         <span className="profile-meta-item"><Mail size={16} /> {selectedTrainee.email}</span>
+// // //                         <span className="profile-meta-item"><Target size={16} /> DPI: {traineeData.dpi || 'N/A'}</span>
+// // //                         <span className="profile-meta-item"><BarChart2 size={16} /> Score: {userInfo.averageScore || selectedTrainee.score}%</span>
+// // //                       </div>
+// // //                     </div>
+// // //                   </div>
+// // //                   <div className="trainee-details-grid">
+// // //                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
+// // //                     <div className="detail-item"><span className="detail-label">Avg Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
+// // //                   </div>
+// // //                   <div className="skills-section">
+// // //                     <h4>Strengths</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.strengths?.map((strength, index) => (
+// // //                         <span key={index} className="skill-tag tech-tag">{strength.courseName} ({strength.avgScore}%)</span>
+// // //                       )) || <span className="no-data">None</span>}
+// // //                     </div>
+// // //                     <h4>Weaknesses</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.weaknesses?.map((weakness, index) => (
+// // //                         <span key={index} className="skill-tag soft-tag">{weakness.courseName} ({weakness.avgScore}%)</span>
+// // //                       )) || <span className="no-data">None</span>}
+// // //                     </div>
+// // //                     <h4>Certificates</h4>
+// // //                     <div className="skills-list">
+// // //                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">None</span>}
+// // //                     </div>
+// // //                   </div>
+// // //                 </div>
+// // //                 {!selectedTrainee.isMapped && (
+// // //                   <div className="projects-section">
+// // //                     <div className="projects-header">
+// // //                       <h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3>
+// // //                     </div>
+// // //                     {traineeMatches ? (
+// // //                       <>
+// // //                         {traineeMatches.total_matches === 0 ? (
+// // //                           <div className="no-matches open-pool-message">
+// // //                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p>
+// // //                             <div className="open-pool-info"><p><strong>Open Pool</strong></p>
+// // //                               <button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button>
+// // //                             </div>
+// // //                           </div>
+// // //                         ) : (
+// // //                           <>
+// // //                             {traineeMatches.perfect_match?.length > 0 && (
+// // //                               <div className="bucket-section bucket-perfect">
+// // //                                 <h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3>
+// // //                                 <div className="projects-grid">
+// // //                                   {traineeMatches.perfect_match.map((match) => {
+// // //                                     const job = jobs.find(j => j.id === match.job_id);
+// // //                                     if (job && job.openings <= 0) return null;
+// // //                                     return (
+// // //                                       <div key={match.match_id} className="project-match-card">
+// // //                                         <div className="match-card-header">
+// // //                                           <div className="project-title">
+// // //                                             <h4>{match.job_title}</h4>
+// // //                                             <div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div>
+// // //                                           </div>
+// // //                                           <div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div>
+// // //                                         </div>
+// // //                                         <div className="match-details">
+// // //                                           <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
+// // //                                           <span>Location: {match.location_percentage.toFixed(1)}%</span>
+// // //                                           <span><Calendar size={14} /> Posted: {match.posted_date}</span>
+// // //                                         </div>
+// // //                                         <div className="project-actions">
+// // //                                           <button className="map-to-project-btn" onClick={() => {
+// // //                                             const job = jobs.find(j => j.id === match.job_id);
+// // //                                             if (job) {
+// // //                                               if (job.openings <= 0) { toast.error('No openings'); return; }
+// // //                                               handleMapToProject(selectedTrainee, job);
+// // //                                             }
+// // //                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Full' : 'Map'}</button>
+// // //                                         </div>
+// // //                                       </div>
+// // //                                     );
+// // //                                   })}
+// // //                                 </div>
+// // //                               </div>
+// // //                             )}
+// // //                             {/* Similarly for skills_only, location_only, nearby, no_match – can be added if needed */}
+// // //                           </>
+// // //                         )}
+// // //                       </>
+// // //                     ) : (
+// // //                       <div className="no-matches-data">
+// // //                         <Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p>
+// // //                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+// // //                       </div>
+// // //                     )}
+// // //                   </div>
+// // //                 )}
+// // //               </>
+// // //             )}
+// // //           </div>
+// // //           <div className="modal-footer">
+// // //             <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
+// // //             {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
+// // //               <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+// // //             )}
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Interview Locks Tab
+// // //   const renderInterviewLocks = () => {
+// // //     return (
+// // //       <div className="interview-locks">
+// // //         <div className="section-header">
+// // //           <div className="header-title"><h2><Lock size={24} /> Interview Locks</h2><p className="subtitle">Track locked candidates</p></div>
+// // //           <div className="header-actions">
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport()}><Download size={18} /> All</button>
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><CheckCircle size={18} /> Selected</button>
+// // //             <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><XCircle size={18} /> Rejected</button>
+// // //           </div>
+// // //         </div>
+// // //         {lockStats && (
+// // //           <div className="stats-grid small">
+// // //             <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// // //             <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// // //             <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+// // //           </div>
+// // //         )}
+// // //         <div className="search-filter">
+// // //           <div className="filter-group">
+// // //             <select className="filter-select" value={lockFilter.status} onChange={(e) => setLockFilter({ ...lockFilter, status: e.target.value })}>
+// // //               <option value="">All Status</option>
+// // //               <option value="locked">Locked</option>
+// // //               <option value="selected">Selected</option>
+// // //               <option value="rejected">Rejected</option>
+// // //               <option value="cancelled">Cancelled</option>
+// // //             </select>
+// // //             <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// // //               <option value="">All Jobs</option>
+// // //               {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// // //             </select>
+// // //             <button className="btn-icon" onClick={() => setLockFilter({ status: '', job: '' })}><X size={18} /></button>
+// // //           </div>
+// // //         </div>
+// // //         {loading ? <div className="loading-overlay"><div className="loading-spinner"></div></div> : (
+// // //           <div className="table-container">
+// // //             <table className="data-table">
+// // //               <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Date/Time</th><th>Status</th><th>Comments</th><th>Locked By</th><th>Actions</th></tr></thead>
+// // //               <tbody>
+// // //                 {interviewLocks.map(lock => (
+// // //                   <tr key={lock.id}>
+// // //                     <td><span className="font-medium">{lock.trainee_name}</span></td>
+// // //                     <td>{lock.job_title}</td>
+// // //                     <td>{lock.assigned_to_name || '-'}</td>
+// // //                     <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                     <td>
+// // //                       <select value={lock.status} onChange={(e) => updateLockStatus(lock.id, e.target.value)} className={`status-badge status-${lock.status}`}>
+// // //                         <option value="locked">Locked</option>
+// // //                         <option value="selected">Selected</option>
+// // //                         <option value="rejected">Rejected</option>
+// // //                         <option value="cancelled">Cancelled</option>
+// // //                       </select>
+// // //                     </td>
+// // //                     <td>{lock.comments || '-'}</td>
+// // //                     <td>{lock.locked_by_name}</td>
+// // //                     <td>
+// // //                       <button className="btn-icon btn-icon-view" onClick={() => {
+// // //                         const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                         if (trainee) handleViewTraineeProfile(trainee);
+// // //                       }}><Eye size={16} /></button>
+// // //                     </td>
+// // //                   </tr>
+// // //                 ))}
+// // //                 {interviewLocks.length === 0 && <tr><td colSpan="8" className="no-data">No locks found</td></tr>}
+// // //               </tbody>
+// // //             </table>
+// // //           </div>
+// // //         )}
+// // //         <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+// // //           <button className="btn-secondary" onClick={() => {
+// // //             const filtered = interviewLocks;
+// // //             if (filtered.length === 0) { toast.error('No data to download'); return; }
+// // //             const csvRows = [];
+// // //             csvRows.push(['Trainee Name','Job Title','Interviewer','Interview DateTime','Status','Comments','Locked By','Created At'].join(','));
+// // //             filtered.forEach(lock => {
+// // //               csvRows.push([
+// // //                 `"${lock.trainee_name}"`,
+// // //                 `"${lock.job_title}"`,
+// // //                 `"${lock.assigned_to_name || ''}"`,
+// // //                 lock.interview_datetime,
+// // //                 lock.status,
+// // //                 `"${lock.comments || ''}"`,
+// // //                 `"${lock.locked_by_name || ''}"`,
+// // //                 lock.created_at,
+// // //               ].join(','));
+// // //             });
+// // //             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+// // //             const url = window.URL.createObjectURL(blob);
+// // //             const a = document.createElement('a');
+// // //             a.href = url;
+// // //             a.download = `interview_locks_filtered.csv`;
+// // //             document.body.appendChild(a);
+// // //             a.click();
+// // //             window.URL.revokeObjectURL(url);
+// // //             document.body.removeChild(a);
+// // //           }}><Download size={18} /> Download Filtered</button>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Selected Tab
+// // //   const renderSelected = () => (
+// // //     <div className="selected-tab">
+// // //       <div className="section-header">
+// // //         <h2><CheckCircle size={24} /> Selected Candidates</h2>
+// // //         <div style={{ display: 'flex', gap: '1rem' }}>
+// // //           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// // //             <option value="">All Jobs</option>
+// // //             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// // //           </select>
+// // //           <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><Download size={18} /> Download All</button>
+// // //         </div>
+// // //       </div>
+// // //       <div className="table-container">
+// // //         <table className="data-table">
+// // //           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// // //           <tbody>
+// // //             {selectedLocks.map(lock => (
+// // //               <tr key={lock.id}>
+// // //                 <td>{lock.trainee_name}</td>
+// // //                 <td>{lock.job_title}</td>
+// // //                 <td>{lock.assigned_to_name || '-'}</td>
+// // //                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                 <td>
+// // //                   {lock.feedback ? (
+// // //                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+// // //                   ) : '-'}
+// // //                 </td>
+// // //                 <td>
+// // //                   <button className="btn-icon" onClick={() => {
+// // //                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                     if (trainee) handleViewTraineeProfile(trainee);
+// // //                   }}><User size={16} /></button>
+// // //                 </td>
+// // //               </tr>
+// // //             ))}
+// // //             {selectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No selected candidates</td></tr>}
+// // //           </tbody>
+// // //         </table>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Rejected Tab
+// // //   const renderRejected = () => (
+// // //     <div className="rejected-tab">
+// // //       <div className="section-header">
+// // //         <h2><XCircle size={24} /> Rejected Candidates</h2>
+// // //         <div style={{ display: 'flex', gap: '1rem' }}>
+// // //           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// // //             <option value="">All Jobs</option>
+// // //             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// // //           </select>
+// // //           <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><Download size={18} /> Download All</button>
+// // //         </div>
+// // //       </div>
+// // //       <div className="table-container">
+// // //         <table className="data-table">
+// // //           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// // //           <tbody>
+// // //             {rejectedLocks.map(lock => (
+// // //               <tr key={lock.id}>
+// // //                 <td>{lock.trainee_name}</td>
+// // //                 <td>{lock.job_title}</td>
+// // //                 <td>{lock.assigned_to_name || '-'}</td>
+// // //                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// // //                 <td>
+// // //                   {lock.feedback ? (
+// // //                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+// // //                   ) : '-'}
+// // //                 </td>
+// // //                 <td>
+// // //                   <button className="btn-icon" onClick={() => {
+// // //                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+// // //                     if (trainee) handleViewTraineeProfile(trainee);
+// // //                   }}><User size={16} /></button>
+// // //                 </td>
+// // //               </tr>
+// // //             ))}
+// // //             {rejectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No rejected candidates</td></tr>}
+// // //           </tbody>
+// // //         </table>
+// // //       </div>
+// // //     </div>
+// // //   );
+
+// // //   // Feedback Modal
+// // //   const renderFeedbackModal = () => {
+// // //     if (!viewingFeedback) return null;
+// // //     const fb = viewingFeedback;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setViewingFeedback(null)}>
+// // //         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// // //           <div className="modal-header">
+// // //             <h3>Interview Feedback</h3>
+// // //             <button className="modal-close" onClick={() => setViewingFeedback(null)}><X /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <p><strong>Interviewer:</strong> {fb.interviewer_name}</p>
+// // //             <p><strong>Date:</strong> {new Date(fb.feedback_date).toLocaleString()}</p>
+// // //             <p><strong>Questions:</strong> {fb.questions_asked} asked, {fb.questions_answered} answered</p>
+// // //             <p><strong>Attitude Rating:</strong> {fb.attitude_rating}/5</p>
+// // //             {fb.behaviour_notes && <p><strong>Behaviour Notes:</strong> {fb.behaviour_notes}</p>}
+// // //             {fb.technical_skills_assessed?.length > 0 && (
+// // //               <div><strong>Skills Assessed:</strong> {fb.technical_skills_assessed.join(', ')}</div>
+// // //             )}
+// // //             {fb.strengths && <p><strong>Strengths:</strong> {fb.strengths}</p>}
+// // //             {fb.weaknesses && <p><strong>Weaknesses:</strong> {fb.weaknesses}</p>}
+// // //             {fb.upskill_needed && <p><strong>Upskilling Needed:</strong> {fb.upskill_needed}</p>}
+// // //             {fb.overall_comments && <p><strong>Overall Comments:</strong> {fb.overall_comments}</p>}
+// // //             <p><strong>Recommendation:</strong> {fb.recommendation === 'selected' ? '✅ Selected' : '❌ Rejected'}</p>
+// // //           </div>
+// // //           <div className="modal-actions"><button className="btn-secondary" onClick={() => setViewingFeedback(null)}>Close</button></div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Lock Interview Modal
+// // //   const renderLockInterviewModal = () => {
+// // //     if (!showLockModal) return null;
+// // //     return (
+// // //       <div className="modal-overlay" onClick={() => setShowLockModal(false)}>
+// // //         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+// // //           <div className="modal-header">
+// // //             <h3><Lock size={20} /> Lock for Interview</h3>
+// // //             <button className="modal-close" onClick={() => setShowLockModal(false)}><X /></button>
+// // //           </div>
+// // //           <div className="modal-body">
+// // //             <div className="form-group">
+// // //               <label>Interview Date & Time *</label>
+// // //               <input type="datetime-local" className="form-control" value={lockInterviewDatetime} onChange={(e) => setLockInterviewDatetime(e.target.value)} required />
+// // //             </div>
+// // //             <div className="form-group">
+// // //               <label>Assign to Interviewer *</label>
+// // //               <select className="form-control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} required>
+// // //                 <option value="">Select Interviewer</option>
+// // //                 {interviewers.map(usr => <option key={usr.id} value={usr.id}>{usr.username}</option>)}
+// // //               </select>
+// // //             </div>
+// // //             <div className="form-group">
+// // //               <label>Comments (optional)</label>
+// // //               <textarea className="form-control" rows="3" value={lockComments} onChange={(e) => setLockComments(e.target.value)} placeholder="Add notes..." />
+// // //             </div>
+// // //             <p>Selected trainees: {selectedTraineeIds.length}</p>
+// // //           </div>
+// // //           <div className="modal-actions">
+// // //             <button className="btn-secondary" onClick={() => setShowLockModal(false)}>Cancel</button>
+// // //             <button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || !assignedToId || loading}>
+// // //               {loading ? 'Locking...' : 'Lock for Interview'}
+// // //             </button>
+// // //           </div>
+// // //         </div>
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Talent Search Tab
+// // //   const renderTalentSearch = () => {
+// // //     const baseFiltered = filteredSearchMatches();
+// // //     const filtered = baseFiltered.filter(m => {
+// // //       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// // //       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// // //     });
+// // //     return (
+// // //       <div className="talent-search">
+// // //         <div className="section-header">
+// // //           <h2><Users size={24} /> Talent Search</h2>
+// // //           <p className="subtitle">Find the best candidates for your job</p>
+// // //         </div>
+
+// // //         <div className="search-job-selector">
+// // //           <label>Select Job:</label>
+// // //           <select
+// // //             className="form-control"
+// // //             value={selectedJobForSearch?.id || ''}
+// // //             onChange={(e) => handleJobSelectForSearch(e.target.value)}
+// // //             style={{ maxWidth: '400px' }}
+// // //           >
+// // //             <option value="">-- Choose a job --</option>
+// // //             {jobs.map(job => (
+// // //               <option key={job.id} value={job.id}>{job.title} (Openings: {job.openings})</option>
+// // //             ))}
+// // //           </select>
+// // //         </div>
+
+// // //         {selectedJobForSearch && (
+// // //           <>
+// // //             <div className="filters-panel">
+// // //               <div className="filter-row">
+// // //                 <div className="filter-group">
+// // //                   <label>Bucket</label>
+// // //                   <select
+// // //                     className="filter-select"
+// // //                     value={searchFilters.bucket}
+// // //                     onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}
+// // //                   >
+// // //                     <option value="">All Buckets</option>
+// // //                     <option value="PERFECT_MATCH">Perfect Match</option>
+// // //                     <option value="SKILLS_ONLY">Skills Only</option>
+// // //                     <option value="LOCATION_ONLY">Location Only</option>
+// // //                     <option value="NEARBY">Nearby</option>
+// // //                     <option value="NO_MATCH">No Match</option>
+// // //                   </select>
+// // //                 </div>
+// // //                 <div className="filter-group">
+// // //                   <label>Location</label>
+// // //                   <input
+// // //                     type="text"
+// // //                     className="form-control"
+// // //                     placeholder="Filter by location"
+// // //                     value={searchFilters.location}
+// // //                     onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
+// // //                   />
+// // //                 </div>
+// // //                 <div className="filter-group">
+// // //                   <label>Min Total %</label>
+// // //                   <input
+// // //                     type="number"
+// // //                     className="form-control"
+// // //                     min="0"
+// // //                     max="100"
+// // //                     value={searchFilters.minTotal}
+// // //                     onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })}
+// // //                   />
+// // //                 </div>
+// // //                 <div className="filter-group">
+// // //                   <label>Skill Keyword</label>
+// // //                   <input
+// // //                     type="text"
+// // //                     className="form-control"
+// // //                     placeholder="e.g., React"
+// // //                     value={searchFilters.skillKeyword}
+// // //                     onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })}
+// // //                   />
+// // //                 </div>
+// // //                 <button className="btn-icon" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}>
+// // //                   <X size={18} /> Clear
+// // //                 </button>
+// // //               </div>
+// // //             </div>
+
+// // //             <div className="table-actions">
+// // //               <div>
+// // //                 <input
+// // //                     type="checkbox"
+// // //                     checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(m.trainee_id))}
+// // //                     onChange={handleSelectAllSearch}
+// // //                   /> Select All ({filtered.length} matches)
+// // //               </div>
+// // //               <div className="action-buttons">
+// // //                 <button
+// // //                   className="btn-primary"
+// // //                   onClick={() => {
+// // //                     fetchInterviewers();
+// // //                     setShowLockModal(true);
+// // //                   }}
+// // //                   disabled={selectedSearchTraineeIds.length === 0}
+// // //                 >
+// // //                   <Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})
+// // //                 </button>
+// // //                 <button className="btn-secondary" onClick={downloadFilteredSearch} disabled={filtered.length === 0}>
+// // //                   <Download size={18} /> Download Filtered
+// // //                 </button>
+// // //               </div>
+// // //             </div>
+
+// // //             {jobMatchesLoading ? (
+// // //               <div className="loading-overlay"><div className="loading-spinner"></div></div>
+// // //             ) : (
+// // //               <div className="table-container">
+// // //                 <table className="data-table">
+// // //                   <thead>
+// // //                     <tr>
+// // //                       <th>Select</th>
+// // //                       <th>Trainee Name</th>
+// // //                       <th>Location</th>
+// // //                       <th>Bucket</th>
+// // //                       <th>Skills %</th>
+// // //                       <th>Location %</th>
+// // //                       <th>Total %</th>
+// // //                       <th>Matched Skills</th>
+// // //                       <th>Actions</th>
+// // //                     </tr>
+// // //                   </thead>
+// // //                   <tbody>
+// // //                     {filtered.map((match) => (
+// // //                       <tr key={match.trainee_id}>
+// // //                         <td>
+// // //                           <input
+// // //                             type="checkbox"
+// // //                             checked={selectedSearchTraineeIds.includes(match.trainee_id)}
+// // //                             onChange={(e) => {
+// // //                               if (e.target.checked) {
+// // //                                 setSelectedSearchTraineeIds([...selectedSearchTraineeIds, match.trainee_id]);
+// // //                               } else {
+// // //                                 setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(id => id !== match.trainee_id));
+// // //                                 setSelectAll(false);
+// // //                               }
+// // //                             }}
+// // //                           />
+// // //                         </td>
+// // //                         <td><span className="font-medium">{match.trainee_name}</span></td>
+// // //                         <td>{match.trainee_location}</td>
+// // //                         <td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket?.replace('_', ' ')}</span></td>
+// // //                         <td>{match.skills_percentage.toFixed(1)}%</td>
+// // //                         <td>{match.location_percentage.toFixed(1)}%</td>
+// // //                         <td><strong>{match.total_percentage.toFixed(1)}%</strong></td>
+// // //                         <td>
+// // //                           {match.matched_skills?.length > 0
+// // //                             ? match.matched_skills.join(', ')
+// // //                             : '-'}
+// // //                         </td>
+// // //                         <td>
+// // //                           <div className="action-buttons">
+// // //                             <button
+// // //                               className="btn-icon btn-icon-view"
+// // //                               onClick={() => handleViewTraineeProfileFromJob(match)}
+// // //                               title="View Profile"
+// // //                             >
+// // //                               <User size={16} />
+// // //                             </button>
+// // //                             <button
+// // //                               className="btn-icon btn-icon-map"
+// // //                               onClick={() => {
+// // //                                 if (selectedJobForSearch.openings <= 0) {
+// // //                                   toast.error('No openings');
+// // //                                   return;
+// // //                                 }
+// // //                                 handleMapToProject(match, selectedJobForSearch);
+// // //                               }}
+// // //                               disabled={selectedJobForSearch.openings <= 0}
+// // //                               title="Map to Project"
+// // //                             >
+// // //                               <Link size={16} />
+// // //                             </button>
+// // //                           </div>
+// // //                         </td>
+// // //                       </tr>
+// // //                     ))}
+// // //                     {filtered.length === 0 && (
+// // //                       <tr><td colSpan="9" className="no-data">No matches match your filters</td></tr>
+// // //                     )}
+// // //                   </tbody>
+// // //                 </table>
+// // //               </div>
+// // //             )}
+// // //           </>
+// // //         )}
+// // //       </div>
+// // //     );
+// // //   };
+
+// // //   // Sidebar items
+// // //   const sidebarItems = [
+// // //     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+// // //     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
+// // //     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
+// // //     { id: 'talentSearch', label: 'Talent Search', icon: <Search size={20} /> },
+// // //     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
+// // //     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
+// // //     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
+// // //   ];
+
+// // //   const renderContent = () => {
+// // //     switch (activeTab) {
+// // //       case 'dashboard': return renderDashboard();
+// // //       case 'jobs': return renderJobManagement();
+// // //       case 'createJob': return renderCreateJob();
+// // //       case 'trainees':
+// // //       case 'mapped':
+// // //       case 'unmapped':
+// // //       case 'openPool':
+// // //         return renderTraineesList();
+// // //       case 'talentSearch': return renderTalentSearch();
+// // //       case 'interviewLocks': return renderInterviewLocks();
+// // //       case 'selected': return renderSelected();
+// // //       case 'rejected': return renderRejected();
+// // //       default: return renderDashboard();
+// // //     }
+// // //   };
+
+// // //   return (
+// // //     <div className="dashboard">
+// // //       <Toaster richColors position="top-right" />
+// // //       <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
+// // //       <div className="main-content">
+// // //         <div className="dashboard-header">
+// // //           <div className="header-title">
+// // //             <h1><LayoutDashboard size={28} /> HR Dashboard</h1>
+// // //             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management</div>
+// // //           </div>
+// // //           <div className="header-actions">
+// // //             {loading && <div className="loading-indicator"><div className="loading-spinner small"></div><span>Processing...</span></div>}
+// // //           </div>
+// // //         </div>
+// // //         {renderContent()}
+// // //       </div>
+// // //       {renderHiddenFileInputs()}
+// // //       {renderExcelTemplateModal()}
+// // //       {renderWordTemplateModal()}
+// // //       {renderJobDetailsModal()}  {/* New modal */}
+// // //       {renderTraineeModal()}
+// // //       {renderLockInterviewModal()}
+// // //       {renderFeedbackModal()}
+// // //     </div>
+// // //   );
+// // // }
+
+// // // export default DashboardHR;
+
+
+
+
+// // // DashboardHR.js – Final version with all requested enhancements
 // // import React, { useState, useEffect } from 'react';
 // // import { Toaster, toast } from 'sonner';
 // // import {
@@ -55,6 +4298,11 @@
 // //   Upload,
 // //   Users2,
 // //   Lock,
+// //   XCircle,
+// //   Sliders,
+// //   Grid,
+// //   List,
+// //   RefreshCw,
 // // } from 'lucide-react';
 // // import Sidebar from './Sidebar';
 // // import api from '../api/axios';
@@ -63,7 +4311,7 @@
 // // function DashboardHR({ userData, onLogout }) {
 // //   // ==================== Core State ====================
 // //   const [activeTab, setActiveTab] = useState('dashboard');
-// //   const [selectedJob, setSelectedJob] = useState(null);
+// //   const [selectedJob, setSelectedJob] = useState(null); // for edit or job details modal
 // //   const [selectedTrainee, setSelectedTrainee] = useState(null);
 // //   const [isEditMode, setIsEditMode] = useState(false);
 // //   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
@@ -93,17 +4341,31 @@
 // //   const [traineesWithNoMatches, setTraineesWithNoMatches] = useState([]);
 // //   const [checkingMatches, setCheckingMatches] = useState(false);
 
-// //   // ==================== NEW: Interview Locking ====================
+// //   // Interview Locking
 // //   const [selectedTraineeIds, setSelectedTraineeIds] = useState([]);
 // //   const [showLockModal, setShowLockModal] = useState(false);
 // //   const [lockInterviewDatetime, setLockInterviewDatetime] = useState('');
 // //   const [lockComments, setLockComments] = useState('');
+// //   const [assignedToId, setAssignedToId] = useState('');
+// //   const [interviewers, setInterviewers] = useState([]);
 
 // //   const [interviewLocks, setInterviewLocks] = useState([]);
 // //   const [lockStats, setLockStats] = useState(null);
 // //   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
 
-// //   // ==================== New Job State (with is_public) ====================
+// //   // Selected & Rejected lists (combined)
+// //   const [selectedCandidates, setSelectedCandidates] = useState([]);
+// //   const [rejectedLocks, setRejectedLocks] = useState([]);
+// //   const [viewingFeedback, setViewingFeedback] = useState(null);
+
+// //   // Job Details Modal
+// //   const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
+// //   const [jobDetailsJob, setJobDetailsJob] = useState(null);
+// //   const [jobDetailsTab, setJobDetailsTab] = useState('overview');
+// //   const [mappedTrainees, setMappedTrainees] = useState([]);
+// //   const [rejectedTrainees, setRejectedTrainees] = useState([]);
+
+// //   // New Job State
 // //   const [newJob, setNewJob] = useState({
 // //     title: '',
 // //     department: '',
@@ -115,153 +4377,50 @@
 // //     description: '',
 // //     salary: '',
 // //     expiryDate: '',
-// //     is_public: true, // NEW
+// //     is_public: true,
 // //   });
 
-// //   // ==================== Helper: Normalize Skill ====================
+// //   // ========== Talent Search Tab State ==========
+// //   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
+// //   const [searchJobMatches, setSearchJobMatches] = useState(null);
+// //   const [searchFilters, setSearchFilters] = useState({
+// //     bucket: '',
+// //     location: '',
+// //     minTotal: 0,
+// //     skillKeyword: '',
+// //   });
+// //   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
+// //   const [selectAll, setSelectAll] = useState(false);
+
+// //   // ==================== Helper Functions ====================
 // //   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
-
-// //   // ==================== Compute Skill Trends ====================
-// //   const computeSkillTrends = (jobs) => {
-// //     const techMap = new Map();
-// //     const softMap = new Map();
-// //     const WEIGHTS = {
-// //       basePerJob: 1,
-// //       openingsWeight: 0.5,
-// //       matchesWeight: 0.25,
-// //       inactivePenalty: 0.4,
-// //       unfilledBonus: 0.3,
-// //     };
-// //     for (const job of jobs || []) {
-// //       const isActive = job?.status === 'active';
-// //       const openings = Number(job?.openings ?? 0);
-// //       const filled = Number(job?.filled ?? 0);
-// //       const matches = Number(job?.matches ?? 0);
-// //       const unfilled = Math.max(0, openings - filled);
-// //       const jobWeight =
-// //         WEIGHTS.basePerJob +
-// //         (openings * WEIGHTS.openingsWeight) +
-// //         (matches * WEIGHTS.matchesWeight) +
-// //         (unfilled * WEIGHTS.unfilledBonus);
-// //       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
-
-// //       const techSkills = Array.isArray(job?.techSkills) ? job.techSkills : [];
-// //       const softSkills = Array.isArray(job?.softSkills) ? job.softSkills : [];
-
-// //       techSkills.forEach((raw) => {
-// //         const skill = normalizeSkill(raw);
-// //         if (!skill) return;
-// //         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-// //         techMap.set(skill, {
-// //           jobs: cur.jobs + 1,
-// //           openings: cur.openings + openings,
-// //           matches: cur.matches + matches,
-// //           demand: cur.demand + effectiveWeight,
-// //         });
-// //       });
-
-// //       softSkills.forEach((raw) => {
-// //         const skill = normalizeSkill(raw);
-// //         if (!skill) return;
-// //         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-// //         softMap.set(skill, {
-// //           jobs: cur.jobs + 1,
-// //           openings: cur.openings + openings,
-// //           matches: cur.matches + matches,
-// //           demand: cur.demand + effectiveWeight,
-// //         });
-// //       });
-// //     }
-
-// //     const toSortedArray = (map) => {
-// //       const arr = Array.from(map.entries()).map(([name, stats]) => ({
-// //         name,
-// //         jobs: stats.jobs,
-// //         openings: stats.openings,
-// //         matches: stats.matches,
-// //         demandRaw: stats.demand,
-// //       }));
-// //       const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
-// //       return arr
-// //         .map((a) => ({
-// //           ...a,
-// //           demand: Math.round((a.demandRaw / maxDemand) * 100),
-// //         }))
-// //         .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
-// //         .slice(0, 5);
-// //     };
-
-// //     return {
-// //       tech: toSortedArray(techMap),
-// //       soft: toSortedArray(softMap),
-// //     };
-// //   };
 
 // //   // ==================== API Calls ====================
 // //   const jobAPI = {
-// //     getAllJobs: async () => {
-// //       const res = await api.get('/jobs/');
-// //       return res.data;
-// //     },
-// //     getJobById: async (id) => {
-// //       const res = await api.get(`/jobs/${id}/`);
-// //       return res.data;
-// //     },
-// //     createJob: async (jobData) => {
-// //       const res = await api.post('/jobs/', jobData);
-// //       return res.data;
-// //     },
-// //     updateJob: async (id, jobData) => {
-// //       const res = await api.put(`/jobs/${id}/`, jobData);
-// //       return res.data;
-// //     },
-// //     deleteJob: async (id) => {
-// //       const res = await api.delete(`/jobs/${id}/`);
-// //       return res.data;
-// //     },
-// //     toggleJobStatus: async (id) => {
-// //       const res = await api.patch(`/jobs/${id}/toggle-status/`);
-// //       return res.data;
-// //     },
+// //     getAllJobs: async () => (await api.get('/jobs/')).data,
+// //     getJobById: async (id) => (await api.get(`/jobs/${id}/`)).data,
+// //     createJob: async (jobData) => (await api.post('/jobs/', jobData)).data,
+// //     updateJob: async (id, jobData) => (await api.put(`/jobs/${id}/`, jobData)).data,
+// //     deleteJob: async (id) => (await api.delete(`/jobs/${id}/`)).data,
+// //     toggleJobStatus: async (id) => (await api.patch(`/jobs/${id}/toggle-status/`)).data,
 // //     uploadExcel: async (file) => {
 // //       const formData = new FormData();
 // //       formData.append('excel_file', file);
-// //       const res = await api.post('/jobs/upload-excel/', formData, {
-// //         headers: { 'Content-Type': 'multipart/form-data' },
-// //       });
-// //       return res.data;
+// //       return (await api.post('/jobs/upload-excel/', formData)).data;
 // //     },
 // //     uploadWord: async (file) => {
 // //       const formData = new FormData();
 // //       formData.append('wordFile', file);
-// //       const res = await api.post('/jobs/upload-word/', formData, {
-// //         headers: { 'Content-Type': 'multipart/form-data' },
-// //       });
-// //       return res.data;
+// //       return (await api.post('/jobs/upload-word/', formData)).data;
 // //     },
-// //     downloadExcelTemplate: async () => {
-// //       const res = await api.get('/jobs/download-excel-template/', {
-// //         responseType: 'blob',
-// //       });
-// //       return res.data;
-// //     },
-// //     downloadWordTemplate: async () => {
-// //       const res = await api.get('/jobs/download-word-template/', {
-// //         responseType: 'blob',
-// //       });
-// //       return res.data;
-// //     },
+// //     downloadExcelTemplate: async () => (await api.get('/jobs/download-excel-template/', { responseType: 'blob' })).data,
+// //     downloadWordTemplate: async () => (await api.get('/jobs/download-word-template/', { responseType: 'blob' })).data,
 // //   };
 
 // //   const mappingAPI = {
-// //     updateMapping: async (userId, mappingData) => {
-// //       const res = await api.patch(`/api/userinfo/${userId}/update-mapping/`, mappingData);
-// //       return res.data;
-// //     },
-// //     getMapping: async (userId) => {
-// //       const res = await api.get(`/api/userinfo/${userId}/`);
-// //       return res.data;
-// //     },
+// //     updateMapping: async (userId, mappingData) =>
+// //       (await api.patch(`/api/userinfo/${userId}/update-mapping/`, mappingData)).data,
+// //     getMapping: async (userId) => (await api.get(`/api/userinfo/${userId}/`)).data,
 // //   };
 
 // //   // Fetch trainees
@@ -270,7 +4429,7 @@
 // //     setError(null);
 // //     try {
 // //       const response = await api.get('/api/profiles/');
-// //       const transformedTrainees = response.data.map((trainee) => {
+// //       const transformed = response.data.map((trainee) => {
 // //         const userInfo = trainee.userInfo || {};
 // //         const skills = [
 // //           ...(trainee.strengths?.map((s) => s.courseName) || []),
@@ -294,12 +4453,11 @@
 // //           traineeData: trainee,
 // //         };
 // //       });
-// //       setTrainees(transformedTrainees);
-// //       setAllTrainees(transformedTrainees);
+// //       setTrainees(transformed);
+// //       setAllTrainees(transformed);
 // //       setTraineesWithNoMatches([]);
 // //     } catch (err) {
-// //       console.error('Error fetching trainees:', err);
-// //       setError('Failed to fetch trainees. Please try again.');
+// //       setError('Failed to fetch trainees.');
 // //       setTrainees([]);
 // //       setAllTrainees([]);
 // //     } finally {
@@ -315,30 +4473,8 @@
 // //       const response = await jobAPI.getAllJobs();
 // //       setJobs(response);
 // //     } catch (err) {
-// //       console.error('Error fetching jobs:', err);
-// //       setError('Failed to fetch jobs. Please try again.');
-// //       // fallback mock data (optional – remove in production)
-// //       setJobs([
-// //         {
-// //           id: 1,
-// //           title: 'Frontend Developer',
-// //           department: 'Technology',
-// //           location: ['Hyderabad', 'Bangalore'],
-// //           openings: 5,
-// //           filled: 2,
-// //           matches: 15,
-// //           status: 'active',
-// //           description: '...',
-// //           requirements: '...',
-// //           techSkills: ['React', 'JavaScript'],
-// //           softSkills: ['Communication'],
-// //           salary: '$85,000',
-// //           postedDate: '2024-01-15',
-// //           expiryDate: '2024-03-15',
-// //           is_public: true,
-// //         },
-// //         // ... other fallback jobs
-// //       ]);
+// //       setError('Failed to fetch jobs.');
+// //       setJobs([]);
 // //     } finally {
 // //       setLoading(false);
 // //     }
@@ -350,46 +4486,36 @@
 // //     setCheckingMatches(true);
 // //     try {
 // //       const noMatchTrainees = [];
-// //       const unmappedTrainees = allTrainees.filter((t) => !t.isMapped);
-// //       for (const trainee of unmappedTrainees) {
+// //       const unmapped = allTrainees.filter((t) => !t.isMapped);
+// //       for (const trainee of unmapped) {
 // //         try {
 // //           const response = await api.get(`/trainee-matches/${trainee.id}/`);
-// //           const matchesData = response.data;
+// //           const data = response.data;
 // //           const hasNoMatch =
-// //             (matchesData.total_matches >= 0 &&
-// //               matchesData.no_match &&
-// //               matchesData.no_match.length > 0 &&
-// //               (!matchesData.perfect_match || matchesData.perfect_match.length === 0) &&
-// //               (!matchesData.skills_only || matchesData.skills_only.length === 0) &&
-// //               (!matchesData.location_only || matchesData.location_only.length === 0) &&
-// //               (!matchesData.nearby || matchesData.nearby.length === 0)) ||
-// //             matchesData.total_matches === 0;
+// //             (data.total_matches >= 0 &&
+// //               data.no_match?.length > 0 &&
+// //               !data.perfect_match?.length &&
+// //               !data.skills_only?.length &&
+// //               !data.location_only?.length &&
+// //               !data.nearby?.length) ||
+// //             data.total_matches === 0;
 // //           if (hasNoMatch) {
 // //             noMatchTrainees.push({
 // //               ...trainee,
 // //               trainee_id: trainee.id,
 // //               trainee_name: trainee.name,
 // //               trainee_location: trainee.location,
-// //               total_matches: matchesData.total_matches,
-// //               no_match_count: matchesData.no_match ? matchesData.no_match.length : 0,
+// //               total_matches: data.total_matches,
+// //               no_match_count: data.no_match?.length || 0,
 // //             });
 // //           }
 // //         } catch (error) {
-// //           console.error(`Error checking matches for trainee ${trainee.id}:`, error);
-// //           noMatchTrainees.push({
-// //             ...trainee,
-// //             trainee_id: trainee.id,
-// //             trainee_name: trainee.name,
-// //             trainee_location: trainee.location,
-// //             total_matches: 0,
-// //             no_match_count: 0,
-// //           });
+// //           noMatchTrainees.push({ ...trainee, total_matches: 0, no_match_count: 0 });
 // //         }
 // //       }
 // //       setTraineesWithNoMatches(noMatchTrainees);
 // //     } catch (err) {
-// //       console.error('Error checking trainees for open pool:', err);
-// //       toast.error('Failed to check trainee matches for Open Pool');
+// //       toast.error('Failed to check Open Pool');
 // //     } finally {
 // //       setCheckingMatches(false);
 // //     }
@@ -400,108 +4526,134 @@
 // //     try {
 // //       const newFilled = (job.filled || 0) + 1;
 // //       const newOpenings = Math.max(0, (job.openings || 0) - 1);
-// //       const updatedJobData = { ...job, filled: newFilled, openings: newOpenings };
-// //       const response = await jobAPI.updateJob(job.id, updatedJobData);
-// //       setJobs((prev) =>
-// //         prev.map((j) => (j.id === job.id ? { ...j, filled: newFilled, openings: newOpenings } : j))
-// //       );
-// //       if (selectedJob && selectedJob.id === job.id) {
-// //         setSelectedJob((prev) => ({ ...prev, filled: newFilled, openings: newOpenings }));
-// //       }
-// //       if (newOpenings === 0) {
-// //         await checkAndAutoDeactivateJob(updatedJobData);
-// //       }
-// //       return updatedJobData;
+// //       const updated = { ...job, filled: newFilled, openings: newOpenings };
+// //       await jobAPI.updateJob(job.id, updated);
+// //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// //       if (selectedJob?.id === job.id) setSelectedJob(updated);
+// //       if (newOpenings === 0) await checkAndAutoDeactivateJob(updated);
+// //       return updated;
 // //     } catch (error) {
-// //       console.error('Error updating job vacancies:', error);
-// //       toast.error('Failed to update job vacancies.');
+// //       toast.error('Failed to update job vacancies');
 // //       throw error;
 // //     }
 // //   };
 
 // //   const checkAndAutoDeactivateJob = async (job) => {
 // //     if (job.openings <= 0) {
-// //       const updatedJobData = { ...job, status: 'inactive' };
-// //       await jobAPI.updateJob(job.id, updatedJobData);
-// //       setJobs((prev) =>
-// //         prev.map((j) => (j.id === job.id ? { ...j, status: 'inactive', openings: 0 } : j))
-// //       );
+// //       const updated = { ...job, status: 'inactive' };
+// //       await jobAPI.updateJob(job.id, updated);
+// //       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
 // //       toast.success(`Job "${job.title}" auto‑deactivated.`);
 // //     }
 // //   };
 
-// //   // Map trainee to project
-// //   const handleMapToProject = async (trainee, job) => {
+// //   // Map trainee to project (used by Talent Search and Job Matches)
+// //   const handleMapToProject = async (traineeOrMatch, job) => {
 // //     try {
 // //       setLoading(true);
+// //       let userId = null;
+// //       let traineeName = '';
+
+// //       if (traineeOrMatch.traineeData) {
+// //         userId = traineeOrMatch.traineeData.userInfo.userId;
+// //         traineeName = traineeOrMatch.name;
+// //       } else {
+// //         const match = traineeOrMatch;
+// //         const found = allTrainees.find(t => t.userId === match.trainee_id);
+// //         if (found) {
+// //           userId = found.userId;
+// //           traineeName = found.name;
+// //         } else {
+// //           toast.error('Trainee not found in local data');
+// //           console.error('Trainee not found for userId:', match.trainee_id);
+// //           return;
+// //         }
+// //       }
+
+// //       if (!userId) {
+// //         toast.error('Could not find user ID');
+// //         return;
+// //       }
+
+// //       // Check if job still has openings
+// //       if (job.openings <= 0) {
+// //         toast.error('No openings left for this job');
+// //         return;
+// //       }
+
 // //       const mappingData = {
 // //         isMapped: true,
 // //         projectId: job.id.toString(),
 // //         projectName: job.title,
 // //       };
-
-// //       let userId = null;
-// //       if (trainee.traineeData) {
-// //         userId = trainee.traineeData.userInfo.userId;
-// //       } else {
-// //         const found = allTrainees.find(
-// //           (t) =>
-// //             t.traineeData.userInfo.name === trainee.trainee_name &&
-// //             t.traineeData.userInfo.location === trainee.trainee_location
-// //         );
-// //         if (found) userId = found.traineeData.userInfo.userId;
-// //       }
-// //       if (!userId) {
-// //         toast.error('Could not find user ID for trainee');
-// //         return;
-// //       }
-
 // //       await mappingAPI.updateMapping(userId, mappingData);
-// //       await updateJobVacancies(job);
+// //       const updatedJob = await updateJobVacancies(job);
 
-// //       // Remove from open pool if present
-// //       setTraineesWithNoMatches((prev) =>
-// //         prev.filter(
-// //           (t) => t.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-// //         )
-// //       );
+// //       // Update selectedJobForSearch if it's the same job
+// //       if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
+// //         setSelectedJobForSearch(updatedJob);
+// //       }
+
+// //       // Remove from open pool
+// //       setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
 
 // //       // Update local trainee lists
-// //       const updateTrainee = (t) => {
-// //         if (trainee.traineeData) {
-// //           return t.traineeData.userInfo.name === trainee.traineeData.userInfo.name
-// //             ? { ...t, ...mappingData }
-// //             : t;
-// //         } else {
-// //           return t.traineeData.userInfo.name === trainee.trainee_name ? { ...t, ...mappingData } : t;
-// //         }
-// //       };
-// //       setAllTrainees((prev) => prev.map(updateTrainee));
-// //       setTrainees((prev) => prev.filter(updateTrainee)); // remove from current filtered list
+// //       setAllTrainees((prev) =>
+// //         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// //       );
+// //       setTrainees((prev) =>
+// //         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+// //       );
 
 // //       // Update jobMatches if open
 // //       if (jobMatches) {
 // //         const bucket = Object.keys(jobMatches).find((key) =>
-// //           Array.isArray(jobMatches[key]) &&
-// //           jobMatches[key].some((m) => m.trainee_name === (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
+// //           Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
 // //         );
 // //         if (bucket) {
 // //           setJobMatches((prev) => ({
 // //             ...prev,
-// //             [bucket]: prev[bucket].filter(
-// //               (m) => m.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-// //             ),
+// //             [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
 // //             total_matches: prev.total_matches - 1,
 // //           }));
 // //         }
 // //       }
 
-// //       toast.success(
-// //         `Successfully mapped ${trainee.traineeData?.userInfo?.name || trainee.trainee_name} to ${job.title}`
-// //       );
+// //       // Update searchJobMatches if open
+// //       if (searchJobMatches) {
+// //         const bucket = Object.keys(searchJobMatches).find((key) =>
+// //           Array.isArray(searchJobMatches[key]) && searchJobMatches[key].some((m) => m.trainee_id === userId)
+// //         );
+// //         if (bucket) {
+// //           setSearchJobMatches((prev) => ({
+// //             ...prev,
+// //             [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+// //             total_matches: prev.total_matches - 1,
+// //           }));
+// //         } else {
+// //           // Fallback: remove from all buckets if bucket not found
+// //           const newSearchMatches = { ...searchJobMatches };
+// //           let removed = false;
+// //           Object.keys(newSearchMatches).forEach(key => {
+// //             if (Array.isArray(newSearchMatches[key])) {
+// //               const filtered = newSearchMatches[key].filter(m => m.trainee_id !== userId);
+// //               if (filtered.length !== newSearchMatches[key].length) {
+// //                 newSearchMatches[key] = filtered;
+// //                 removed = true;
+// //               }
+// //             }
+// //           });
+// //           if (removed) {
+// //             newSearchMatches.total_matches = (newSearchMatches.total_matches || 0) - 1;
+// //             setSearchJobMatches(newSearchMatches);
+// //           }
+// //         }
+// //       }
+
+// //       toast.success(`Mapped ${traineeName} to ${job.title}`);
 // //     } catch (err) {
-// //       console.error('Error mapping trainee:', err);
-// //       toast.error('Failed to map trainee.');
+// //       console.error('Mapping error:', err);
+// //       toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
 // //     } finally {
 // //       setLoading(false);
 // //     }
@@ -512,57 +4664,40 @@
 // //       setLoading(true);
 // //       const unmappingData = { isMapped: false, projectId: '', projectName: '' };
 // //       await mappingAPI.updateMapping(trainee.userId, unmappingData);
-
 // //       const jobId = trainee.projectId;
 // //       if (jobId) {
 // //         const job = jobs.find((j) => j.id.toString() === jobId);
 // //         if (job) {
-// //           const updatedJob = {
+// //           const updated = {
 // //             ...job,
 // //             filled: Math.max(0, (job.filled || 0) - 1),
 // //             openings: (job.openings || 0) + 1,
 // //           };
-// //           if (job.status === 'inactive' && updatedJob.openings > 0) {
-// //             updatedJob.status = 'active';
-// //           }
-// //           await jobAPI.updateJob(job.id, updatedJob);
-// //           setJobs((prev) => prev.map((j) => (j.id === job.id ? updatedJob : j)));
-// //           if (selectedJob && selectedJob.id === job.id) {
-// //             setSelectedJob(updatedJob);
-// //           }
+// //           if (job.status === 'inactive' && updated.openings > 0) updated.status = 'active';
+// //           await jobAPI.updateJob(job.id, updated);
+// //           setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+// //           if (selectedJob?.id === job.id) setSelectedJob(updated);
 // //         }
 // //       }
-
 // //       setAllTrainees((prev) => prev.map((t) => (t.id === trainee.id ? { ...t, ...unmappingData } : t)));
-// //       if (activeTab === 'mapped' || activeTab === 'unmapped' || activeTab === 'trainees' || activeTab === 'openPool') {
-// //         fetchTrainees();
-// //       }
-// //       if (selectedTrainee && selectedTrainee.id === trainee.id) {
-// //         setSelectedTrainee({ ...selectedTrainee, ...unmappingData });
-// //       }
-// //       toast.success(`Successfully unmapped ${trainee.name}`);
+// //       if (['mapped', 'unmapped', 'trainees', 'openPool'].includes(activeTab)) fetchTrainees();
+// //       if (selectedTrainee?.id === trainee.id) setSelectedTrainee({ ...selectedTrainee, ...unmappingData });
+// //       toast.success(`Unmapped ${trainee.name}`);
 // //     } catch (err) {
-// //       console.error('Error unmapping trainee:', err);
-// //       toast.error('Failed to unmap trainee.');
+// //       toast.error('Failed to unmap trainee');
 // //     } finally {
 // //       setLoading(false);
 // //     }
 // //   };
 
-// //   // Get mapped trainee names
-// //   const getMappedTraineeNames = () => {
-// //     return allTrainees.filter((t) => t.isMapped).map((t) => t.traineeData?.userInfo?.name || t.name);
-// //   };
-
-// //   // Fetch job matches
+// //   // Fetch job matches (backend filters out locked/selected)
 // //   const fetchJobMatches = async (jobId) => {
 // //     setJobMatchesLoading(true);
 // //     try {
 // //       const response = await api.get(`/matches/${jobId}/`);
 // //       setJobMatches(response.data);
 // //     } catch (err) {
-// //       console.error('Error fetching job matches:', err);
-// //       toast.error('Failed to fetch job matches.');
+// //       toast.error('Failed to fetch job matches');
 // //     } finally {
 // //       setJobMatchesLoading(false);
 // //     }
@@ -575,23 +4710,49 @@
 // //       const response = await api.get(`/trainee-matches/${traineeId}/`);
 // //       setTraineeMatches(response.data);
 // //     } catch (err) {
-// //       console.error('Error fetching trainee matches:', err);
-// //       toast.error('Failed to fetch trainee matches.');
+// //       toast.error('Failed to fetch trainee matches');
 // //     } finally {
 // //       setTraineeMatchesLoading(false);
 // //     }
 // //   };
 
+// //   // Fetch mapped trainees for a job (from UserInfo where projectId matches)
+// //   const fetchMappedForJob = async (jobId) => {
+// //     try {
+// //       const mapped = allTrainees.filter(t => t.isMapped && t.projectId === jobId.toString());
+// //       setMappedTrainees(mapped);
+// //     } catch (err) {
+// //       toast.error('Failed to fetch mapped trainees');
+// //     }
+// //   };
+
+// //   // Fetch rejected trainees for a job (from InterviewLock with status='rejected')
+// //   const fetchRejectedForJob = async (jobId) => {
+// //     try {
+// //       const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected`);
+// //       setRejectedTrainees(res.data);
+// //     } catch (err) {
+// //       toast.error('Failed to fetch rejected trainees');
+// //     }
+// //   };
+
 // //   const handleViewTraineeProfileFromJob = (match) => {
-// //     const trainee = allTrainees.find((at) => at.traineeData.userInfo.name === match.trainee_name);
+// //     const trainee = allTrainees.find((at) => at.userId === match.trainee_id);
 // //     if (trainee) {
 // //       setSelectedTrainee(trainee);
-// //       setJobMatches(null);
-// //       setSelectedJob(null);
+// //       setShowJobDetailsModal(false);
 // //       fetchTraineeMatches(trainee.id);
 // //     } else {
-// //       toast.error('Trainee not found.');
+// //       toast.error('Trainee not found');
 // //     }
+// //   };
+
+// //   const handleViewJobDetails = (job) => {
+// //     setJobDetailsJob(job);
+// //     setJobDetailsTab('overview');
+// //     fetchMappedForJob(job.id);
+// //     fetchRejectedForJob(job.id);
+// //     setShowJobDetailsModal(true);
 // //   };
 
 // //   const handleViewJobMatches = (job) => {
@@ -609,38 +4770,33 @@
 // //       await jobAPI.toggleJobStatus(jobId);
 // //       setJobs((jobs) =>
 // //         jobs.map((job) =>
-// //           job.id === jobId
-// //             ? { ...job, status: job.status === 'active' ? 'inactive' : 'active' }
-// //             : job
+// //           job.id === jobId ? { ...job, status: job.status === 'active' ? 'inactive' : 'active' } : job
 // //         )
 // //       );
 // //       toast.success('Job status updated!');
 // //     } catch (err) {
-// //       console.error('Error toggling job status:', err);
-// //       toast.error('Failed to update job status.');
+// //       toast.error('Failed to update job status');
 // //     }
 // //   };
 
-// //   // Delete job
 // //   const handleDeleteJob = async (jobId) => {
-// //     if (!window.confirm('Are you sure you want to delete this job?')) return;
+// //     if (!window.confirm('Delete this job?')) return;
 // //     try {
 // //       setLoading(true);
 // //       await jobAPI.deleteJob(jobId);
 // //       setJobs(jobs.filter((j) => j.id !== jobId));
-// //       toast.success('Job deleted successfully!');
+// //       toast.success('Job deleted');
 // //     } catch (err) {
-// //       console.error('Error deleting job:', err);
-// //       toast.error('Failed to delete job.');
+// //       toast.error('Failed to delete job');
 // //     } finally {
 // //       setLoading(false);
 // //     }
 // //   };
 
-// //   // Create job (with is_public)
+// //   // Create job
 // //   const handleCreateJob = async () => {
 // //     if (!newJob.title || !newJob.department || !newJob.description || !newJob.requirements) {
-// //       toast.error('Please fill in all required fields');
+// //       toast.error('Please fill all required fields');
 // //       return;
 // //     }
 // //     try {
@@ -654,11 +4810,10 @@
 // //         filled: 0,
 // //         matches: 0,
 // //         postedDate: new Date().toISOString().split('T')[0],
-// //         is_public: newJob.is_public, // include
+// //         is_public: newJob.is_public,
 // //       };
 // //       await jobAPI.createJob(jobData);
 // //       await fetchJobs();
-// //       // Reset form
 // //       setNewJob({
 // //         title: '',
 // //         department: '',
@@ -675,16 +4830,14 @@
 // //       setTechSkills([]);
 // //       setSoftSkills([]);
 // //       setActiveTab('jobs');
-// //       toast.success('Job created successfully!');
+// //       toast.success('Job created');
 // //     } catch (err) {
-// //       console.error('Error creating job:', err);
-// //       toast.error('Failed to create job.');
+// //       toast.error('Failed to create job');
 // //     } finally {
 // //       setLoading(false);
 // //     }
 // //   };
 
-// //   // Update job (with is_public)
 // //   const handleUpdateJob = async (updatedJob) => {
 // //     try {
 // //       setLoading(true);
@@ -695,16 +4848,15 @@
 // //       setActiveTab('jobs');
 // //       setTechSkills([]);
 // //       setSoftSkills([]);
-// //       toast.success('Job updated successfully!');
+// //       toast.success('Job updated');
 // //     } catch (err) {
-// //       console.error('Error updating job:', err);
-// //       toast.error('Failed to update job.');
+// //       toast.error('Failed to update job');
 // //     } finally {
 // //       setLoading(false);
 // //     }
 // //   };
 
-// //   // Skill input handlers
+// //   // Skill handlers
 // //   const handleTechSkillAdd = (e) => {
 // //     if (e.key === 'Enter' || e.key === ',') {
 // //       e.preventDefault();
@@ -757,12 +4909,8 @@
 // //   };
 
 // //   // Location fields
-// //   const addLocationField = () => {
-// //     setNewJob({ ...newJob, location: [...newJob.location, ''] });
-// //   };
-// //   const removeLocationField = (index) => {
-// //     setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
-// //   };
+// //   const addLocationField = () => setNewJob({ ...newJob, location: [...newJob.location, ''] });
+// //   const removeLocationField = (index) => setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
 // //   const updateLocationField = (index, value) => {
 // //     const newLocs = [...newJob.location];
 // //     newLocs[index] = value;
@@ -773,26 +4921,17 @@
 // //   const calculateStatistics = () => {
 // //     const totalTrainees = allTrainees.length;
 // //     const totalJobs = jobs.length;
-// //     const mappedTrainees = allTrainees.filter((t) => t.isMapped === true).length;
+// //     const mappedTrainees = allTrainees.filter((t) => t.isMapped).length;
 // //     const unmappedTrainees = allTrainees.filter((t) => !t.isMapped).length;
 // //     const activeJobs = jobs.filter((j) => j.status === 'active').length;
 // //     const filledPositions = jobs.reduce((sum, job) => sum + (job.filled || 0), 0);
 // //     const totalOpenings = jobs.reduce((sum, job) => sum + (job.openings || 0), 0);
-// //     const fillRate = totalOpenings > 0 ? Math.round((filledPositions / totalOpenings) * 100) : 0;
-// //     return {
-// //       totalTrainees,
-// //       totalJobs,
-// //       mappedTrainees,
-// //       unmappedTrainees,
-// //       activeJobs,
-// //       filledPositions,
-// //       totalOpenings,
-// //       fillRate,
-// //     };
+// //     const fillRate = totalOpenings ? Math.round((filledPositions / totalOpenings) * 100) : 0;
+// //     return { totalTrainees, totalJobs, mappedTrainees, unmappedTrainees, activeJobs, filledPositions, totalOpenings, fillRate };
 // //   };
 // //   const stats = calculateStatistics();
 
-// //   // ==================== NEW: Interview Lock Functions ====================
+// //   // Interview Lock Functions
 // //   const fetchInterviewLocks = async () => {
 // //     try {
 // //       setLoading(true);
@@ -825,13 +4964,101 @@
 // //       toast.success('Status updated');
 // //       fetchInterviewLocks();
 // //       fetchLockStats();
+// //       if (activeTab === 'selected') fetchSelectedCandidates();
+// //       if (activeTab === 'rejected') fetchRejectedLocks();
 // //     } catch (err) {
 // //       toast.error('Failed to update status');
 // //     }
 // //   };
 
-// //   const downloadLockReport = () => {
-// //     window.open('/api/interview-locks/report/', '_blank');
+// //   // Download functions (using axios with auth)
+// //   const downloadLockReport = async (status = '') => {
+// //     try {
+// //       let url = '/interview-locks/report/';
+// //       if (status) url += `?status=${status}`;
+// //       const response = await api.get(url, { responseType: 'blob' });
+// //       const blob = new Blob([response.data], { type: 'text/csv' });
+// //       const downloadUrl = window.URL.createObjectURL(blob);
+// //       const a = document.createElement('a');
+// //       a.href = downloadUrl;
+// //       a.download = `interview_locks${status ? '_' + status : ''}.csv`;
+// //       document.body.appendChild(a);
+// //       a.click();
+// //       window.URL.revokeObjectURL(downloadUrl);
+// //       document.body.removeChild(a);
+// //     } catch (err) {
+// //       toast.error('Failed to download report');
+// //     }
+// //   };
+
+// //   const downloadReport = async (type) => {
+// //     try {
+// //       const response = await api.get(`/reports/${type}/`, { responseType: 'blob' });
+// //       const blob = new Blob([response.data], { type: 'text/csv' });
+// //       const downloadUrl = window.URL.createObjectURL(blob);
+// //       const a = document.createElement('a');
+// //       a.href = downloadUrl;
+// //       a.download = `${type}_report.csv`;
+// //       document.body.appendChild(a);
+// //       a.click();
+// //       window.URL.revokeObjectURL(downloadUrl);
+// //       document.body.removeChild(a);
+// //     } catch (err) {
+// //       toast.error('Failed to download report');
+// //     }
+// //   };
+
+// //   const fetchInterviewers = async () => {
+// //     try {
+// //       const res = await api.get('/users/?role=interviewer');
+// //       setInterviewers(res.data);
+// //     } catch (err) {
+// //       toast.error('Failed to load interviewers');
+// //     }
+// //   };
+
+// //   // ========== Selected Candidates (Interview + Direct) ==========
+// //   const fetchSelectedCandidates = async () => {
+// //     try {
+// //       const [locksRes, traineesRes] = await Promise.all([
+// //         api.get('/interview-locks/?status=selected'),
+// //         Promise.resolve(allTrainees) // already have
+// //       ]);
+// //       const interviewSelected = locksRes.data;
+// //       const directMapped = traineesRes.filter(t => t.isMapped);
+      
+// //       // Combine and add source field
+// //       const combined = [
+// //         ...interviewSelected.map(lock => ({
+// //           ...lock,
+// //           source: 'Interview',
+// //           trainee_id: lock.trainee_id, // string userId
+// //           name: lock.trainee_name,
+// //           projectName: lock.job_title,
+// //         })),
+// //         ...directMapped.map(t => ({
+// //           trainee_id: t.userId,
+// //           trainee_name: t.name,
+// //           job_title: t.projectName,
+// //           assigned_to_name: 'HR Direct',
+// //           interview_datetime: null,
+// //           feedback: null,
+// //           source: 'Direct',
+// //         }))
+// //       ];
+// //       setSelectedCandidates(combined);
+// //     } catch (err) {
+// //       toast.error('Failed to fetch selected candidates');
+// //     }
+// //   };
+
+// //   const fetchRejectedLocks = async () => {
+// //     try {
+// //       const res = await api.get('/interview-locks/?status=rejected');
+// //       setRejectedLocks(res.data);
+// //     } catch (err) {
+// //       toast.error('Failed to fetch rejected candidates');
+// //     }
 // //   };
 
 // //   const handleLockForInterview = async () => {
@@ -840,7 +5067,11 @@
 // //       return;
 // //     }
 // //     if (!lockInterviewDatetime) {
-// //       toast.error('Please select interview date and time');
+// //       toast.error('Select interview date and time');
+// //       return;
+// //     }
+// //     if (!assignedToId) {
+// //       toast.error('Select an interviewer');
 // //       return;
 // //     }
 // //     try {
@@ -850,42 +5081,183 @@
 // //         job_id: selectedJob.id,
 // //         interview_datetime: lockInterviewDatetime,
 // //         comments: lockComments,
+// //         assigned_to: assignedToId,
 // //       });
-// //       toast.success(`Locked ${selectedTraineeIds.length} trainee(s) for interview`);
+// //       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
 // //       setShowLockModal(false);
 // //       setSelectedTraineeIds([]);
 // //       setLockInterviewDatetime('');
 // //       setLockComments('');
+// //       setAssignedToId('');
+// //       if (selectedJob) fetchJobMatches(selectedJob.id);
 // //     } catch (err) {
 // //       toast.error('Failed to lock trainees');
 // //     } finally {
 // //       setLoading(false);
 // //     }
 // //   };
-// //   // ================================================================
+
+// //   // ==================== Talent Search Functions ====================
+// //   const handleJobSelectForSearch = (jobId) => {
+// //     const job = jobs.find(j => j.id === parseInt(jobId));
+// //     setSelectedJobForSearch(job);
+// //     if (job) {
+// //       setJobMatchesLoading(true);
+// //       api.get(`/matches/${job.id}/`)
+// //         .then(res => {
+// //           setSearchJobMatches(res.data);
+// //           setSelectedSearchTraineeIds([]);
+// //           setSelectAll(false);
+// //         })
+// //         .catch(() => toast.error('Failed to fetch matches'))
+// //         .finally(() => setJobMatchesLoading(false));
+// //     } else {
+// //       setSearchJobMatches(null);
+// //     }
+// //   };
+
+// //   const filteredSearchMatches = () => {
+// //     if (!searchJobMatches) return [];
+// //     const allMatches = [
+// //       ...(searchJobMatches.perfect_match || []),
+// //       ...(searchJobMatches.skills_only || []),
+// //       ...(searchJobMatches.location_only || []),
+// //       ...(searchJobMatches.nearby || []),
+// //       ...(searchJobMatches.no_match || []),
+// //     ];
+// //     return allMatches.filter(m => {
+// //       if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
+// //       if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
+// //       if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
+// //       if (searchFilters.skillKeyword) {
+// //         const skills = m.matched_skills || [];
+// //         if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false;
+// //       }
+// //       return true;
+// //     });
+// //   };
+
+// //   const handleSelectAllSearch = () => {
+// //     const baseFiltered = filteredSearchMatches();
+// //     const filtered = baseFiltered.filter(m => {
+// //       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// //       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// //     });
+// //     if (selectAll) {
+// //       setSelectedSearchTraineeIds([]);
+// //     } else {
+// //       setSelectedSearchTraineeIds(filtered.map(m => m.trainee_id));
+// //     }
+// //     setSelectAll(!selectAll);
+// //   };
+
+// //   const handleLockFromSearch = async () => {
+// //     if (selectedSearchTraineeIds.length === 0) {
+// //       toast.error('Select at least one trainee');
+// //       return;
+// //     }
+// //     if (!lockInterviewDatetime) {
+// //       toast.error('Select interview date and time');
+// //       return;
+// //     }
+// //     if (!assignedToId) {
+// //       toast.error('Select an interviewer');
+// //       return;
+// //     }
+// //     try {
+// //       setLoading(true);
+// //       await api.post('/interview-locks/bulk_create/', {
+// //         trainee_ids: selectedSearchTraineeIds,
+// //         job_id: selectedJobForSearch.id,
+// //         interview_datetime: lockInterviewDatetime,
+// //         comments: lockComments,
+// //         assigned_to: assignedToId,
+// //       });
+// //       toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
+// //       setShowLockModal(false);
+// //       setSelectedSearchTraineeIds([]);
+// //       setSelectAll(false);
+// //       setLockInterviewDatetime('');
+// //       setLockComments('');
+// //       setAssignedToId('');
+// //       handleJobSelectForSearch(selectedJobForSearch.id);
+// //     } catch (err) {
+// //       toast.error('Failed to lock trainees');
+// //     } finally {
+// //       setLoading(false);
+// //     }
+// //   };
+
+// //   const downloadFilteredSearch = () => {
+// //     const baseFiltered = filteredSearchMatches();
+// //     const filtered = baseFiltered.filter(m => {
+// //       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// //       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// //     });
+// //     if (filtered.length === 0) {
+// //       toast.error('No data to download');
+// //       return;
+// //     }
+// //     const csvRows = [];
+// //     csvRows.push(['Trainee Name', 'Location', 'Bucket', 'Skills %', 'Location %', 'Total %', 'Matched Skills'].join(','));
+// //     filtered.forEach(m => {
+// //       csvRows.push([
+// //         `"${m.trainee_name}"`,
+// //         `"${m.trainee_location || ''}"`,
+// //         m.bucket,
+// //         m.skills_percentage,
+// //         m.location_percentage,
+// //         m.total_percentage,
+// //         `"${(m.matched_skills || []).join('; ')}"`,
+// //       ].join(','));
+// //     });
+// //     const csvString = csvRows.join('\n');
+// //     const blob = new Blob([csvString], { type: 'text/csv' });
+// //     const url = window.URL.createObjectURL(blob);
+// //     const a = document.createElement('a');
+// //     a.href = url;
+// //     a.download = `job_matches_${selectedJobForSearch?.title}_filtered.csv`;
+// //     document.body.appendChild(a);
+// //     a.click();
+// //     window.URL.revokeObjectURL(url);
+// //     document.body.removeChild(a);
+// //   };
+
+// //   // ==================== Manual Matching Trigger ====================
+// //   const runMatchingEngine = async () => {
+// //     try {
+// //       setLoading(true);
+// //       await api.post('/run-matching/');
+// //       toast.success('Matching engine triggered successfully');
+// //     } catch (err) {
+// //       toast.error('Failed to trigger matching engine');
+// //     } finally {
+// //       setLoading(false);
+// //     }
+// //   };
 
 // //   // ==================== Effects ====================
 // //   useEffect(() => {
-// //     if (activeTab === 'dashboard' || activeTab === 'trainees' || activeTab === 'mapped' || activeTab === 'unmapped' || activeTab === 'openPool') {
+// //     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
 // //       fetchTrainees();
 // //     }
 // //   }, [activeTab]);
 
 // //   useEffect(() => {
-// //     if (activeTab === 'dashboard' || activeTab === 'jobs' || activeTab === 'createJob') {
-// //       fetchJobs();
-// //     }
+// //     if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
 // //   }, [activeTab]);
 
 // //   useEffect(() => {
-// //     if (allTrainees.length > 0 && activeTab === 'openPool') {
-// //       checkTraineesForOpenPool();
-// //     }
+// //     if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool();
 // //   }, [allTrainees, activeTab]);
 
 // //   useEffect(() => {
 // //     setSkillTrends(computeSkillTrends(jobs));
 // //   }, [jobs]);
+
+// //   useEffect(() => {
+// //     if (activeTab === 'dashboard') fetchLockStats();
+// //   }, [activeTab]);
 
 // //   // Filter trainees
 // //   useEffect(() => {
@@ -901,24 +5273,95 @@
 // //     if (locationFilter) {
 // //       filtered = filtered.filter((t) => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
 // //     }
-// //     if (activeTab === 'mapped') {
-// //       filtered = filtered.filter((t) => t.isMapped === true);
-// //     } else if (activeTab === 'unmapped') {
-// //       filtered = filtered.filter((t) => t.isMapped !== true);
-// //     } else if (activeTab === 'openPool') {
+// //     if (activeTab === 'mapped') filtered = filtered.filter((t) => t.isMapped);
+// //     else if (activeTab === 'unmapped') filtered = filtered.filter((t) => !t.isMapped);
+// //     else if (activeTab === 'openPool') {
 // //       const noMatchIds = traineesWithNoMatches.map((t) => t.id || t.trainee_id);
 // //       filtered = filtered.filter((t) => !t.isMapped && noMatchIds.includes(t.id));
 // //     }
 // //     setTrainees(filtered);
 // //   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
 
-// //   // Fetch interview locks when tab changes
 // //   useEffect(() => {
 // //     if (activeTab === 'interviewLocks') {
 // //       fetchInterviewLocks();
 // //       fetchLockStats();
 // //     }
 // //   }, [activeTab, lockFilter]);
+
+// //   useEffect(() => {
+// //     if (activeTab === 'selected') fetchSelectedCandidates();
+// //     if (activeTab === 'rejected') fetchRejectedLocks();
+// //   }, [activeTab, allTrainees]);
+
+// //   // Compute skill trends
+// //   const computeSkillTrends = (jobs) => {
+// //     const techMap = new Map();
+// //     const softMap = new Map();
+// //     const WEIGHTS = {
+// //       basePerJob: 1,
+// //       openingsWeight: 0.5,
+// //       matchesWeight: 0.25,
+// //       inactivePenalty: 0.4,
+// //       unfilledBonus: 0.3,
+// //     };
+// //     for (const job of jobs || []) {
+// //       const isActive = job?.status === 'active';
+// //       const openings = Number(job?.openings ?? 0);
+// //       const filled = Number(job?.filled ?? 0);
+// //       const matches = Number(job?.matches ?? 0);
+// //       const unfilled = Math.max(0, openings - filled);
+// //       const jobWeight =
+// //         WEIGHTS.basePerJob +
+// //         openings * WEIGHTS.openingsWeight +
+// //         matches * WEIGHTS.matchesWeight +
+// //         unfilled * WEIGHTS.unfilledBonus;
+// //       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
+
+// //       (job?.techSkills || []).forEach((raw) => {
+// //         const skill = normalizeSkill(raw);
+// //         if (!skill) return;
+// //         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// //         techMap.set(skill, {
+// //           jobs: cur.jobs + 1,
+// //           openings: cur.openings + openings,
+// //           matches: cur.matches + matches,
+// //           demand: cur.demand + effectiveWeight,
+// //         });
+// //       });
+
+// //       (job?.softSkills || []).forEach((raw) => {
+// //         const skill = normalizeSkill(raw);
+// //         if (!skill) return;
+// //         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
+// //         softMap.set(skill, {
+// //           jobs: cur.jobs + 1,
+// //           openings: cur.openings + openings,
+// //           matches: cur.matches + matches,
+// //           demand: cur.demand + effectiveWeight,
+// //         });
+// //       });
+// //     }
+
+// //     const toSortedArray = (map) => {
+// //       const arr = Array.from(map.entries()).map(([name, stats]) => ({
+// //         name,
+// //         jobs: stats.jobs,
+// //         openings: stats.openings,
+// //         matches: stats.matches,
+// //         demandRaw: stats.demand,
+// //       }));
+// //       const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
+// //       return arr
+// //         .map((a) => ({
+// //           ...a,
+// //           demand: Math.round((a.demandRaw / maxDemand) * 100),
+// //         }))
+// //         .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
+// //         .slice(0, 5);
+// //     };
+// //     return { tech: toSortedArray(techMap), soft: toSortedArray(softMap) };
+// //   };
 
 // //   // ==================== Render Helpers ====================
 // //   const renderHiddenFileInputs = () => (
@@ -931,14 +5374,13 @@
 // //   const handleExcelUpload = async (event) => {
 // //     const file = event.target.files[0];
 // //     if (!file) return;
-// //     // validation...
 // //     try {
 // //       setLoading(true);
 // //       await jobAPI.uploadExcel(file);
 // //       await fetchJobs();
-// //       toast.success('Excel uploaded successfully!');
+// //       toast.success('Excel uploaded');
 // //     } catch (err) {
-// //       toast.error('Upload failed.');
+// //       toast.error('Upload failed');
 // //     } finally {
 // //       setLoading(false);
 // //       event.target.value = '';
@@ -952,9 +5394,9 @@
 // //       setLoading(true);
 // //       await jobAPI.uploadWord(file);
 // //       await fetchJobs();
-// //       toast.success('Word document uploaded!');
+// //       toast.success('Word uploaded');
 // //     } catch (err) {
-// //       toast.error('Upload failed.');
+// //       toast.error('Upload failed');
 // //     } finally {
 // //       setLoading(false);
 // //       event.target.value = '';
@@ -1008,29 +5450,17 @@
 // //       <div className="modal-overlay" onClick={() => setShowExcelTemplate(false)}>
 // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
 // //           <div className="modal-header">
-// //             <div className="modal-title">
-// //               <FileSpreadsheet size={24} />
-// //               <h2>Excel Upload Template</h2>
-// //             </div>
-// //             <button className="modal-close" onClick={() => setShowExcelTemplate(false)}>
-// //               <X size={24} />
-// //             </button>
+// //             <div className="modal-title"><FileSpreadsheet size={24} /><h2>Excel Upload Template</h2></div>
+// //             <button className="modal-close" onClick={() => setShowExcelTemplate(false)}><X size={24} /></button>
 // //           </div>
 // //           <div className="modal-body">
-// //             <h3>Here you can download this template</h3>
+// //             <h3>Download the template, fill it, and upload.</h3>
 // //           </div>
 // //           <div className="modal-actions">
 // //             <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}>
 // //               <Download size={18} /> Download Template
 // //             </button>
-// //             <button
-// //               className="btn-primary"
-// //               onClick={() => {
-// //                 document.getElementById('excelUpload').click();
-// //                 setShowExcelTemplate(false);
-// //               }}
-// //               disabled={loading}
-// //             >
+// //             <button className="btn-primary" onClick={() => { document.getElementById('excelUpload').click(); setShowExcelTemplate(false); }} disabled={loading}>
 // //               <Upload size={18} /> Upload Excel
 // //             </button>
 // //           </div>
@@ -1045,30 +5475,18 @@
 // //       <div className="modal-overlay" onClick={() => setShowWordTemplate(false)}>
 // //         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
 // //           <div className="modal-header">
-// //             <div className="modal-title">
-// //               <File size={24} />
-// //               <h2>Word Document Template</h2>
-// //             </div>
-// //             <button className="modal-close" onClick={() => setShowWordTemplate(false)}>
-// //               <X size={24} />
-// //             </button>
+// //             <div className="modal-title"><File size={24} /><h2>Word Template</h2></div>
+// //             <button className="modal-close" onClick={() => setShowWordTemplate(false)}><X size={24} /></button>
 // //           </div>
 // //           <div className="modal-body">
-// //             <h3>Here you can download this template</h3>
+// //             <h3>Download the Word template, fill it, and upload.</h3>
 // //           </div>
 // //           <div className="modal-actions">
 // //             <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}>
 // //               <Download size={18} /> Download Template
 // //             </button>
-// //             <button
-// //               className="btn-primary"
-// //               onClick={() => {
-// //                 document.getElementById('wordUpload').click();
-// //                 setShowWordTemplate(false);
-// //               }}
-// //               disabled={loading}
-// //             >
-// //               <Upload size={18} /> Upload Word Doc
+// //             <button className="btn-primary" onClick={() => { document.getElementById('wordUpload').click(); setShowWordTemplate(false); }} disabled={loading}>
+// //               <Upload size={18} /> Upload Word
 // //             </button>
 // //           </div>
 // //         </div>
@@ -1079,43 +5497,24 @@
 // //   // Dashboard render
 // //   const renderDashboard = () => (
 // //     <div className="dashboard-content">
-// //       {loading && (
-// //         <div className="loading-overlay">
-// //           <div className="loading-spinner"></div>
-// //           <p>Loading dashboard data...</p>
-// //         </div>
-// //       )}
-// //       {error && (
-// //         <div className="error-message">
-// //           <AlertCircle size={20} /> <span>{error}</span>
-// //         </div>
-// //       )}
+// //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
+// //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
 // //       <div className="stats-grid">
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><Users className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div>
-// //         </div>
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><BriefcaseBusiness className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div>
-// //         </div>
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><CheckCircle className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Mapped Trainees</h3><div className="stat-value">{stats.mappedTrainees}</div></div>
-// //         </div>
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><AlertCircle className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Unmapped Trainees</h3><div className="stat-value">{stats.unmappedTrainees}</div></div>
-// //         </div>
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><Target className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div>
-// //         </div>
-// //         <div className="stat-card">
-// //           <div className="stat-icon"><Briefcase className="stat-icon-svg" /></div>
-// //           <div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div>
-// //         </div>
+// //         <div className="stat-card"><div className="stat-icon"><Users /></div><div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div></div>
+// //         <div className="stat-card"><div className="stat-icon"><BriefcaseBusiness /></div><div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div></div>
+// //         <div className="stat-card"><div className="stat-icon"><CheckCircle /></div><div className="stat-content"><h3>Mapped</h3><div className="stat-value">{stats.mappedTrainees}</div></div></div>
+// //         <div className="stat-card"><div className="stat-icon"><AlertCircle /></div><div className="stat-content"><h3>Unmapped</h3><div className="stat-value">{stats.unmappedTrainees}</div></div></div>
+// //         <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
+// //         <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
 // //       </div>
+
+// //       {lockStats && (
+// //         <div className="stats-grid small" style={{ marginTop: '1rem' }}>
+// //           <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// //           <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// //           <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+// //         </div>
+// //       )}
 
 // //       <h2 className="section-title">Top Skills in Demand</h2>
 // //       <div className="skills-section">
@@ -1124,13 +5523,7 @@
 // //           <div className="hr-skills-list">
 // //             {skillTrends.tech.map((skill) => (
 // //               <div key={`tech-${skill.name}`} className="skill-item">
-// //                 <div className="skill-header">
-// //                   <span className="skill-name">{skill.name}</span>
-// //                   <div className="skill-stats">
-// //                     <span className="skill-jobs">{skill.jobs} jobs</span>
-// //                     <span className="skill-demand">{skill.demand}%</span>
-// //                   </div>
-// //                 </div>
+// //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
 // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#3b82f6' }} /></div>
 // //               </div>
 // //             ))}
@@ -1142,13 +5535,7 @@
 // //           <div className="hr-skills-list">
 // //             {skillTrends.soft.map((skill) => (
 // //               <div key={`soft-${skill.name}`} className="skill-item">
-// //                 <div className="skill-header">
-// //                   <span className="skill-name">{skill.name}</span>
-// //                   <div className="skill-stats">
-// //                     <span className="skill-jobs">{skill.jobs} jobs</span>
-// //                     <span className="skill-demand">{skill.demand}%</span>
-// //                   </div>
-// //                 </div>
+// //                 <div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div>
 // //                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#10b981' }} /></div>
 // //               </div>
 // //             ))}
@@ -1163,103 +5550,41 @@
 // //   const renderJobManagement = () => (
 // //     <div className="job-management">
 // //       <div className="section-header">
-// //         <div className="header-title">
-// //           <h2><Briefcase size={24} /> Job Profiles Management</h2>
-// //           <p className="subtitle">Manage and track all job positions</p>
-// //         </div>
+// //         <div className="header-title"><h2><Briefcase size={24} /> Job Profiles</h2><p className="subtitle">Manage all job positions</p></div>
 // //         <div className="header-actions">
-// //           <div className="upload-buttons">
-// //             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}>
-// //               <FileSpreadsheet size={18} /> Upload Excel
-// //             </button>
-// //             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}>
-// //               <File size={18} /> Upload Word
-// //             </button>
-// //           </div>
-// //           <button
-// //             className="btn-primary"
-// //             onClick={() => {
-// //               setSelectedJob(null);
-// //               setIsEditMode(false);
-// //               setActiveTab('createJob');
-// //             }}
-// //             disabled={loading}
-// //           >
-// //             <Plus size={18} /> Create New Job
+// //           <button className="btn-primary" onClick={runMatchingEngine} disabled={loading} style={{ marginRight: '1rem' }}>
+// //             <RefreshCw size={18} /> Generate Matches
 // //           </button>
+// //           <div className="upload-buttons">
+// //             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}><FileSpreadsheet size={18} /> Upload Excel</button>
+// //             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}><File size={18} /> Upload Word</button>
+// //           </div>
+// //           <button className="btn-primary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }} disabled={loading}><Plus size={18} /> Create New Job</button>
 // //         </div>
 // //       </div>
-
 // //       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading jobs...</p></div>}
 // //       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-
 // //       {jobs.length === 0 && !loading && !error && (
-// //         <div className="no-data">
-// //           <Briefcase size={48} />
-// //           <h3>No Jobs Found</h3>
-// //           <p>Create your first job profile or upload jobs via Excel/Word</p>
-// //         </div>
+// //         <div className="no-data"><Briefcase size={48} /><h3>No Jobs Found</h3><p>Create your first job profile or upload via Excel/Word</p></div>
 // //       )}
-
 // //       {jobs.length > 0 && (
 // //         <div className="table-container">
 // //           <table className="data-table">
-// //             <thead>
-// //               <tr>
-// //                 <th>Job Title</th>
-// //                 <th>Department</th>
-// //                 <th>Location(s)</th>
-// //                 <th>Openings</th>
-// //                 <th>Filled</th>
-// //                 <th>Status</th>
-// //                 <th>Actions</th>
-// //               </tr>
-// //             </thead>
+// //             <thead><tr><th>Job Title</th><th>Department</th><th>Location(s)</th><th>Openings</th><th>Filled</th><th>Status</th><th>Actions</th></tr></thead>
 // //             <tbody>
 // //               {jobs.map((job) => (
 // //                 <tr key={job.id}>
-// //                   <td>
-// //                     <div className="job-title-cell">
-// //                       <div className="job-icon"><BriefcaseBusiness size={16} /></div>
-// //                       <span className="font-medium">{job.title}</span>
-// //                     </div>
-// //                   </td>
-// //                   <td>
-// //                     <div className="department-cell"><Building size={14} />{job.department}</div>
-// //                   </td>
-// //                   <td>
-// //                     <div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div>
-// //                   </td>
+// //                   <td><div className="job-title-cell"><div className="job-icon"><BriefcaseBusiness size={16} /></div><span className="font-medium">{job.title}</span></div></td>
+// //                   <td><div className="department-cell"><Building size={14} />{job.department}</div></td>
+// //                   <td><div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div></td>
 // //                   <td><div className="openings-cell">{job.openings}</div></td>
 // //                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
-// //                   <td>
-// //                     <button
-// //                       className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`}
-// //                       onClick={() => toggleJobStatus(job.id)}
-// //                       disabled={loading}
-// //                     >
-// //                       {job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}
-// //                     </button>
-// //                   </td>
-// //                   <td>
-// //                     <div className="action-buttons">
-// //                       <button className="btn-icon btn-icon-view" onClick={() => handleViewJobMatches(job)} disabled={loading}><Eye size={16} /></button>
-// //                       <button
-// //                         className="btn-icon btn-icon-edit"
-// //                         onClick={() => {
-// //                           setSelectedJob(job);
-// //                           setIsEditMode(true);
-// //                           setActiveTab('createJob');
-// //                           setTechSkills(job.techSkills || []);
-// //                           setSoftSkills(job.softSkills || []);
-// //                         }}
-// //                         disabled={loading}
-// //                       >
-// //                         <Edit size={16} />
-// //                       </button>
-// //                       <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
-// //                     </div>
-// //                   </td>
+// //                   <td><button className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`} onClick={() => toggleJobStatus(job.id)} disabled={loading}>{job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}</button></td>
+// //                   <td><div className="action-buttons">
+// //                     <button className="btn-icon btn-icon-view" onClick={() => handleViewJobDetails(job)} disabled={loading}><Eye size={16} /></button>
+// //                     <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading}><Edit size={16} /></button>
+// //                     <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
+// //                   </div></td>
 // //                 </tr>
 // //               ))}
 // //             </tbody>
@@ -1269,7 +5594,7 @@
 // //     </div>
 // //   );
 
-// //   // Create/Edit Job Form (with is_public)
+// //   // Create/Edit Job Form
 // //   const renderCreateJob = () => {
 // //     const jobToEdit = selectedJob || newJob;
 // //     const isEditing = !!selectedJob && isEditMode;
@@ -1290,36 +5615,9 @@
 // //             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
 // //             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
 // //           </div>
-// //           <button
-// //             className="btn-secondary"
-// //             onClick={() => {
-// //               setSelectedJob(null);
-// //               setIsEditMode(false);
-// //               setActiveTab('jobs');
-// //               setNewJob({
-// //                 title: '',
-// //                 department: '',
-// //                 location: [''],
-// //                 openings: 1,
-// //                 requirements: '',
-// //                 techSkills: [],
-// //                 softSkills: [],
-// //                 description: '',
-// //                 salary: '',
-// //                 expiryDate: '',
-// //                 is_public: true,
-// //               });
-// //               setTechSkills([]);
-// //               setSoftSkills([]);
-// //             }}
-// //             disabled={loading}
-// //           >
-// //             <ArrowLeft size={18} /> Back to Jobs
-// //           </button>
+// //           <button className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
 // //         </div>
-
-// //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating job...' : 'Creating job...'}</p></div>}
-
+// //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating...' : 'Creating...'}</p></div>}
 // //         <div className="form-card">
 // //           <form onSubmit={handleSubmit}>
 // //             <div className="form-section">
@@ -1327,25 +5625,11 @@
 // //               <div className="form-row">
 // //                 <div className="form-group">
 // //                   <label><span className="required">*</span> Job Title</label>
-// //                   <input
-// //                     type="text"
-// //                     className="form-control"
-// //                     value={jobToEdit.title}
-// //                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })}
-// //                     required
-// //                     placeholder="e.g., Senior Frontend Developer"
-// //                     disabled={loading}
-// //                   />
+// //                   <input type="text" className="form-control" value={jobToEdit.title} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })} required placeholder="e.g., Senior Frontend Developer" disabled={loading} />
 // //                 </div>
 // //                 <div className="form-group">
 // //                   <label><span className="required">*</span> Department</label>
-// //                   <select
-// //                     className="form-control"
-// //                     value={jobToEdit.department}
-// //                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })}
-// //                     required
-// //                     disabled={loading}
-// //                   >
+// //                   <select className="form-control" value={jobToEdit.department} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })} required disabled={loading}>
 // //                     <option value="">Select Department</option>
 // //                     <option value="Technology">Technology</option>
 // //                     <option value="Analytics">Analytics</option>
@@ -1356,196 +5640,73 @@
 // //                   </select>
 // //                 </div>
 // //               </div>
-
-// //               {/* Visibility dropdown */}
 // //               <div className="form-row">
 // //                 <div className="form-group">
 // //                   <label>Visibility</label>
-// //                   <select
-// //                     className="form-control"
-// //                     value={jobToEdit.is_public ? 'public' : 'private'}
-// //                     onChange={(e) => {
-// //                       const val = e.target.value === 'public';
-// //                       if (isEditing) {
-// //                         setSelectedJob({ ...jobToEdit, is_public: val });
-// //                       } else {
-// //                         setNewJob({ ...newJob, is_public: val });
-// //                       }
-// //                     }}
-// //                   >
-// //                     <option value="public">Public (visible to associates)</option>
-// //                     <option value="private">Private (internal only)</option>
+// //                   <select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}>
+// //                     <option value="public">Public</option>
+// //                     <option value="private">Private</option>
 // //                   </select>
 // //                 </div>
 // //               </div>
-
 // //               <div className="form-group">
-// //                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple locations if needed)</span></label>
+// //                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple)</span></label>
 // //                 {jobToEdit.location.map((loc, index) => (
 // //                   <div key={index} className="location-input-group">
-// //                     <input
-// //                       type="text"
-// //                       className="form-control"
-// //                       value={loc}
-// //                       onChange={(e) => {
-// //                         if (isEditing) {
-// //                           const newLocs = [...jobToEdit.location];
-// //                           newLocs[index] = e.target.value;
-// //                           setSelectedJob({ ...jobToEdit, location: newLocs });
-// //                         } else {
-// //                           updateLocationField(index, e.target.value);
-// //                         }
-// //                       }}
-// //                       required={index === 0}
-// //                       placeholder="e.g., Hyderabad"
-// //                       disabled={loading}
-// //                     />
-// //                     {jobToEdit.location.length > 1 && (
-// //                       <button type="button" className="btn-icon" onClick={() => {
-// //                         if (isEditing) {
-// //                           const newLocs = jobToEdit.location.filter((_, i) => i !== index);
-// //                           setSelectedJob({ ...jobToEdit, location: newLocs });
-// //                         } else {
-// //                           removeLocationField(index);
-// //                         }
-// //                       }} disabled={loading}><X size={16} /></button>
-// //                     )}
+// //                     <input type="text" className="form-control" value={loc} onChange={(e) => { if (isEditing) { const newLocs = [...jobToEdit.location]; newLocs[index] = e.target.value; setSelectedJob({ ...jobToEdit, location: newLocs }); } else updateLocationField(index, e.target.value); }} required={index === 0} placeholder="e.g., Hyderabad" disabled={loading} />
+// //                     {jobToEdit.location.length > 1 && <button type="button" className="btn-icon" onClick={() => { if (isEditing) { const newLocs = jobToEdit.location.filter((_, i) => i !== index); setSelectedJob({ ...jobToEdit, location: newLocs }); } else removeLocationField(index); }} disabled={loading}><X size={16} /></button>}
 // //                   </div>
 // //                 ))}
-// //                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}>
-// //                   <Plus size={16} /> Add Another Location
-// //                 </button>
+// //                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}><Plus size={16} /> Add Another</button>
 // //               </div>
-
 // //               <div className="form-row">
 // //                 <div className="form-group">
-// //                   <label><span className="required">*</span> Number of Openings</label>
-// //                   <input
-// //                     type="number"
-// //                     className="form-control"
-// //                     value={jobToEdit.openings}
-// //                     onChange={(e) => {
-// //                       const val = parseInt(e.target.value) || 1;
-// //                       if (isEditing) {
-// //                         setSelectedJob({ ...jobToEdit, openings: val });
-// //                       } else {
-// //                         setNewJob({ ...newJob, openings: val });
-// //                       }
-// //                     }}
-// //                     min="1"
-// //                     required
-// //                     disabled={loading}
-// //                   />
+// //                   <label><span className="required">*</span> Openings</label>
+// //                   <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
 // //                 </div>
 // //                 <div className="form-group">
 // //                   <label><Calendar size={16} /> Expiry Date</label>
-// //                   <input
-// //                     type="date"
-// //                     className="form-control"
-// //                     value={jobToEdit.expiryDate}
-// //                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })}
-// //                     disabled={loading}
-// //                   />
+// //                   <input type="date" className="form-control" value={jobToEdit.expiryDate} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })} disabled={loading} />
 // //                 </div>
 // //               </div>
 // //             </div>
-
 // //             <div className="form-section">
 // //               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
 // //               <div className="form-group">
 // //                 <label><span className="required">*</span> Technical Skills</label>
 // //                 <div className="skills-input">
-// //                   <input
-// //                     type="text"
-// //                     className="form-control"
-// //                     placeholder="Type technical skill and press Enter or comma"
-// //                     onKeyDown={handleTechSkillAdd}
-// //                     disabled={loading}
-// //                   />
+// //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleTechSkillAdd} disabled={loading} />
 // //                   <div className="skills-tags">
 // //                     {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
-// //                       <span key={index} className="skill-tag tech-tag">
-// //                         {skill}
-// //                         <button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button>
-// //                       </span>
+// //                       <span key={index} className="skill-tag tech-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button></span>
 // //                     ))}
 // //                   </div>
 // //                 </div>
 // //               </div>
-
 // //               <div className="form-group">
 // //                 <label>Soft Skills</label>
 // //                 <div className="skills-input">
-// //                   <input
-// //                     type="text"
-// //                     className="form-control"
-// //                     placeholder="Type soft skill and press Enter or comma"
-// //                     onKeyDown={handleSoftSkillAdd}
-// //                     disabled={loading}
-// //                   />
+// //                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleSoftSkillAdd} disabled={loading} />
 // //                   <div className="skills-tags">
 // //                     {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
-// //                       <span key={index} className="skill-tag soft-tag">
-// //                         {skill}
-// //                         <button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button>
-// //                       </span>
+// //                       <span key={index} className="skill-tag soft-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button></span>
 // //                     ))}
 // //                   </div>
 // //                 </div>
 // //               </div>
-
 // //               <div className="form-group">
 // //                 <label><span className="required">*</span> Job Description</label>
-// //                 <textarea
-// //                   className="form-control"
-// //                   rows="4"
-// //                   value={jobToEdit.description}
-// //                   onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })}
-// //                   placeholder="Describe the job role, responsibilities, and expectations..."
-// //                   required
-// //                   disabled={loading}
-// //                 ></textarea>
+// //                 <textarea className="form-control" rows="4" value={jobToEdit.description} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })} placeholder="Describe the role..." required disabled={loading} />
 // //               </div>
-
 // //               <div className="form-group">
-// //                 <label><span className="required">*</span> Requirements & Qualifications</label>
-// //                 <textarea
-// //                   className="form-control"
-// //                   rows="4"
-// //                   value={jobToEdit.requirements}
-// //                   onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })}
-// //                   placeholder="List the required experience, education, certifications, etc."
-// //                   required
-// //                   disabled={loading}
-// //                 ></textarea>
+// //                 <label><span className="required">*</span> Requirements</label>
+// //                 <textarea className="form-control" rows="4" value={jobToEdit.requirements} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })} placeholder="List required qualifications..." required disabled={loading} />
 // //               </div>
 // //             </div>
-
 // //             <div className="form-actions">
-// //               <button type="button" className="btn-secondary" onClick={() => {
-// //                 setSelectedJob(null);
-// //                 setIsEditMode(false);
-// //                 setActiveTab('jobs');
-// //                 setNewJob({
-// //                   title: '',
-// //                   department: '',
-// //                   location: [''],
-// //                   openings: 1,
-// //                   requirements: '',
-// //                   techSkills: [],
-// //                   softSkills: [],
-// //                   description: '',
-// //                   salary: '',
-// //                   expiryDate: '',
-// //                   is_public: true,
-// //                 });
-// //                 setTechSkills([]);
-// //                 setSoftSkills([]);
-// //               }} disabled={loading}>
-// //                 Cancel
-// //               </button>
+// //               <button type="button" className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}>Cancel</button>
 // //               <button type="submit" className="btn-primary" disabled={loading}>
-// //                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job Profile'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job Profile'}</>}
+// //                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job'}</>}
 // //               </button>
 // //             </div>
 // //           </form>
@@ -1558,100 +5719,56 @@
 // //   const renderTraineesList = () => {
 // //     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
 // //     const openPoolCount = traineesWithNoMatches.length;
-
 // //     return (
 // //       <div className="trainees-list">
 // //         <div className="section-header">
-// //           <div className="header-title">
-// //             <h2><Users size={24} /> Trainees Management</h2>
-// //             <p className="subtitle">Manage and track all trainees in the system</p>
-// //           </div>
+// //           <div className="header-title"><h2><Users size={24} /> Trainees</h2><p className="subtitle">Manage all trainees</p></div>
 // //           <div className="view-options">
-// //             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All Trainees</button>
+// //             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All</button>
 // //             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
 // //             <button className={`btn-view-option ${activeTab === 'unmapped' ? 'active' : ''}`} onClick={() => setActiveTab('unmapped')}><AlertCircle size={16} /> Unmapped ({stats.unmappedTrainees})</button>
 // //             <button className={`btn-view-option ${activeTab === 'openPool' ? 'active' : ''}`} onClick={() => setActiveTab('openPool')}><Users2 size={16} /> Open Pool ({openPoolCount})</button>
 // //           </div>
 // //         </div>
-
 // //         <div className="search-filter">
-// //           <div className="search-box">
-// //             <input type="text" className="search-input" placeholder="Search trainees by name, skills, or location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-// //           </div>
+// //           <div className="search-box"><input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
 // //           <div className="filter-group">
 // //             <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
 // //               <option value="">All Locations</option>
-// //               {uniqueLocations.map((loc) => (
-// //                 <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>
-// //               ))}
+// //               {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>)}
 // //             </select>
 // //             <button className="btn-icon" onClick={() => { setSearchQuery(''); setLocationFilter(''); }}><X size={18} /></button>
 // //           </div>
 // //         </div>
-
-// //         {checkingMatches && activeTab === 'openPool' && (
-// //           <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking trainee matches for Open Pool...</p></div>
-// //         )}
-// //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading trainees...</p></div>}
+// //         {checkingMatches && activeTab === 'openPool' && <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking Open Pool...</p></div>}
+// //         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
 // //         {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-
 // //         {trainees.length === 0 && !loading && !checkingMatches && (
-// //           <div className="no-data">
-// //             <Users size={48} />
-// //             <h3>No Trainees Found</h3>
-// //             <p>No trainees match your search criteria or no trainees available</p>
-// //             {activeTab === 'openPool' && (
-// //               <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}>
-// //                 <Search size={18} /> Re-check for Open Pool
-// //               </button>
-// //             )}
+// //           <div className="no-data"><Users size={48} /><h3>No Trainees Found</h3><p>No trainees match your criteria.</p>
+// //             {activeTab === 'openPool' && <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}><Search size={18} /> Re-check Open Pool</button>}
 // //           </div>
 // //         )}
-
 // //         <div className="trainees-grid">
 // //           {trainees.map((trainee) => (
 // //             <div key={trainee.id} className="trainee-card">
 // //               <div className="trainee-header">
 // //                 <div className="trainee-info-main">
 // //                   <div className="trainee-avatar">{trainee.name.charAt(0)}</div>
-// //                   <div className="trainee-info">
-// //                     <h4>{trainee.name}</h4>
-// //                     <div className="trainee-meta">
-// //                       <span className="trainee-email"><Mail size={14} /> {trainee.email}</span>
-// //                       <span className="trainee-location"><MapPin size={14} /> {trainee.location}</span>
-// //                     </div>
-// //                   </div>
+// //                   <div className="trainee-info"><h4>{trainee.name}</h4><div className="trainee-meta"><span className="trainee-email"><Mail size={14} /> {trainee.email}</span><span className="trainee-location"><MapPin size={14} /> {trainee.location}</span></div></div>
 // //                 </div>
 // //                 <div className={`mapping-indicator ${trainee.isMapped ? 'mapped' : 'unmapped'}`}>
-// //                   {trainee.isMapped ? (
-// //                     <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</>
-// //                   ) : (
-// //                     <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>
-// //                   )}
+// //                   {trainee.isMapped ? <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</> : <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>}
 // //                 </div>
 // //               </div>
-
 // //               <div className="trainee-skills">
-// //                 {trainee.skills.slice(0, 4).map((skill) => (
-// //                   <span key={skill} className="skill-tag">{skill}</span>
-// //                 ))}
+// //                 {trainee.skills.slice(0, 4).map((skill) => <span key={skill} className="skill-tag">{skill}</span>)}
 // //                 {trainee.skills.length > 4 && <span className="skill-tag-more">+{trainee.skills.length - 4}</span>}
 // //               </div>
-
 // //               <div className="trainee-stats">
-// //                 <div className="trainee-stat">
-// //                   <span className="stat-label">Average Score</span>
-// //                   <div className="score-progress">
-// //                     <div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div>
-// //                     <span className="score-value">{trainee.score}%</span>
-// //                   </div>
-// //                 </div>
+// //                 <div className="trainee-stat"><span className="stat-label">Avg Score</span><div className="score-progress"><div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div><span className="score-value">{trainee.score}%</span></div></div>
 // //               </div>
-
 // //               <div className="trainee-actions">
-// //                 <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}>
-// //                   <User size={16} /> View Profile
-// //                 </button>
+// //                 <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}><User size={16} /> View Profile</button>
 // //               </div>
 // //             </div>
 // //           ))}
@@ -1660,167 +5777,106 @@
 // //     );
 // //   };
 
-// //   // Job Modal (view details)
-// //   const renderJobModal = () => {
-// //     if (!selectedJob || isEditMode) return null;
-// //     const handleDelete = async () => {
-// //       if (window.confirm('Are you sure you want to delete this job?')) {
-// //         await handleDeleteJob(selectedJob.id);
-// //         setSelectedJob(null);
-// //       }
-// //     };
+// //   // Job Details Modal
+// //   const renderJobDetailsModal = () => {
+// //     if (!showJobDetailsModal || !jobDetailsJob) return null;
+
 // //     return (
-// //       <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
-// //         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+// //       <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
+// //         <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
 // //           <div className="modal-header">
-// //             <div className="modal-title"><Briefcase size={24} /><h2>{selectedJob.title}</h2></div>
-// //             <button className="modal-close" onClick={() => setSelectedJob(null)} disabled={loading}><X size={24} /></button>
+// //             <h2><Briefcase size={24} /> {jobDetailsJob.title}</h2>
+// //             <button className="modal-close" onClick={() => setShowJobDetailsModal(false)}><X /></button>
+// //           </div>
+// //           <div className="modal-tabs">
+// //             <button className={jobDetailsTab === 'overview' ? 'active' : ''} onClick={() => setJobDetailsTab('overview')}>Overview</button>
+// //             <button className={jobDetailsTab === 'mapped' ? 'active' : ''} onClick={() => setJobDetailsTab('mapped')}>Mapped ({mappedTrainees.length})</button>
+// //             <button className={jobDetailsTab === 'rejected' ? 'active' : ''} onClick={() => setJobDetailsTab('rejected')}>Rejected ({rejectedTrainees.length})</button>
 // //           </div>
 // //           <div className="modal-body">
-// //             {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
-// //             <div className="job-details-grid">
-// //               <div className="detail-item"><Building size={16} /><div><span className="detail-label">Department</span><span className="detail-value">{selectedJob.department}</span></div></div>
-// //               <div className="detail-item"><MapPin size={16} /><div><span className="detail-label">Location</span><span className="detail-value">{Array.isArray(selectedJob.location) ? selectedJob.location.join(', ') : selectedJob.location}</span></div></div>
-// //               <div className="detail-item"><BriefcaseBusiness size={16} /><div><span className="detail-label">Openings</span><span className="detail-value">{selectedJob.openings} ({selectedJob.filled} filled)</span></div></div>
-// //               <div className="detail-item"><Dollar size={16} /><div><span className="detail-label">Salary</span><span className="detail-value">{selectedJob.salary}</span></div></div>
-// //               <div className="detail-item"><div className={`status-badge status-${selectedJob.status}`}>{selectedJob.status === 'active' ? 'Active' : 'Inactive'}</div></div>
-// //               <div className="detail-item"><CalendarDays size={16} /><div><span className="detail-label">Posted</span><span className="detail-value">{selectedJob.postedDate}</span></div></div>
-// //               <div className="detail-item"><Calendar size={16} /><div><span className="detail-label">Expires</span><span className="detail-value">{selectedJob.expiryDate}</span></div></div>
-// //             </div>
-// //             <div className="job-section"><h3>Job Description</h3><p>{selectedJob.description}</p></div>
-// //             <div className="job-section"><h3>Requirements</h3><p>{selectedJob.requirements}</p></div>
-// //             <div className="job-section"><h3>Technical Skills</h3><div className="skills-list">{selectedJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}</div></div>
-// //             <div className="job-section"><h3>Soft Skills</h3><div className="skills-list">{selectedJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}</div></div>
-// //             <div className="modal-actions">
-// //               <button className="btn-secondary" onClick={() => setSelectedJob(null)} disabled={loading}>Close</button>
-// //               <button className="btn-danger" onClick={handleDelete} disabled={loading}><Trash2 size={18} /> Delete Job</button>
-// //               <button className="btn-primary" onClick={() => {
-// //                 setIsEditMode(true);
-// //                 setActiveTab('createJob');
-// //                 setTechSkills(selectedJob.techSkills || []);
-// //                 setSoftSkills(selectedJob.softSkills || []);
-// //               }} disabled={loading}><Edit size={18} /> Edit Job</button>
-// //             </div>
-// //           </div>
-// //         </div>
-// //       </div>
-// //     );
-// //   };
-
-// //   // Job Matches Modal (with checkboxes and lock)
-// //   const renderJobMatchesModal = () => {
-// //     if (!selectedJob || jobMatches === null) return null;
-
-// //     const bucketConfig = {
-// //       perfect_match: { title: 'Perfect Match', color: 'bucket-perfect' },
-// //       skills_only: { title: 'Skills Only', color: 'bucket-skills' },
-// //       location_only: { title: 'Location Only', color: 'bucket-location' },
-// //       nearby: { title: 'Nearby', color: 'bucket-nearby' },
-// //       no_match: { title: 'No Match', color: 'bucket-no-match' },
-// //     };
-// //     const mappedTraineeNames = getMappedTraineeNames();
-
-// //     return (
-// //       <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>
-// //         <div className="modal-content job-matches-modal" onClick={(e) => e.stopPropagation()}>
-// //           <div className="modal-header">
-// //             <div className="modal-title">
-// //               <Users size={24} />
-// //               <div>
-// //                 <h2>{jobMatches.job_title} - Matches</h2>
-// //                 <p className="subtitle">Total Matches: {jobMatches.total_matches} | Available: {jobMatches.total_matches - mappedTraineeNames.length}</p>
+// //             {jobDetailsTab === 'overview' && (
+// //               <div className="job-details">
+// //                 <p><strong>Department:</strong> {jobDetailsJob.department}</p>
+// //                 <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
+// //                 <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
+// //                 <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
+// //                 <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
+// //                 <p><strong>Expires:</strong> {jobDetailsJob.expiryDate}</p>
+// //                 <p><strong>Salary:</strong> {jobDetailsJob.salary}</p>
+// //                 <div className="job-section">
+// //                   <h4>Description</h4>
+// //                   <p>{jobDetailsJob.description}</p>
+// //                 </div>
+// //                 <div className="job-section">
+// //                   <h4>Requirements</h4>
+// //                   <p>{jobDetailsJob.requirements}</p>
+// //                 </div>
+// //                 <div className="job-section">
+// //                   <h4>Technical Skills</h4>
+// //                   <div className="skills-list">
+// //                     {jobDetailsJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}
+// //                   </div>
+// //                 </div>
+// //                 <div className="job-section">
+// //                   <h4>Soft Skills</h4>
+// //                   <div className="skills-list">
+// //                     {jobDetailsJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}
+// //                   </div>
+// //                 </div>
 // //               </div>
-// //             </div>
-// //             <button className="modal-close" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}><X size={24} /></button>
-// //           </div>
-
-// //           <div className="modal-body">
-// //             {jobMatchesLoading ? (
-// //               <div className="loading-state">...</div>
-// //             ) : (
-// //               <>
-// //                 <div className="modal-actions" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
-// //                   <span>Selected: {selectedTraineeIds.length}</span>
-// //                   <button
-// //                     className="btn-primary"
-// //                     onClick={() => setShowLockModal(true)}
-// //                     disabled={selectedTraineeIds.length === 0}
-// //                   >
-// //                     <Lock size={18} /> Lock for Interview ({selectedTraineeIds.length})
-// //                   </button>
-// //                 </div>
-
-// //                 <div className="job-matches-content">
-// //                   {Object.entries(bucketConfig).map(([bucketKey, config]) => {
-// //                     const bucketData = jobMatches[bucketKey];
-// //                     if (!bucketData || bucketData.length === 0) return null;
-// //                     const availableMatches = bucketData.filter(match => !mappedTraineeNames.includes(match.trainee_name));
-// //                     if (availableMatches.length === 0) return null;
-
-// //                     return (
-// //                       <div key={bucketKey} className={`bucket-section ${config.color}`}>
-// //                         <h3 className="bucket-title">{config.title} ({availableMatches.length} available of {bucketData.length})</h3>
-// //                         <div className="bucket-grid">
-// //                           {availableMatches.map((match) => (
-// //                             <div key={match.id || match.trainee_id} className="trainee-match-card">
-// //                               <input
-// //                                 type="checkbox"
-// //                                 className="trainee-checkbox"
-// //                                 checked={selectedTraineeIds.includes(match.trainee_id)}
-// //                                 onChange={(e) => {
-// //                                   if (e.target.checked) {
-// //                                     setSelectedTraineeIds([...selectedTraineeIds, match.trainee_id]);
-// //                                   } else {
-// //                                     setSelectedTraineeIds(selectedTraineeIds.filter(id => id !== match.trainee_id));
-// //                                   }
-// //                                 }}
-// //                               />
-// //                               <div className="match-percentage">{match.total_percentage.toFixed(1)}%</div>
-// //                               <div className="bucket-tag">{match.bucket?.replace('_', ' ') || config.title}</div>
-// //                               <h4>{match.trainee_name}</h4>
-// //                               <div className="match-breakdown">
-// //                                 <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
-// //                                 <span>Location: {match.location_percentage.toFixed(1)}%</span>
-// //                               </div>
-// //                               <p className="location-info"><MapPin size={14} /> {match.trainee_location}</p>
-// //                               <div className="match-actions">
-// //                                 <button className="view-trainee-btn" onClick={() => handleViewTraineeProfileFromJob(match)}>
-// //                                   <User size={16} /> View Profile
-// //                                 </button>
-// //                                 <button
-// //                                   className="map-to-project-btn"
-// //                                   onClick={() => {
-// //                                     if (selectedJob.openings <= 0) {
-// //                                       toast.error('This job has no openings available.');
-// //                                       return;
-// //                                     }
-// //                                     handleMapToProject(match, selectedJob);
-// //                                   }}
-// //                                   disabled={selectedJob.openings <= 0}
-// //                                 >
-// //                                   <Link size={16} /> {selectedJob.openings <= 0 ? 'Job Full' : 'Map to Project'}
-// //                                 </button>
-// //                               </div>
-// //                             </div>
-// //                           ))}
-// //                         </div>
+// //             )}
+// //             {jobDetailsTab === 'mapped' && (
+// //               <div>
+// //                 {mappedTrainees.length === 0 ? (
+// //                   <p className="no-data">No trainees mapped to this job.</p>
+// //                 ) : (
+// //                   <div className="trainee-list">
+// //                     {mappedTrainees.map(t => (
+// //                       <div key={t.id} className="trainee-item">
+// //                         <User size={18} />
+// //                         <span>{t.name}</span>
+// //                         <span className="trainee-location">({t.location})</span>
+// //                         <button className="btn-icon" onClick={() => { setSelectedTrainee(t); setShowJobDetailsModal(false); fetchTraineeMatches(t.id); }}><Eye size={16} /></button>
 // //                       </div>
-// //                     );
-// //                   })}
-// //                 </div>
-// //               </>
+// //                     ))}
+// //                   </div>
+// //                 )}
+// //               </div>
+// //             )}
+// //             {jobDetailsTab === 'rejected' && (
+// //               <div>
+// //                 {rejectedTrainees.length === 0 ? (
+// //                   <p className="no-data">No rejected trainees for this job.</p>
+// //                 ) : (
+// //                   <div className="trainee-list">
+// //                     {rejectedTrainees.map(lock => (
+// //                       <div key={lock.id} className="trainee-item">
+// //                         <User size={18} />
+// //                         <span>{lock.trainee_name}</span>
+// //                         <span className="trainee-location">({lock.trainee_location})</span>
+// //                         {lock.feedback && (
+// //                           <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><FileText size={16} /></button>
+// //                         )}
+// //                         <button className="btn-icon" onClick={() => {
+// //                           const trainee = allTrainees.find(t => t.id === lock.trainee);
+// //                           if (trainee) { setSelectedTrainee(trainee); setShowJobDetailsModal(false); fetchTraineeMatches(trainee.id); }
+// //                         }}><Eye size={16} /></button>
+// //                       </div>
+// //                     ))}
+// //                   </div>
+// //                 )}
+// //               </div>
 // //             )}
 // //           </div>
-
-// //           <div className="modal-footer">
-// //             <button className="btn-secondary" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>Close</button>
+// //           <div className="modal-actions">
+// //             <button className="btn-secondary" onClick={() => setShowJobDetailsModal(false)}>Close</button>
 // //           </div>
 // //         </div>
 // //       </div>
 // //     );
 // //   };
 
-// //   // Trainee Profile Modal
+// //   // Trainee Profile Modal – unchanged
 // //   const renderTraineeModal = () => {
 // //     if (!selectedTrainee) return null;
 // //     const traineeData = selectedTrainee.traineeData || selectedTrainee;
@@ -1833,7 +5889,6 @@
 // //             <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div>
 // //             <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
 // //           </div>
-
 // //           <div className="modal-body">
 // //             {traineeMatchesLoading ? (
 // //               <div className="loading-state"><div className="loading-spinner"></div><p>Loading trainee matches...</p></div>
@@ -1852,14 +5907,13 @@
 // //                       </div>
 // //                       {selectedTrainee.isMapped ? (
 // //                         <button className="btn-danger" onClick={() => handleUnmapFromProject(selectedTrainee)} disabled={loading}>
-// //                           <X size={18} /> Unmap from Project
+// //                           <X size={18} /> Unmap
 // //                         </button>
 // //                       ) : (
-// //                         <div className="available-for-mapping"><p>Available for mapping to matching projects</p></div>
+// //                         <div className="available-for-mapping"><p>Available for mapping</p></div>
 // //                       )}
 // //                     </div>
 // //                   </div>
-
 // //                   <div className="profile-header">
 // //                     <div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div>
 // //                     <div className="profile-info">
@@ -1873,54 +5927,50 @@
 // //                       </div>
 // //                     </div>
 // //                   </div>
-
 // //                   <div className="trainee-details-grid">
 // //                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
 // //                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
 // //                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
 // //                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
 // //                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
-// //                     <div className="detail-item"><span className="detail-label">Average Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
+// //                     <div className="detail-item"><span className="detail-label">Avg Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
 // //                   </div>
-
 // //                   <div className="skills-section">
 // //                     <h4>Strengths</h4>
 // //                     <div className="skills-list">
 // //                       {traineeData.strengths?.map((strength, index) => (
 // //                         <span key={index} className="skill-tag tech-tag">{strength.courseName} ({strength.avgScore}%)</span>
-// //                       )) || <span className="no-data">No strengths data</span>}
+// //                       )) || <span className="no-data">None</span>}
 // //                     </div>
 // //                     <h4>Weaknesses</h4>
 // //                     <div className="skills-list">
 // //                       {traineeData.weaknesses?.map((weakness, index) => (
 // //                         <span key={index} className="skill-tag soft-tag">{weakness.courseName} ({weakness.avgScore}%)</span>
-// //                       )) || <span className="no-data">No weaknesses data</span>}
+// //                       )) || <span className="no-data">None</span>}
 // //                     </div>
 // //                     <h4>Certificates</h4>
 // //                     <div className="skills-list">
-// //                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">No certificates</span>}
+// //                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">None</span>}
 // //                     </div>
 // //                   </div>
 // //                 </div>
-
 // //                 {!selectedTrainee.isMapped && (
 // //                   <div className="projects-section">
 // //                     <div className="projects-header">
 // //                       <h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3>
 // //                     </div>
-
 // //                     {traineeMatches ? (
 // //                       <>
 // //                         {traineeMatches.total_matches === 0 ? (
 // //                           <div className="no-matches open-pool-message">
-// //                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches with any existing jobs.</p>
-// //                             <div className="open-pool-info"><p><strong>This trainee is in the Open Pool.</strong></p><p>Consider creating a new job or reassessing skill requirements.</p>
+// //                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p>
+// //                             <div className="open-pool-info"><p><strong>Open Pool</strong></p>
 // //                               <button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button>
 // //                             </div>
 // //                           </div>
 // //                         ) : (
 // //                           <>
-// //                             {traineeMatches.perfect_match && traineeMatches.perfect_match.length > 0 && (
+// //                             {traineeMatches.perfect_match?.length > 0 && (
 // //                               <div className="bucket-section bucket-perfect">
 // //                                 <h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3>
 // //                                 <div className="projects-grid">
@@ -1945,10 +5995,10 @@
 // //                                           <button className="map-to-project-btn" onClick={() => {
 // //                                             const job = jobs.find(j => j.id === match.job_id);
 // //                                             if (job) {
-// //                                               if (job.openings <= 0) { toast.error('This job has no openings available.'); return; }
+// //                                               if (job.openings <= 0) { toast.error('No openings'); return; }
 // //                                               handleMapToProject(selectedTrainee, job);
 // //                                             }
-// //                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Job Full' : 'Map to Project'}</button>
+// //                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Full' : 'Map'}</button>
 // //                                         </div>
 // //                                       </div>
 // //                                     );
@@ -1956,16 +6006,14 @@
 // //                                 </div>
 // //                               </div>
 // //                             )}
-// //                             {/* Similar blocks for skills_only, location_only, nearby, no_match */}
+// //                             {/* Similarly for skills_only, location_only, nearby, no_match – can be added if needed */}
 // //                           </>
 // //                         )}
 // //                       </>
 // //                     ) : (
 // //                       <div className="no-matches-data">
-// //                         <Users size={48} /><h3>No match data loaded</h3><p>Click the button below to fetch project matches for this trainee</p>
-// //                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}>
-// //                           <Search size={18} /> Find Project Matches
-// //                         </button>
+// //                         <Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p>
+// //                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
 // //                       </div>
 // //                     )}
 // //                   </div>
@@ -1973,55 +6021,36 @@
 // //               </>
 // //             )}
 // //           </div>
-
 // //           <div className="modal-footer">
-// //             <div className="footer-actions">
-// //               <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
-// //               {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
-// //                 <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}>
-// //                   <Search size={18} /> Find Matches
-// //                 </button>
-// //               )}
-// //             </div>
+// //             <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
+// //             {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
+// //               <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+// //             )}
 // //           </div>
 // //         </div>
 // //       </div>
 // //     );
 // //   };
 
-// //   // ==================== NEW: Interview Locks Tab ====================
+// //   // Interview Locks Tab
 // //   const renderInterviewLocks = () => {
 // //     return (
 // //       <div className="interview-locks">
 // //         <div className="section-header">
-// //           <div className="header-title">
-// //             <h2><Lock size={24} /> Interview Locks Management</h2>
-// //             <p className="subtitle">Track and manage locked candidates</p>
-// //           </div>
+// //           <div className="header-title"><h2><Lock size={24} /> Interview Locks</h2><p className="subtitle">Track locked candidates</p></div>
 // //           <div className="header-actions">
-// //             <button className="btn-secondary" onClick={downloadLockReport}>
-// //               <Download size={18} /> Download Report
-// //             </button>
+// //             <button className="btn-secondary" onClick={() => downloadLockReport()}><Download size={18} /> All</button>
+// //             <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><CheckCircle size={18} /> Selected</button>
+// //             <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><XCircle size={18} /> Rejected</button>
 // //           </div>
 // //         </div>
-
 // //         {lockStats && (
 // //           <div className="stats-grid small">
-// //             <div className="stat-card">
-// //               <div className="stat-icon"><Lock size={20} /></div>
-// //               <div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div>
-// //             </div>
-// //             <div className="stat-card">
-// //               <div className="stat-icon"><CheckCircle size={20} /></div>
-// //               <div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div>
-// //             </div>
-// //             <div className="stat-card">
-// //               <div className="stat-icon"><X size={20} /></div>
-// //               <div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div>
-// //             </div>
+// //             <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+// //             <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+// //             <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
 // //           </div>
 // //         )}
-
 // //         <div className="search-filter">
 // //           <div className="filter-group">
 // //             <select className="filter-select" value={lockFilter.status} onChange={(e) => setLockFilter({ ...lockFilter, status: e.target.value })}>
@@ -2038,35 +6067,19 @@
 // //             <button className="btn-icon" onClick={() => setLockFilter({ status: '', job: '' })}><X size={18} /></button>
 // //           </div>
 // //         </div>
-
-// //         {loading ? (
-// //           <div className="loading-overlay"><div className="loading-spinner"></div></div>
-// //         ) : (
+// //         {loading ? <div className="loading-overlay"><div className="loading-spinner"></div></div> : (
 // //           <div className="table-container">
 // //             <table className="data-table">
-// //               <thead>
-// //                 <tr>
-// //                   <th>Trainee</th>
-// //                   <th>Job</th>
-// //                   <th>Interview Date/Time</th>
-// //                   <th>Status</th>
-// //                   <th>Comments</th>
-// //                   <th>Locked By</th>
-// //                   <th>Actions</th>
-// //                 </tr>
-// //               </thead>
+// //               <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Date/Time</th><th>Status</th><th>Comments</th><th>Locked By</th><th>Actions</th></tr></thead>
 // //               <tbody>
 // //                 {interviewLocks.map(lock => (
 // //                   <tr key={lock.id}>
-// //                     <td><div className="trainee-info"><span className="font-medium">{lock.trainee_name}</span></div></td>
+// //                     <td><span className="font-medium">{lock.trainee_name}</span></td>
 // //                     <td>{lock.job_title}</td>
+// //                     <td>{lock.assigned_to_name || '-'}</td>
 // //                     <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
 // //                     <td>
-// //                       <select
-// //                         value={lock.status}
-// //                         onChange={(e) => updateLockStatus(lock.id, e.target.value)}
-// //                         className={`status-badge status-${lock.status}`}
-// //                       >
+// //                       <select value={lock.status} onChange={(e) => updateLockStatus(lock.id, e.target.value)} className={`status-badge status-${lock.status}`}>
 // //                         <option value="locked">Locked</option>
 // //                         <option value="selected">Selected</option>
 // //                         <option value="rejected">Rejected</option>
@@ -2083,17 +6096,210 @@
 // //                     </td>
 // //                   </tr>
 // //                 ))}
-// //                 {interviewLocks.length === 0 && <tr><td colSpan="7" className="no-data">No interview locks found</td></tr>}
+// //                 {interviewLocks.length === 0 && <tr><td colSpan="8" className="no-data">No locks found</td></tr>}
 // //               </tbody>
 // //             </table>
 // //           </div>
 // //         )}
+// //         <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+// //           <button className="btn-secondary" onClick={() => {
+// //             const filtered = interviewLocks;
+// //             if (filtered.length === 0) { toast.error('No data to download'); return; }
+// //             const csvRows = [];
+// //             csvRows.push(['Trainee Name','Job Title','Interviewer','Interview DateTime','Status','Comments','Locked By','Created At'].join(','));
+// //             filtered.forEach(lock => {
+// //               csvRows.push([
+// //                 `"${lock.trainee_name}"`,
+// //                 `"${lock.job_title}"`,
+// //                 `"${lock.assigned_to_name || ''}"`,
+// //                 lock.interview_datetime,
+// //                 lock.status,
+// //                 `"${lock.comments || ''}"`,
+// //                 `"${lock.locked_by_name || ''}"`,
+// //                 lock.created_at,
+// //               ].join(','));
+// //             });
+// //             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+// //             const url = window.URL.createObjectURL(blob);
+// //             const a = document.createElement('a');
+// //             a.href = url;
+// //             a.download = `interview_locks_filtered.csv`;
+// //             document.body.appendChild(a);
+// //             a.click();
+// //             window.URL.revokeObjectURL(url);
+// //             document.body.removeChild(a);
+// //           }}><Download size={18} /> Download Filtered</button>
+// //         </div>
 // //       </div>
 // //     );
 // //   };
-// //   // ================================================================
 
-// //   // ==================== NEW: Lock Interview Modal ====================
+// //   // Selected Tab (Interview + Direct Mapping)
+// //   const renderSelected = () => (
+// //     <div className="selected-tab">
+// //       <div className="section-header">
+// //         <h2><CheckCircle size={24} /> Selected Candidates</h2>
+// //         <div style={{ display: 'flex', gap: '1rem' }}>
+// //           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// //             <option value="">All Jobs</option>
+// //             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// //           </select>
+// //           <button className="btn-secondary" onClick={async () => {
+// //             const filtered = selectedCandidates; // already filtered by job if job filter set? We'll implement simple download of all selected
+// //             if (filtered.length === 0) { toast.error('No data to download'); return; }
+// //             const csvRows = [];
+// //             csvRows.push(['Trainee Name','Project','Source','Interviewer','Interview Date'].join(','));
+// //             filtered.forEach(c => {
+// //               csvRows.push([
+// //                 `"${c.trainee_name}"`,
+// //                 `"${c.job_title || c.projectName}"`,
+// //                 c.source,
+// //                 c.assigned_to_name || '',
+// //                 c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '',
+// //               ].join(','));
+// //             });
+// //             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+// //             const url = window.URL.createObjectURL(blob);
+// //             const a = document.createElement('a');
+// //             a.href = url;
+// //             a.download = 'selected_candidates.csv';
+// //             document.body.appendChild(a);
+// //             a.click();
+// //             window.URL.revokeObjectURL(url);
+// //             document.body.removeChild(a);
+// //           }}><Download size={18} /> Download All</button>
+// //         </div>
+// //       </div>
+// //       <div className="table-container">
+// //         <table className="data-table">
+// //           <thead><tr><th>Trainee</th><th>Project</th><th>Source</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// //           <tbody>
+// //             {selectedCandidates.map((c, idx) => (
+// //               <tr key={c.trainee_id || idx}>
+// //                 <td>{c.trainee_name}</td>
+// //                 <td>{c.job_title || c.projectName}</td>
+// //                 <td><span className={`source-badge source-${c.source === 'Interview' ? 'interview' : 'direct'}`}>{c.source}</span></td>
+// //                 <td>{c.assigned_to_name || (c.source === 'Direct' ? 'HR Direct' : '-')}</td>
+// //                 <td>{c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '-'}</td>
+// //                 <td>
+// //                   {c.feedback ? (
+// //                     <button className="btn-icon" onClick={() => setViewingFeedback(c.feedback)}><Eye size={16} /></button>
+// //                   ) : '-'}
+// //                 </td>
+// //                 <td>
+// //                   <button className="btn-icon" onClick={() => {
+// //                     const trainee = allTrainees.find(t => t.userId === c.trainee_id);
+// //                     if (trainee) handleViewTraineeProfile(trainee);
+// //                   }}><User size={16} /></button>
+// //                 </td>
+// //               </tr>
+// //             ))}
+// //             {selectedCandidates.length === 0 && <tr><td colSpan="7" className="no-data">No selected candidates</td></tr>}
+// //           </tbody>
+// //         </table>
+// //       </div>
+// //     </div>
+// //   );
+
+// //   // Rejected Tab (unchanged)
+// //   const renderRejected = () => (
+// //     <div className="rejected-tab">
+// //       <div className="section-header">
+// //         <h2><XCircle size={24} /> Rejected Candidates</h2>
+// //         <div style={{ display: 'flex', gap: '1rem' }}>
+// //           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+// //             <option value="">All Jobs</option>
+// //             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+// //           </select>
+// //           <button className="btn-secondary" onClick={async () => {
+// //             const filtered = rejectedLocks; // already filtered by job if job filter set? We'll just download all for now
+// //             if (filtered.length === 0) { toast.error('No data to download'); return; }
+// //             const csvRows = [];
+// //             csvRows.push(['Trainee Name','Job','Interviewer','Interview Date','Comments'].join(','));
+// //             filtered.forEach(lock => {
+// //               csvRows.push([
+// //                 `"${lock.trainee_name}"`,
+// //                 `"${lock.job_title}"`,
+// //                 `"${lock.assigned_to_name || ''}"`,
+// //                 lock.interview_datetime ? new Date(lock.interview_datetime).toLocaleString() : '',
+// //                 `"${lock.comments || ''}"`,
+// //               ].join(','));
+// //             });
+// //             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+// //             const url = window.URL.createObjectURL(blob);
+// //             const a = document.createElement('a');
+// //             a.href = url;
+// //             a.download = 'rejected_candidates.csv';
+// //             document.body.appendChild(a);
+// //             a.click();
+// //             window.URL.revokeObjectURL(url);
+// //             document.body.removeChild(a);
+// //           }}><Download size={18} /> Download All</button>
+// //         </div>
+// //       </div>
+// //       <div className="table-container">
+// //         <table className="data-table">
+// //           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+// //           <tbody>
+// //             {rejectedLocks.map(lock => (
+// //               <tr key={lock.id}>
+// //                 <td>{lock.trainee_name}</td>
+// //                 <td>{lock.job_title}</td>
+// //                 <td>{lock.assigned_to_name || '-'}</td>
+// //                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+// //                 <td>
+// //                   {lock.feedback ? (
+// //                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+// //                   ) : '-'}
+// //                 </td>
+// //                 <td>
+// //                   <button className="btn-icon" onClick={() => {
+// //                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+// //                     if (trainee) handleViewTraineeProfile(trainee);
+// //                   }}><User size={16} /></button>
+// //                 </td>
+// //               </tr>
+// //             ))}
+// //             {rejectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No rejected candidates</td></tr>}
+// //           </tbody>
+// //         </table>
+// //       </div>
+// //     </div>
+// //   );
+
+// //   // Feedback Modal
+// //   const renderFeedbackModal = () => {
+// //     if (!viewingFeedback) return null;
+// //     const fb = viewingFeedback;
+// //     return (
+// //       <div className="modal-overlay" onClick={() => setViewingFeedback(null)}>
+// //         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+// //           <div className="modal-header">
+// //             <h3>Interview Feedback</h3>
+// //             <button className="modal-close" onClick={() => setViewingFeedback(null)}><X /></button>
+// //           </div>
+// //           <div className="modal-body">
+// //             <p><strong>Interviewer:</strong> {fb.interviewer_name}</p>
+// //             <p><strong>Date:</strong> {new Date(fb.feedback_date).toLocaleString()}</p>
+// //             <p><strong>Questions:</strong> {fb.questions_asked} asked, {fb.questions_answered} answered</p>
+// //             <p><strong>Attitude Rating:</strong> {fb.attitude_rating}/5</p>
+// //             {fb.behaviour_notes && <p><strong>Behaviour Notes:</strong> {fb.behaviour_notes}</p>}
+// //             {fb.technical_skills_assessed?.length > 0 && (
+// //               <div><strong>Skills Assessed:</strong> {fb.technical_skills_assessed.join(', ')}</div>
+// //             )}
+// //             {fb.strengths && <p><strong>Strengths:</strong> {fb.strengths}</p>}
+// //             {fb.weaknesses && <p><strong>Weaknesses:</strong> {fb.weaknesses}</p>}
+// //             {fb.upskill_needed && <p><strong>Upskilling Needed:</strong> {fb.upskill_needed}</p>}
+// //             {fb.overall_comments && <p><strong>Overall Comments:</strong> {fb.overall_comments}</p>}
+// //             <p><strong>Recommendation:</strong> {fb.recommendation === 'selected' ? '✅ Selected' : '❌ Rejected'}</p>
+// //           </div>
+// //           <div className="modal-actions"><button className="btn-secondary" onClick={() => setViewingFeedback(null)}>Close</button></div>
+// //         </div>
+// //       </div>
+// //     );
+// //   };
+
+// //   // Lock Interview Modal
 // //   const renderLockInterviewModal = () => {
 // //     if (!showLockModal) return null;
 // //     return (
@@ -2106,29 +6312,24 @@
 // //           <div className="modal-body">
 // //             <div className="form-group">
 // //               <label>Interview Date & Time *</label>
-// //               <input
-// //                 type="datetime-local"
-// //                 className="form-control"
-// //                 value={lockInterviewDatetime}
-// //                 onChange={(e) => setLockInterviewDatetime(e.target.value)}
-// //                 required
-// //               />
+// //               <input type="datetime-local" className="form-control" value={lockInterviewDatetime} onChange={(e) => setLockInterviewDatetime(e.target.value)} required />
+// //             </div>
+// //             <div className="form-group">
+// //               <label>Assign to Interviewer *</label>
+// //               <select className="form-control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} required>
+// //                 <option value="">Select Interviewer</option>
+// //                 {interviewers.map(usr => <option key={usr.id} value={usr.id}>{usr.username}</option>)}
+// //               </select>
 // //             </div>
 // //             <div className="form-group">
 // //               <label>Comments (optional)</label>
-// //               <textarea
-// //                 className="form-control"
-// //                 rows="3"
-// //                 value={lockComments}
-// //                 onChange={(e) => setLockComments(e.target.value)}
-// //                 placeholder="Add any notes or instructions..."
-// //               />
+// //               <textarea className="form-control" rows="3" value={lockComments} onChange={(e) => setLockComments(e.target.value)} placeholder="Add notes..." />
 // //             </div>
 // //             <p>Selected trainees: {selectedTraineeIds.length}</p>
 // //           </div>
 // //           <div className="modal-actions">
 // //             <button className="btn-secondary" onClick={() => setShowLockModal(false)}>Cancel</button>
-// //             <button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || loading}>
+// //             <button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || !assignedToId || loading}>
 // //               {loading ? 'Locking...' : 'Lock for Interview'}
 // //             </button>
 // //           </div>
@@ -2136,14 +6337,212 @@
 // //       </div>
 // //     );
 // //   };
-// //   // ================================================================
 
-// //   // Sidebar items (including new tab)
+// //   // Talent Search Tab
+// //   const renderTalentSearch = () => {
+// //     const baseFiltered = filteredSearchMatches();
+// //     const filtered = baseFiltered.filter(m => {
+// //       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+// //       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+// //     });
+// //     return (
+// //       <div className="talent-search">
+// //         <div className="section-header">
+// //           <h2><Users size={24} /> Talent Search</h2>
+// //           <p className="subtitle">Find the best candidates for your job</p>
+// //         </div>
+
+// //         <div className="search-job-selector">
+// //           <label>Select Job:</label>
+// //           <select
+// //             className="form-control"
+// //             value={selectedJobForSearch?.id || ''}
+// //             onChange={(e) => handleJobSelectForSearch(e.target.value)}
+// //             style={{ maxWidth: '400px' }}
+// //           >
+// //             <option value="">-- Choose a job --</option>
+// //             {jobs.map(job => (
+// //               <option key={job.id} value={job.id}>{job.title} (Openings: {job.openings})</option>
+// //             ))}
+// //           </select>
+// //         </div>
+
+// //         {selectedJobForSearch && (
+// //           <>
+// //             <div className="filters-panel">
+// //               <div className="filter-row">
+// //                 <div className="filter-group">
+// //                   <label>Bucket</label>
+// //                   <select
+// //                     className="filter-select"
+// //                     value={searchFilters.bucket}
+// //                     onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}
+// //                   >
+// //                     <option value="">All Buckets</option>
+// //                     <option value="PERFECT_MATCH">Perfect Match</option>
+// //                     <option value="SKILLS_ONLY">Skills Only</option>
+// //                     <option value="LOCATION_ONLY">Location Only</option>
+// //                     <option value="NEARBY">Nearby</option>
+// //                     <option value="NO_MATCH">No Match</option>
+// //                   </select>
+// //                 </div>
+// //                 <div className="filter-group">
+// //                   <label>Location</label>
+// //                   <input
+// //                     type="text"
+// //                     className="form-control"
+// //                     placeholder="Filter by location"
+// //                     value={searchFilters.location}
+// //                     onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
+// //                   />
+// //                 </div>
+// //                 <div className="filter-group">
+// //                   <label>Min Total %</label>
+// //                   <input
+// //                     type="number"
+// //                     className="form-control"
+// //                     min="0"
+// //                     max="100"
+// //                     value={searchFilters.minTotal}
+// //                     onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })}
+// //                   />
+// //                 </div>
+// //                 <div className="filter-group">
+// //                   <label>Skill Keyword</label>
+// //                   <input
+// //                     type="text"
+// //                     className="form-control"
+// //                     placeholder="e.g., React"
+// //                     value={searchFilters.skillKeyword}
+// //                     onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })}
+// //                   />
+// //                 </div>
+// //                 <button className="btn-icon" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}>
+// //                   <X size={18} /> Clear
+// //                 </button>
+// //               </div>
+// //             </div>
+
+// //             <div className="table-actions">
+// //               <div>
+// //                 <input
+// //                   type="checkbox"
+// //                   checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(m.trainee_id))}
+// //                   onChange={handleSelectAllSearch}
+// //                 /> Select All ({filtered.length} matches)
+// //               </div>
+// //               <div className="action-buttons">
+// //                 <button
+// //                   className="btn-primary"
+// //                   onClick={() => {
+// //                     fetchInterviewers();
+// //                     setShowLockModal(true);
+// //                   }}
+// //                   disabled={selectedSearchTraineeIds.length === 0}
+// //                 >
+// //                   <Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})
+// //                 </button>
+// //                 <button className="btn-secondary" onClick={downloadFilteredSearch} disabled={filtered.length === 0}>
+// //                   <Download size={18} /> Download Filtered
+// //                 </button>
+// //               </div>
+// //             </div>
+
+// //             {jobMatchesLoading ? (
+// //               <div className="loading-overlay"><div className="loading-spinner"></div></div>
+// //             ) : (
+// //               <div className="table-container">
+// //                 <table className="data-table">
+// //                   <thead>
+// //                     <tr>
+// //                       <th>Select</th>
+// //                       <th>Trainee Name</th>
+// //                       <th>Location</th>
+// //                       <th>Bucket</th>
+// //                       <th>Skills %</th>
+// //                       <th>Location %</th>
+// //                       <th>Total %</th>
+// //                       <th>Matched Skills</th>
+// //                       <th>Actions</th>
+// //                     </tr>
+// //                   </thead>
+// //                   <tbody>
+// //                     {filtered.map((match) => (
+// //                       <tr key={match.trainee_id}>
+// //                         <td>
+// //                           <input
+// //                             type="checkbox"
+// //                             checked={selectedSearchTraineeIds.includes(match.trainee_id)}
+// //                             onChange={(e) => {
+// //                               if (e.target.checked) {
+// //                                 setSelectedSearchTraineeIds([...selectedSearchTraineeIds, match.trainee_id]);
+// //                               } else {
+// //                                 setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(id => id !== match.trainee_id));
+// //                                 setSelectAll(false);
+// //                               }
+// //                             }}
+// //                           />
+// //                         </td>
+// //                         <td><span className="font-medium">{match.trainee_name}</span></td>
+// //                         <td>{match.trainee_location}</td>
+// //                         <td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket?.replace('_', ' ')}</span></td>
+// //                         <td>{match.skills_percentage.toFixed(1)}%</td>
+// //                         <td>{match.location_percentage.toFixed(1)}%</td>
+// //                         <td><strong>{match.total_percentage.toFixed(1)}%</strong></td>
+// //                         <td>
+// //                           {match.matched_skills?.length > 0
+// //                             ? match.matched_skills.join(', ')
+// //                             : '-'}
+// //                         </td>
+// //                         <td>
+// //                           <div className="action-buttons">
+// //                             <button
+// //                               className="btn-icon btn-icon-view"
+// //                               onClick={() => handleViewTraineeProfileFromJob(match)}
+// //                               title="View Profile"
+// //                             >
+// //                               <User size={16} />
+// //                             </button>
+// //                             <button
+// //                               className="btn-icon btn-icon-map"
+// //                               onClick={() => {
+// //                                 if (selectedJobForSearch.openings <= 0) {
+// //                                   toast.error('No openings');
+// //                                   return;
+// //                                 }
+// //                                 handleMapToProject(match, selectedJobForSearch);
+// //                               }}
+// //                               disabled={selectedJobForSearch.openings <= 0}
+// //                               title="Map to Project"
+// //                             >
+// //                               <Link size={16} />
+// //                             </button>
+// //                           </div>
+// //                         </td>
+// //                       </tr>
+// //                     ))}
+// //                     {filtered.length === 0 && (
+// //                       <tr><td colSpan="9" className="no-data">No matches match your filters</td></tr>
+// //                     )}
+// //                   </tbody>
+// //                 </table>
+// //               </div>
+// //             )}
+// //           </>
+// //         )}
+// //       </div>
+// //     );
+// //   };
+
+// //   // Sidebar items
 // //   const sidebarItems = [
 // //     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
 // //     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
-// //     { id: 'trainees', label: 'Trainees List', icon: <Users size={20} /> },
+// //     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
+// //     { id: 'talentSearch', label: 'Talent Search', icon: <Search size={20} /> },
 // //     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
+// //     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
+// //     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
 // //   ];
 
 // //   const renderContent = () => {
@@ -2156,8 +6555,10 @@
 // //       case 'unmapped':
 // //       case 'openPool':
 // //         return renderTraineesList();
-// //       case 'interviewLocks':
-// //         return renderInterviewLocks();
+// //       case 'talentSearch': return renderTalentSearch();
+// //       case 'interviewLocks': return renderInterviewLocks();
+// //       case 'selected': return renderSelected();
+// //       case 'rejected': return renderRejected();
 // //       default: return renderDashboard();
 // //     }
 // //   };
@@ -2170,7 +6571,7 @@
 // //         <div className="dashboard-header">
 // //           <div className="header-title">
 // //             <h1><LayoutDashboard size={28} /> HR Dashboard</h1>
-// //             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management & Job Allocation</div>
+// //             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management</div>
 // //           </div>
 // //           <div className="header-actions">
 // //             {loading && <div className="loading-indicator"><div className="loading-spinner small"></div><span>Processing...</span></div>}
@@ -2178,14 +6579,13 @@
 // //         </div>
 // //         {renderContent()}
 // //       </div>
-
 // //       {renderHiddenFileInputs()}
 // //       {renderExcelTemplateModal()}
 // //       {renderWordTemplateModal()}
-// //       {renderJobModal()}
-// //       {renderJobMatchesModal()}
+// //       {renderJobDetailsModal()}
 // //       {renderTraineeModal()}
 // //       {renderLockInterviewModal()}
+// //       {renderFeedbackModal()}
 // //     </div>
 // //   );
 // // }
@@ -2193,2364 +6593,7 @@
 // // export default DashboardHR;
 
 
-
-
-
-
-
-// // DashboardHR.js – Full version with Interviewer Assignment, Selected/Rejected Tabs & Reports
-// import React, { useState, useEffect } from 'react';
-// import { Toaster, toast } from 'sonner';
-// import {
-//   LayoutDashboard,
-//   Briefcase,
-//   Users,
-//   BarChart2,
-//   FileText,
-//   ExternalLink,
-//   Lightbulb,
-//   BarChart3,
-//   LogOut,
-//   TrendingUp,
-//   CheckCircle,
-//   Clock,
-//   MapPin,
-//   DollarSign,
-//   Calendar,
-//   Edit,
-//   Trash2,
-//   Eye,
-//   Search,
-//   Filter,
-//   X,
-//   ChevronRight,
-//   User,
-//   Mail,
-//   Star,
-//   Award,
-//   Target,
-//   PieChart,
-//   Download,
-//   Bell,
-//   Settings,
-//   Plus,
-//   ArrowLeft,
-//   Check,
-//   AlertCircle,
-//   Link,
-//   GraduationCap,
-//   BriefcaseBusiness,
-//   Building,
-//   DollarSign as Dollar,
-//   CalendarDays,
-//   BookOpen,
-//   Brain,
-//   Sparkles,
-//   Zap,
-//   ThumbsUp,
-//   TrendingDown,
-//   FileSpreadsheet,
-//   File,
-//   Upload,
-//   Users2,
-//   Lock,
-//   XCircle,        // added for rejected tab
-// } from 'lucide-react';
-// import Sidebar from './Sidebar';
-// import api from '../api/axios';
-// import './styles/HrDashboard.css';
-
-// function DashboardHR({ userData, onLogout }) {
-//   // ==================== Core State ====================
-//   const [activeTab, setActiveTab] = useState('dashboard');
-//   const [selectedJob, setSelectedJob] = useState(null);
-//   const [selectedTrainee, setSelectedTrainee] = useState(null);
-//   const [isEditMode, setIsEditMode] = useState(false);
-//   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
-//   const [showWordTemplate, setShowWordTemplate] = useState(false);
-//   const [techSkills, setTechSkills] = useState([]);
-//   const [softSkills, setSoftSkills] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState(null);
-
-//   // Search & filter
-//   const [searchQuery, setSearchQuery] = useState('');
-//   const [locationFilter, setLocationFilter] = useState('');
-
-//   // Data
-//   const [jobs, setJobs] = useState([]);
-//   const [trainees, setTrainees] = useState([]);
-//   const [allTrainees, setAllTrainees] = useState([]);
-//   const [skillTrends, setSkillTrends] = useState({ tech: [], soft: [] });
-
-//   // Match data
-//   const [jobMatches, setJobMatches] = useState(null);
-//   const [jobMatchesLoading, setJobMatchesLoading] = useState(false);
-//   const [traineeMatches, setTraineeMatches] = useState(null);
-//   const [traineeMatchesLoading, setTraineeMatchesLoading] = useState(false);
-
-//   // Open Pool
-//   const [traineesWithNoMatches, setTraineesWithNoMatches] = useState([]);
-//   const [checkingMatches, setCheckingMatches] = useState(false);
-
-//   // ==================== Interview Locking ====================
-//   const [selectedTraineeIds, setSelectedTraineeIds] = useState([]);
-//   const [showLockModal, setShowLockModal] = useState(false);
-//   const [lockInterviewDatetime, setLockInterviewDatetime] = useState('');
-//   const [lockComments, setLockComments] = useState('');
-//   // NEW: interviewer assignment
-//   const [assignedToId, setAssignedToId] = useState('');
-//   const [interviewers, setInterviewers] = useState([]);
-
-//   const [interviewLocks, setInterviewLocks] = useState([]);
-//   const [lockStats, setLockStats] = useState(null);
-//   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
-
-//   // NEW: Selected & Rejected lists
-//   const [selectedLocks, setSelectedLocks] = useState([]);
-//   const [rejectedLocks, setRejectedLocks] = useState([]);
-
-//   // ==================== New Job State (with is_public) ====================
-//   const [newJob, setNewJob] = useState({
-//     title: '',
-//     department: '',
-//     location: [''],
-//     openings: 1,
-//     requirements: '',
-//     techSkills: [],
-//     softSkills: [],
-//     description: '',
-//     salary: '',
-//     expiryDate: '',
-//     is_public: true,
-//   });
-
-//   // ==================== Helper: Normalize Skill ====================
-//   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
-
-//   // ==================== Compute Skill Trends ====================
-//   const computeSkillTrends = (jobs) => {
-//     const techMap = new Map();
-//     const softMap = new Map();
-//     const WEIGHTS = {
-//       basePerJob: 1,
-//       openingsWeight: 0.5,
-//       matchesWeight: 0.25,
-//       inactivePenalty: 0.4,
-//       unfilledBonus: 0.3,
-//     };
-//     for (const job of jobs || []) {
-//       const isActive = job?.status === 'active';
-//       const openings = Number(job?.openings ?? 0);
-//       const filled = Number(job?.filled ?? 0);
-//       const matches = Number(job?.matches ?? 0);
-//       const unfilled = Math.max(0, openings - filled);
-//       const jobWeight =
-//         WEIGHTS.basePerJob +
-//         (openings * WEIGHTS.openingsWeight) +
-//         (matches * WEIGHTS.matchesWeight) +
-//         (unfilled * WEIGHTS.unfilledBonus);
-//       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
-
-//       const techSkills = Array.isArray(job?.techSkills) ? job.techSkills : [];
-//       const softSkills = Array.isArray(job?.softSkills) ? job.softSkills : [];
-
-//       techSkills.forEach((raw) => {
-//         const skill = normalizeSkill(raw);
-//         if (!skill) return;
-//         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-//         techMap.set(skill, {
-//           jobs: cur.jobs + 1,
-//           openings: cur.openings + openings,
-//           matches: cur.matches + matches,
-//           demand: cur.demand + effectiveWeight,
-//         });
-//       });
-
-//       softSkills.forEach((raw) => {
-//         const skill = normalizeSkill(raw);
-//         if (!skill) return;
-//         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-//         softMap.set(skill, {
-//           jobs: cur.jobs + 1,
-//           openings: cur.openings + openings,
-//           matches: cur.matches + matches,
-//           demand: cur.demand + effectiveWeight,
-//         });
-//       });
-//     }
-
-//     const toSortedArray = (map) => {
-//       const arr = Array.from(map.entries()).map(([name, stats]) => ({
-//         name,
-//         jobs: stats.jobs,
-//         openings: stats.openings,
-//         matches: stats.matches,
-//         demandRaw: stats.demand,
-//       }));
-//       const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
-//       return arr
-//         .map((a) => ({
-//           ...a,
-//           demand: Math.round((a.demandRaw / maxDemand) * 100),
-//         }))
-//         .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
-//         .slice(0, 5);
-//     };
-
-//     return {
-//       tech: toSortedArray(techMap),
-//       soft: toSortedArray(softMap),
-//     };
-//   };
-
-//   // ==================== API Calls ====================
-//   const jobAPI = {
-//     getAllJobs: async () => {
-//       const res = await api.get('/jobs/');
-//       return res.data;
-//     },
-//     getJobById: async (id) => {
-//       const res = await api.get(`/jobs/${id}/`);
-//       return res.data;
-//     },
-//     createJob: async (jobData) => {
-//       const res = await api.post('/jobs/', jobData);
-//       return res.data;
-//     },
-//     updateJob: async (id, jobData) => {
-//       const res = await api.put(`/jobs/${id}/`, jobData);
-//       return res.data;
-//     },
-//     deleteJob: async (id) => {
-//       const res = await api.delete(`/jobs/${id}/`);
-//       return res.data;
-//     },
-//     toggleJobStatus: async (id) => {
-//       const res = await api.patch(`/jobs/${id}/toggle-status/`);
-//       return res.data;
-//     },
-//     uploadExcel: async (file) => {
-//       const formData = new FormData();
-//       formData.append('excel_file', file);
-//       const res = await api.post('/jobs/upload-excel/', formData, {
-//         headers: { 'Content-Type': 'multipart/form-data' },
-//       });
-//       return res.data;
-//     },
-//     uploadWord: async (file) => {
-//       const formData = new FormData();
-//       formData.append('wordFile', file);
-//       const res = await api.post('/jobs/upload-word/', formData, {
-//         headers: { 'Content-Type': 'multipart/form-data' },
-//       });
-//       return res.data;
-//     },
-//     downloadExcelTemplate: async () => {
-//       const res = await api.get('/jobs/download-excel-template/', {
-//         responseType: 'blob',
-//       });
-//       return res.data;
-//     },
-//     downloadWordTemplate: async () => {
-//       const res = await api.get('/jobs/download-word-template/', {
-//         responseType: 'blob',
-//       });
-//       return res.data;
-//     },
-//   };
-
-//   const mappingAPI = {
-//     updateMapping: async (userId, mappingData) => {
-//       const res = await api.patch(`/api/userinfo/${userId}/update-mapping/`, mappingData);
-//       return res.data;
-//     },
-//     getMapping: async (userId) => {
-//       const res = await api.get(`/api/userinfo/${userId}/`);
-//       return res.data;
-//     },
-//   };
-
-//   // Fetch trainees
-//   const fetchTrainees = async () => {
-//     setLoading(true);
-//     setError(null);
-//     try {
-//       const response = await api.get('/api/profiles/');
-//       const transformedTrainees = response.data.map((trainee) => {
-//         const userInfo = trainee.userInfo || {};
-//         const skills = [
-//           ...(trainee.strengths?.map((s) => s.courseName) || []),
-//           ...(trainee.weaknesses?.map((w) => w.courseName) || []),
-//         ];
-//         const avgScore = userInfo.averageScore || 0;
-//         return {
-//           id: trainee.id,
-//           userId: userInfo.userId || trainee.id,
-//           name: userInfo.name || 'Unknown',
-//           email: `${userInfo.employeeId || 'EMP' + trainee.id}@example.com`,
-//           skills,
-//           score: Math.round(avgScore),
-//           location: (userInfo.location || 'unknown').toLowerCase(),
-//           matchedJobs: [],
-//           certifications: trainee.certificates ? [trainee.certificates] : [],
-//           preferredLocation: userInfo.location || 'Unknown',
-//           isMapped: userInfo.isMapped || false,
-//           projectId: userInfo.projectId || '',
-//           projectName: userInfo.projectName || '',
-//           traineeData: trainee,
-//         };
-//       });
-//       setTrainees(transformedTrainees);
-//       setAllTrainees(transformedTrainees);
-//       setTraineesWithNoMatches([]);
-//     } catch (err) {
-//       console.error('Error fetching trainees:', err);
-//       setError('Failed to fetch trainees. Please try again.');
-//       setTrainees([]);
-//       setAllTrainees([]);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Fetch jobs
-//   const fetchJobs = async () => {
-//     setLoading(true);
-//     setError(null);
-//     try {
-//       const response = await jobAPI.getAllJobs();
-//       setJobs(response);
-//     } catch (err) {
-//       console.error('Error fetching jobs:', err);
-//       setError('Failed to fetch jobs. Please try again.');
-//       setJobs([]);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Check Open Pool
-//   const checkTraineesForOpenPool = async () => {
-//     if (allTrainees.length === 0) return;
-//     setCheckingMatches(true);
-//     try {
-//       const noMatchTrainees = [];
-//       const unmappedTrainees = allTrainees.filter((t) => !t.isMapped);
-//       for (const trainee of unmappedTrainees) {
-//         try {
-//           const response = await api.get(`/trainee-matches/${trainee.id}/`);
-//           const matchesData = response.data;
-//           const hasNoMatch =
-//             (matchesData.total_matches >= 0 &&
-//               matchesData.no_match &&
-//               matchesData.no_match.length > 0 &&
-//               (!matchesData.perfect_match || matchesData.perfect_match.length === 0) &&
-//               (!matchesData.skills_only || matchesData.skills_only.length === 0) &&
-//               (!matchesData.location_only || matchesData.location_only.length === 0) &&
-//               (!matchesData.nearby || matchesData.nearby.length === 0)) ||
-//             matchesData.total_matches === 0;
-//           if (hasNoMatch) {
-//             noMatchTrainees.push({
-//               ...trainee,
-//               trainee_id: trainee.id,
-//               trainee_name: trainee.name,
-//               trainee_location: trainee.location,
-//               total_matches: matchesData.total_matches,
-//               no_match_count: matchesData.no_match ? matchesData.no_match.length : 0,
-//             });
-//           }
-//         } catch (error) {
-//           console.error(`Error checking matches for trainee ${trainee.id}:`, error);
-//           noMatchTrainees.push({
-//             ...trainee,
-//             trainee_id: trainee.id,
-//             trainee_name: trainee.name,
-//             trainee_location: trainee.location,
-//             total_matches: 0,
-//             no_match_count: 0,
-//           });
-//         }
-//       }
-//       setTraineesWithNoMatches(noMatchTrainees);
-//     } catch (err) {
-//       console.error('Error checking trainees for open pool:', err);
-//       toast.error('Failed to check trainee matches for Open Pool');
-//     } finally {
-//       setCheckingMatches(false);
-//     }
-//   };
-
-//   // Update job vacancies after mapping
-//   const updateJobVacancies = async (job) => {
-//     try {
-//       const newFilled = (job.filled || 0) + 1;
-//       const newOpenings = Math.max(0, (job.openings || 0) - 1);
-//       const updatedJobData = { ...job, filled: newFilled, openings: newOpenings };
-//       const response = await jobAPI.updateJob(job.id, updatedJobData);
-//       setJobs((prev) =>
-//         prev.map((j) => (j.id === job.id ? { ...j, filled: newFilled, openings: newOpenings } : j))
-//       );
-//       if (selectedJob && selectedJob.id === job.id) {
-//         setSelectedJob((prev) => ({ ...prev, filled: newFilled, openings: newOpenings }));
-//       }
-//       if (newOpenings === 0) {
-//         await checkAndAutoDeactivateJob(updatedJobData);
-//       }
-//       return updatedJobData;
-//     } catch (error) {
-//       console.error('Error updating job vacancies:', error);
-//       toast.error('Failed to update job vacancies.');
-//       throw error;
-//     }
-//   };
-
-//   const checkAndAutoDeactivateJob = async (job) => {
-//     if (job.openings <= 0) {
-//       const updatedJobData = { ...job, status: 'inactive' };
-//       await jobAPI.updateJob(job.id, updatedJobData);
-//       setJobs((prev) =>
-//         prev.map((j) => (j.id === job.id ? { ...j, status: 'inactive', openings: 0 } : j))
-//       );
-//       toast.success(`Job "${job.title}" auto‑deactivated.`);
-//     }
-//   };
-
-//   // Map trainee to project
-//   const handleMapToProject = async (trainee, job) => {
-//     try {
-//       setLoading(true);
-//       const mappingData = {
-//         isMapped: true,
-//         projectId: job.id.toString(),
-//         projectName: job.title,
-//       };
-
-//       let userId = null;
-//       if (trainee.traineeData) {
-//         userId = trainee.traineeData.userInfo.userId;
-//       } else {
-//         const found = allTrainees.find(
-//           (t) =>
-//             t.traineeData.userInfo.name === trainee.trainee_name &&
-//             t.traineeData.userInfo.location === trainee.trainee_location
-//         );
-//         if (found) userId = found.traineeData.userInfo.userId;
-//       }
-//       if (!userId) {
-//         toast.error('Could not find user ID for trainee');
-//         return;
-//       }
-
-//       await mappingAPI.updateMapping(userId, mappingData);
-//       await updateJobVacancies(job);
-
-//       // Remove from open pool if present
-//       setTraineesWithNoMatches((prev) =>
-//         prev.filter(
-//           (t) => t.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-//         )
-//       );
-
-//       // Update local trainee lists
-//       const updateTrainee = (t) => {
-//         if (trainee.traineeData) {
-//           return t.traineeData.userInfo.name === trainee.traineeData.userInfo.name
-//             ? { ...t, ...mappingData }
-//             : t;
-//         } else {
-//           return t.traineeData.userInfo.name === trainee.trainee_name ? { ...t, ...mappingData } : t;
-//         }
-//       };
-//       setAllTrainees((prev) => prev.map(updateTrainee));
-//       setTrainees((prev) => prev.filter(updateTrainee)); // remove from current filtered list
-
-//       // Update jobMatches if open
-//       if (jobMatches) {
-//         const bucket = Object.keys(jobMatches).find((key) =>
-//           Array.isArray(jobMatches[key]) &&
-//           jobMatches[key].some((m) => m.trainee_name === (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
-//         );
-//         if (bucket) {
-//           setJobMatches((prev) => ({
-//             ...prev,
-//             [bucket]: prev[bucket].filter(
-//               (m) => m.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-//             ),
-//             total_matches: prev.total_matches - 1,
-//           }));
-//         }
-//       }
-
-//       toast.success(
-//         `Successfully mapped ${trainee.traineeData?.userInfo?.name || trainee.trainee_name} to ${job.title}`
-//       );
-//     } catch (err) {
-//       console.error('Error mapping trainee:', err);
-//       toast.error('Failed to map trainee.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleUnmapFromProject = async (trainee) => {
-//     try {
-//       setLoading(true);
-//       const unmappingData = { isMapped: false, projectId: '', projectName: '' };
-//       await mappingAPI.updateMapping(trainee.userId, unmappingData);
-
-//       const jobId = trainee.projectId;
-//       if (jobId) {
-//         const job = jobs.find((j) => j.id.toString() === jobId);
-//         if (job) {
-//           const updatedJob = {
-//             ...job,
-//             filled: Math.max(0, (job.filled || 0) - 1),
-//             openings: (job.openings || 0) + 1,
-//           };
-//           if (job.status === 'inactive' && updatedJob.openings > 0) {
-//             updatedJob.status = 'active';
-//           }
-//           await jobAPI.updateJob(job.id, updatedJob);
-//           setJobs((prev) => prev.map((j) => (j.id === job.id ? updatedJob : j)));
-//           if (selectedJob && selectedJob.id === job.id) {
-//             setSelectedJob(updatedJob);
-//           }
-//         }
-//       }
-
-//       setAllTrainees((prev) => prev.map((t) => (t.id === trainee.id ? { ...t, ...unmappingData } : t)));
-//       if (activeTab === 'mapped' || activeTab === 'unmapped' || activeTab === 'trainees' || activeTab === 'openPool') {
-//         fetchTrainees();
-//       }
-//       if (selectedTrainee && selectedTrainee.id === trainee.id) {
-//         setSelectedTrainee({ ...selectedTrainee, ...unmappingData });
-//       }
-//       toast.success(`Successfully unmapped ${trainee.name}`);
-//     } catch (err) {
-//       console.error('Error unmapping trainee:', err);
-//       toast.error('Failed to unmap trainee.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Get mapped trainee names
-//   const getMappedTraineeNames = () => {
-//     return allTrainees.filter((t) => t.isMapped).map((t) => t.traineeData?.userInfo?.name || t.name);
-//   };
-
-//   // Fetch job matches
-//   const fetchJobMatches = async (jobId) => {
-//     setJobMatchesLoading(true);
-//     try {
-//       const response = await api.get(`/matches/${jobId}/`);
-//       setJobMatches(response.data);
-//     } catch (err) {
-//       console.error('Error fetching job matches:', err);
-//       toast.error('Failed to fetch job matches.');
-//     } finally {
-//       setJobMatchesLoading(false);
-//     }
-//   };
-
-//   // Fetch trainee matches
-//   const fetchTraineeMatches = async (traineeId) => {
-//     setTraineeMatchesLoading(true);
-//     try {
-//       const response = await api.get(`/trainee-matches/${traineeId}/`);
-//       setTraineeMatches(response.data);
-//     } catch (err) {
-//       console.error('Error fetching trainee matches:', err);
-//       toast.error('Failed to fetch trainee matches.');
-//     } finally {
-//       setTraineeMatchesLoading(false);
-//     }
-//   };
-
-//   const handleViewTraineeProfileFromJob = (match) => {
-//     const trainee = allTrainees.find((at) => at.traineeData.userInfo.name === match.trainee_name);
-//     if (trainee) {
-//       setSelectedTrainee(trainee);
-//       setJobMatches(null);
-//       setSelectedJob(null);
-//       fetchTraineeMatches(trainee.id);
-//     } else {
-//       toast.error('Trainee not found.');
-//     }
-//   };
-
-//   const handleViewJobMatches = (job) => {
-//     setSelectedJob(job);
-//     fetchJobMatches(job.id);
-//   };
-
-//   const handleViewTraineeProfile = (trainee) => {
-//     setSelectedTrainee(trainee);
-//     fetchTraineeMatches(trainee.id);
-//   };
-
-//   const toggleJobStatus = async (jobId) => {
-//     try {
-//       await jobAPI.toggleJobStatus(jobId);
-//       setJobs((jobs) =>
-//         jobs.map((job) =>
-//           job.id === jobId
-//             ? { ...job, status: job.status === 'active' ? 'inactive' : 'active' }
-//             : job
-//         )
-//       );
-//       toast.success('Job status updated!');
-//     } catch (err) {
-//       console.error('Error toggling job status:', err);
-//       toast.error('Failed to update job status.');
-//     }
-//   };
-
-//   // Delete job
-//   const handleDeleteJob = async (jobId) => {
-//     if (!window.confirm('Are you sure you want to delete this job?')) return;
-//     try {
-//       setLoading(true);
-//       await jobAPI.deleteJob(jobId);
-//       setJobs(jobs.filter((j) => j.id !== jobId));
-//       toast.success('Job deleted successfully!');
-//     } catch (err) {
-//       console.error('Error deleting job:', err);
-//       toast.error('Failed to delete job.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Create job (with is_public)
-//   const handleCreateJob = async () => {
-//     if (!newJob.title || !newJob.department || !newJob.description || !newJob.requirements) {
-//       toast.error('Please fill in all required fields');
-//       return;
-//     }
-//     try {
-//       setLoading(true);
-//       const jobData = {
-//         ...newJob,
-//         location: newJob.location.filter((loc) => loc.trim() !== ''),
-//         techSkills,
-//         softSkills,
-//         status: 'active',
-//         filled: 0,
-//         matches: 0,
-//         postedDate: new Date().toISOString().split('T')[0],
-//         is_public: newJob.is_public,
-//       };
-//       await jobAPI.createJob(jobData);
-//       await fetchJobs();
-//       setNewJob({
-//         title: '',
-//         department: '',
-//         location: [''],
-//         openings: 1,
-//         requirements: '',
-//         techSkills: [],
-//         softSkills: [],
-//         description: '',
-//         salary: '',
-//         expiryDate: '',
-//         is_public: true,
-//       });
-//       setTechSkills([]);
-//       setSoftSkills([]);
-//       setActiveTab('jobs');
-//       toast.success('Job created successfully!');
-//     } catch (err) {
-//       console.error('Error creating job:', err);
-//       toast.error('Failed to create job.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Update job (with is_public)
-//   const handleUpdateJob = async (updatedJob) => {
-//     try {
-//       setLoading(true);
-//       await jobAPI.updateJob(updatedJob.id, updatedJob);
-//       await fetchJobs();
-//       setSelectedJob(null);
-//       setIsEditMode(false);
-//       setActiveTab('jobs');
-//       setTechSkills([]);
-//       setSoftSkills([]);
-//       toast.success('Job updated successfully!');
-//     } catch (err) {
-//       console.error('Error updating job:', err);
-//       toast.error('Failed to update job.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Skill input handlers
-//   const handleTechSkillAdd = (e) => {
-//     if (e.key === 'Enter' || e.key === ',') {
-//       e.preventDefault();
-//       const skill = e.target.value.trim();
-//       if (skill && !techSkills.includes(skill)) {
-//         const updated = [...techSkills, skill];
-//         setTechSkills(updated);
-//         if (selectedJob && isEditMode) {
-//           setSelectedJob({ ...selectedJob, techSkills: updated });
-//         } else {
-//           setNewJob({ ...newJob, techSkills: updated });
-//         }
-//         e.target.value = '';
-//       }
-//     }
-//   };
-//   const handleSoftSkillAdd = (e) => {
-//     if (e.key === 'Enter' || e.key === ',') {
-//       e.preventDefault();
-//       const skill = e.target.value.trim();
-//       if (skill && !softSkills.includes(skill)) {
-//         const updated = [...softSkills, skill];
-//         setSoftSkills(updated);
-//         if (selectedJob && isEditMode) {
-//           setSelectedJob({ ...selectedJob, softSkills: updated });
-//         } else {
-//           setNewJob({ ...newJob, softSkills: updated });
-//         }
-//         e.target.value = '';
-//       }
-//     }
-//   };
-//   const removeTechSkill = (index) => {
-//     const updated = techSkills.filter((_, i) => i !== index);
-//     setTechSkills(updated);
-//     if (selectedJob && isEditMode) {
-//       setSelectedJob({ ...selectedJob, techSkills: updated });
-//     } else {
-//       setNewJob({ ...newJob, techSkills: updated });
-//     }
-//   };
-//   const removeSoftSkill = (index) => {
-//     const updated = softSkills.filter((_, i) => i !== index);
-//     setSoftSkills(updated);
-//     if (selectedJob && isEditMode) {
-//       setSelectedJob({ ...selectedJob, softSkills: updated });
-//     } else {
-//       setNewJob({ ...newJob, softSkills: updated });
-//     }
-//   };
-
-//   // Location fields
-//   const addLocationField = () => {
-//     setNewJob({ ...newJob, location: [...newJob.location, ''] });
-//   };
-//   const removeLocationField = (index) => {
-//     setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
-//   };
-//   const updateLocationField = (index, value) => {
-//     const newLocs = [...newJob.location];
-//     newLocs[index] = value;
-//     setNewJob({ ...newJob, location: newLocs });
-//   };
-
-//   // Stats
-//   const calculateStatistics = () => {
-//     const totalTrainees = allTrainees.length;
-//     const totalJobs = jobs.length;
-//     const mappedTrainees = allTrainees.filter((t) => t.isMapped === true).length;
-//     const unmappedTrainees = allTrainees.filter((t) => !t.isMapped).length;
-//     const activeJobs = jobs.filter((j) => j.status === 'active').length;
-//     const filledPositions = jobs.reduce((sum, job) => sum + (job.filled || 0), 0);
-//     const totalOpenings = jobs.reduce((sum, job) => sum + (job.openings || 0), 0);
-//     const fillRate = totalOpenings > 0 ? Math.round((filledPositions / totalOpenings) * 100) : 0;
-//     return {
-//       totalTrainees,
-//       totalJobs,
-//       mappedTrainees,
-//       unmappedTrainees,
-//       activeJobs,
-//       filledPositions,
-//       totalOpenings,
-//       fillRate,
-//     };
-//   };
-//   const stats = calculateStatistics();
-
-//   // ==================== Interview Lock Functions ====================
-//   const fetchInterviewLocks = async () => {
-//     try {
-//       setLoading(true);
-//       let url = '/interview-locks/';
-//       const params = new URLSearchParams();
-//       if (lockFilter.status) params.append('status', lockFilter.status);
-//       if (lockFilter.job) params.append('job', lockFilter.job);
-//       if (params.toString()) url += '?' + params.toString();
-//       const response = await api.get(url);
-//       setInterviewLocks(response.data);
-//     } catch (err) {
-//       toast.error('Failed to fetch interview locks');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const fetchLockStats = async () => {
-//     try {
-//       const response = await api.get('/interview-locks/dashboard/');
-//       setLockStats(response.data);
-//     } catch (err) {
-//       console.error('Failed to fetch lock stats', err);
-//     }
-//   };
-
-//   const updateLockStatus = async (lockId, newStatus) => {
-//     try {
-//       await api.patch(`/interview-locks/${lockId}/`, { status: newStatus });
-//       toast.success('Status updated');
-//       fetchInterviewLocks();
-//       fetchLockStats();
-//       if (activeTab === 'selected') fetchSelectedLocks();
-//       if (activeTab === 'rejected') fetchRejectedLocks();
-//     } catch (err) {
-//       toast.error('Failed to update status');
-//     }
-//   };
-
-//   const downloadLockReport = (status = '') => {
-//     let url = '/api/interview-locks/report/';
-//     if (status) url += `?status=${status}`;
-//     window.open(url, '_blank');
-//   };
-
-//   // NEW: Fetch interviewers (users with role 'interviewer')
-//   const fetchInterviewers = async () => {
-//     try {
-//       const res = await api.get('/users/');
-//       const filtered = res.data.filter(u => u.role === 'interviewer');
-//       setInterviewers(filtered);
-//     } catch (err) {
-//       toast.error('Failed to load interviewers');
-//     }
-//   };
-
-//   // NEW: Fetch selected & rejected locks
-//   const fetchSelectedLocks = async () => {
-//     try {
-//       const res = await api.get('/interview-locks/?status=selected');
-//       setSelectedLocks(res.data);
-//     } catch (err) {
-//       toast.error('Failed to fetch selected candidates');
-//     }
-//   };
-
-//   const fetchRejectedLocks = async () => {
-//     try {
-//       const res = await api.get('/interview-locks/?status=rejected');
-//       setRejectedLocks(res.data);
-//     } catch (err) {
-//       toast.error('Failed to fetch rejected candidates');
-//     }
-//   };
-
-//   // NEW: Handle lock for interview with interviewer assignment
-//   const handleLockForInterview = async () => {
-//     if (selectedTraineeIds.length === 0) {
-//       toast.error('Select at least one trainee');
-//       return;
-//     }
-//     if (!lockInterviewDatetime) {
-//       toast.error('Please select interview date and time');
-//       return;
-//     }
-//     if (!assignedToId) {
-//       toast.error('Please select an interviewer');
-//       return;
-//     }
-//     try {
-//       setLoading(true);
-//       await api.post('/interview-locks/bulk_create/', {
-//         trainee_ids: selectedTraineeIds,
-//         job_id: selectedJob.id,
-//         interview_datetime: lockInterviewDatetime,
-//         comments: lockComments,
-//         assigned_to: assignedToId,
-//       });
-//       toast.success(`Locked ${selectedTraineeIds.length} trainee(s) for interview`);
-//       setShowLockModal(false);
-//       setSelectedTraineeIds([]);
-//       setLockInterviewDatetime('');
-//       setLockComments('');
-//       setAssignedToId('');
-//     } catch (err) {
-//       toast.error('Failed to lock trainees');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-//   // ================================================================
-
-//   // ==================== Effects ====================
-//   useEffect(() => {
-//     if (activeTab === 'dashboard' || activeTab === 'trainees' || activeTab === 'mapped' || activeTab === 'unmapped' || activeTab === 'openPool') {
-//       fetchTrainees();
-//     }
-//   }, [activeTab]);
-
-//   useEffect(() => {
-//     if (activeTab === 'dashboard' || activeTab === 'jobs' || activeTab === 'createJob') {
-//       fetchJobs();
-//     }
-//   }, [activeTab]);
-
-//   useEffect(() => {
-//     if (allTrainees.length > 0 && activeTab === 'openPool') {
-//       checkTraineesForOpenPool();
-//     }
-//   }, [allTrainees, activeTab]);
-
-//   useEffect(() => {
-//     setSkillTrends(computeSkillTrends(jobs));
-//   }, [jobs]);
-
-//   // Filter trainees
-//   useEffect(() => {
-//     let filtered = [...allTrainees];
-//     if (searchQuery) {
-//       filtered = filtered.filter(
-//         (t) =>
-//           t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-//           t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-//           t.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
-//       );
-//     }
-//     if (locationFilter) {
-//       filtered = filtered.filter((t) => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
-//     }
-//     if (activeTab === 'mapped') {
-//       filtered = filtered.filter((t) => t.isMapped === true);
-//     } else if (activeTab === 'unmapped') {
-//       filtered = filtered.filter((t) => t.isMapped !== true);
-//     } else if (activeTab === 'openPool') {
-//       const noMatchIds = traineesWithNoMatches.map((t) => t.id || t.trainee_id);
-//       filtered = filtered.filter((t) => !t.isMapped && noMatchIds.includes(t.id));
-//     }
-//     setTrainees(filtered);
-//   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
-
-//   // Fetch interview locks when tab changes
-//   useEffect(() => {
-//     if (activeTab === 'interviewLocks') {
-//       fetchInterviewLocks();
-//       fetchLockStats();
-//     }
-//   }, [activeTab, lockFilter]);
-
-//   // NEW: Fetch selected/rejected when tabs change
-//   useEffect(() => {
-//     if (activeTab === 'selected') fetchSelectedLocks();
-//     if (activeTab === 'rejected') fetchRejectedLocks();
-//   }, [activeTab]);
-
-//   // ==================== Render Helpers ====================
-//   const renderHiddenFileInputs = () => (
-//     <>
-//       <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
-//       <input type="file" id="wordUpload" accept=".doc,.docx" style={{ display: 'none' }} onChange={handleWordUpload} />
-//     </>
-//   );
-
-//   const handleExcelUpload = async (event) => {
-//     const file = event.target.files[0];
-//     if (!file) return;
-//     try {
-//       setLoading(true);
-//       await jobAPI.uploadExcel(file);
-//       await fetchJobs();
-//       toast.success('Excel uploaded successfully!');
-//     } catch (err) {
-//       toast.error('Upload failed.');
-//     } finally {
-//       setLoading(false);
-//       event.target.value = '';
-//     }
-//   };
-
-//   const handleWordUpload = async (event) => {
-//     const file = event.target.files[0];
-//     if (!file) return;
-//     try {
-//       setLoading(true);
-//       await jobAPI.uploadWord(file);
-//       await fetchJobs();
-//       toast.success('Word document uploaded!');
-//     } catch (err) {
-//       toast.error('Upload failed.');
-//     } finally {
-//       setLoading(false);
-//       event.target.value = '';
-//     }
-//   };
-
-//   const handleDownloadExcelTemplate = async () => {
-//     try {
-//       setLoading(true);
-//       const blob = await jobAPI.downloadExcelTemplate();
-//       const url = window.URL.createObjectURL(blob);
-//       const a = document.createElement('a');
-//       a.href = url;
-//       a.download = 'job_template.xlsx';
-//       document.body.appendChild(a);
-//       a.click();
-//       window.URL.revokeObjectURL(url);
-//       document.body.removeChild(a);
-//       toast.success('Template downloaded');
-//     } catch (err) {
-//       toast.error('Download failed');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleDownloadWordTemplate = async () => {
-//     try {
-//       setLoading(true);
-//       const blob = await jobAPI.downloadWordTemplate();
-//       const url = window.URL.createObjectURL(blob);
-//       const a = document.createElement('a');
-//       a.href = url;
-//       a.download = 'job_template.docx';
-//       document.body.appendChild(a);
-//       a.click();
-//       window.URL.revokeObjectURL(url);
-//       document.body.removeChild(a);
-//       toast.success('Template downloaded');
-//     } catch (err) {
-//       toast.error('Download failed');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Modals
-//   const renderExcelTemplateModal = () => {
-//     if (!showExcelTemplate) return null;
-//     return (
-//       <div className="modal-overlay" onClick={() => setShowExcelTemplate(false)}>
-//         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-//           <div className="modal-header">
-//             <div className="modal-title">
-//               <FileSpreadsheet size={24} />
-//               <h2>Excel Upload Template</h2>
-//             </div>
-//             <button className="modal-close" onClick={() => setShowExcelTemplate(false)}>
-//               <X size={24} />
-//             </button>
-//           </div>
-//           <div className="modal-body">
-//             <h3>Here you can download this template</h3>
-//           </div>
-//           <div className="modal-actions">
-//             <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}>
-//               <Download size={18} /> Download Template
-//             </button>
-//             <button
-//               className="btn-primary"
-//               onClick={() => {
-//                 document.getElementById('excelUpload').click();
-//                 setShowExcelTemplate(false);
-//               }}
-//               disabled={loading}
-//             >
-//               <Upload size={18} /> Upload Excel
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   const renderWordTemplateModal = () => {
-//     if (!showWordTemplate) return null;
-//     return (
-//       <div className="modal-overlay" onClick={() => setShowWordTemplate(false)}>
-//         <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-//           <div className="modal-header">
-//             <div className="modal-title">
-//               <File size={24} />
-//               <h2>Word Document Template</h2>
-//             </div>
-//             <button className="modal-close" onClick={() => setShowWordTemplate(false)}>
-//               <X size={24} />
-//             </button>
-//           </div>
-//           <div className="modal-body">
-//             <h3>Here you can download this template</h3>
-//           </div>
-//           <div className="modal-actions">
-//             <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}>
-//               <Download size={18} /> Download Template
-//             </button>
-//             <button
-//               className="btn-primary"
-//               onClick={() => {
-//                 document.getElementById('wordUpload').click();
-//                 setShowWordTemplate(false);
-//               }}
-//               disabled={loading}
-//             >
-//               <Upload size={18} /> Upload Word Doc
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Dashboard render
-//   const renderDashboard = () => (
-//     <div className="dashboard-content">
-//       {loading && (
-//         <div className="loading-overlay">
-//           <div className="loading-spinner"></div>
-//           <p>Loading dashboard data...</p>
-//         </div>
-//       )}
-//       {error && (
-//         <div className="error-message">
-//           <AlertCircle size={20} /> <span>{error}</span>
-//         </div>
-//       )}
-//       <div className="stats-grid">
-//         <div className="stat-card">
-//           <div className="stat-icon"><Users className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div>
-//         </div>
-//         <div className="stat-card">
-//           <div className="stat-icon"><BriefcaseBusiness className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div>
-//         </div>
-//         <div className="stat-card">
-//           <div className="stat-icon"><CheckCircle className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Mapped Trainees</h3><div className="stat-value">{stats.mappedTrainees}</div></div>
-//         </div>
-//         <div className="stat-card">
-//           <div className="stat-icon"><AlertCircle className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Unmapped Trainees</h3><div className="stat-value">{stats.unmappedTrainees}</div></div>
-//         </div>
-//         <div className="stat-card">
-//           <div className="stat-icon"><Target className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div>
-//         </div>
-//         <div className="stat-card">
-//           <div className="stat-icon"><Briefcase className="stat-icon-svg" /></div>
-//           <div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div>
-//         </div>
-//       </div>
-
-//       <h2 className="section-title">Top Skills in Demand</h2>
-//       <div className="skills-section">
-//         <div className="content-card">
-//           <div className="card-header"><h3><Target size={20} /> Technical Skills</h3></div>
-//           <div className="hr-skills-list">
-//             {skillTrends.tech.map((skill) => (
-//               <div key={`tech-${skill.name}`} className="skill-item">
-//                 <div className="skill-header">
-//                   <span className="skill-name">{skill.name}</span>
-//                   <div className="skill-stats">
-//                     <span className="skill-jobs">{skill.jobs} jobs</span>
-//                     <span className="skill-demand">{skill.demand}%</span>
-//                   </div>
-//                 </div>
-//                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#3b82f6' }} /></div>
-//               </div>
-//             ))}
-//             {skillTrends.tech.length === 0 && <div className="no-data">No technical skills found.</div>}
-//           </div>
-//         </div>
-//         <div className="content-card">
-//           <div className="card-header"><h3><Star size={20} /> Soft Skills</h3></div>
-//           <div className="hr-skills-list">
-//             {skillTrends.soft.map((skill) => (
-//               <div key={`soft-${skill.name}`} className="skill-item">
-//                 <div className="skill-header">
-//                   <span className="skill-name">{skill.name}</span>
-//                   <div className="skill-stats">
-//                     <span className="skill-jobs">{skill.jobs} jobs</span>
-//                     <span className="skill-demand">{skill.demand}%</span>
-//                   </div>
-//                 </div>
-//                 <div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#10b981' }} /></div>
-//               </div>
-//             ))}
-//             {skillTrends.soft.length === 0 && <div className="no-data">No soft skills found.</div>}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-
-//   // Job Management
-//   const renderJobManagement = () => (
-//     <div className="job-management">
-//       <div className="section-header">
-//         <div className="header-title">
-//           <h2><Briefcase size={24} /> Job Profiles Management</h2>
-//           <p className="subtitle">Manage and track all job positions</p>
-//         </div>
-//         <div className="header-actions">
-//           <div className="upload-buttons">
-//             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}>
-//               <FileSpreadsheet size={18} /> Upload Excel
-//             </button>
-//             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}>
-//               <File size={18} /> Upload Word
-//             </button>
-//           </div>
-//           <button
-//             className="btn-primary"
-//             onClick={() => {
-//               setSelectedJob(null);
-//               setIsEditMode(false);
-//               setActiveTab('createJob');
-//             }}
-//             disabled={loading}
-//           >
-//             <Plus size={18} /> Create New Job
-//           </button>
-//         </div>
-//       </div>
-
-//       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading jobs...</p></div>}
-//       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-
-//       {jobs.length === 0 && !loading && !error && (
-//         <div className="no-data">
-//           <Briefcase size={48} />
-//           <h3>No Jobs Found</h3>
-//           <p>Create your first job profile or upload jobs via Excel/Word</p>
-//         </div>
-//       )}
-
-//       {jobs.length > 0 && (
-//         <div className="table-container">
-//           <table className="data-table">
-//             <thead>
-//               <tr>
-//                 <th>Job Title</th>
-//                 <th>Department</th>
-//                 <th>Location(s)</th>
-//                 <th>Openings</th>
-//                 <th>Filled</th>
-//                 <th>Status</th>
-//                 <th>Actions</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {jobs.map((job) => (
-//                 <tr key={job.id}>
-//                   <td>
-//                     <div className="job-title-cell">
-//                       <div className="job-icon"><BriefcaseBusiness size={16} /></div>
-//                       <span className="font-medium">{job.title}</span>
-//                     </div>
-//                   </td>
-//                   <td>
-//                     <div className="department-cell"><Building size={14} />{job.department}</div>
-//                   </td>
-//                   <td>
-//                     <div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div>
-//                   </td>
-//                   <td><div className="openings-cell">{job.openings}</div></td>
-//                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
-//                   <td>
-//                     <button
-//                       className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`}
-//                       onClick={() => toggleJobStatus(job.id)}
-//                       disabled={loading}
-//                     >
-//                       {job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}
-//                     </button>
-//                   </td>
-//                   <td>
-//                     <div className="action-buttons">
-//                       <button className="btn-icon btn-icon-view" onClick={() => handleViewJobMatches(job)} disabled={loading}><Eye size={16} /></button>
-//                       <button
-//                         className="btn-icon btn-icon-edit"
-//                         onClick={() => {
-//                           setSelectedJob(job);
-//                           setIsEditMode(true);
-//                           setActiveTab('createJob');
-//                           setTechSkills(job.techSkills || []);
-//                           setSoftSkills(job.softSkills || []);
-//                         }}
-//                         disabled={loading}
-//                       >
-//                         <Edit size={16} />
-//                       </button>
-//                       <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
-//                     </div>
-//                   </td>
-//                 </tr>
-//               ))}
-//             </tbody>
-//           </table>
-//         </div>
-//       )}
-//     </div>
-//   );
-
-//   // Create/Edit Job Form (with is_public)
-//   const renderCreateJob = () => {
-//     const jobToEdit = selectedJob || newJob;
-//     const isEditing = !!selectedJob && isEditMode;
-
-//     const handleSubmit = async (e) => {
-//       e.preventDefault();
-//       if (isEditing) {
-//         await handleUpdateJob(jobToEdit);
-//       } else {
-//         await handleCreateJob();
-//       }
-//     };
-
-//     return (
-//       <div className="create-job">
-//         <div className="section-header">
-//           <div className="header-title">
-//             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
-//             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
-//           </div>
-//           <button
-//             className="btn-secondary"
-//             onClick={() => {
-//               setSelectedJob(null);
-//               setIsEditMode(false);
-//               setActiveTab('jobs');
-//               setNewJob({
-//                 title: '',
-//                 department: '',
-//                 location: [''],
-//                 openings: 1,
-//                 requirements: '',
-//                 techSkills: [],
-//                 softSkills: [],
-//                 description: '',
-//                 salary: '',
-//                 expiryDate: '',
-//                 is_public: true,
-//               });
-//               setTechSkills([]);
-//               setSoftSkills([]);
-//             }}
-//             disabled={loading}
-//           >
-//             <ArrowLeft size={18} /> Back to Jobs
-//           </button>
-//         </div>
-
-//         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating job...' : 'Creating job...'}</p></div>}
-
-//         <div className="form-card">
-//           <form onSubmit={handleSubmit}>
-//             <div className="form-section">
-//               <h3 className="form-section-title"><Briefcase size={20} /> Basic Information</h3>
-//               <div className="form-row">
-//                 <div className="form-group">
-//                   <label><span className="required">*</span> Job Title</label>
-//                   <input
-//                     type="text"
-//                     className="form-control"
-//                     value={jobToEdit.title}
-//                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })}
-//                     required
-//                     placeholder="e.g., Senior Frontend Developer"
-//                     disabled={loading}
-//                   />
-//                 </div>
-//                 <div className="form-group">
-//                   <label><span className="required">*</span> Department</label>
-//                   <select
-//                     className="form-control"
-//                     value={jobToEdit.department}
-//                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })}
-//                     required
-//                     disabled={loading}
-//                   >
-//                     <option value="">Select Department</option>
-//                     <option value="Technology">Technology</option>
-//                     <option value="Analytics">Analytics</option>
-//                     <option value="Design">Design</option>
-//                     <option value="Operations">Operations</option>
-//                     <option value="Marketing">Marketing</option>
-//                     <option value="Sales">Sales</option>
-//                   </select>
-//                 </div>
-//               </div>
-
-//               <div className="form-row">
-//                 <div className="form-group">
-//                   <label>Visibility</label>
-//                   <select
-//                     className="form-control"
-//                     value={jobToEdit.is_public ? 'public' : 'private'}
-//                     onChange={(e) => {
-//                       const val = e.target.value === 'public';
-//                       if (isEditing) {
-//                         setSelectedJob({ ...jobToEdit, is_public: val });
-//                       } else {
-//                         setNewJob({ ...newJob, is_public: val });
-//                       }
-//                     }}
-//                   >
-//                     <option value="public">Public (visible to associates)</option>
-//                     <option value="private">Private (internal only)</option>
-//                   </select>
-//                 </div>
-//               </div>
-
-//               <div className="form-group">
-//                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple locations if needed)</span></label>
-//                 {jobToEdit.location.map((loc, index) => (
-//                   <div key={index} className="location-input-group">
-//                     <input
-//                       type="text"
-//                       className="form-control"
-//                       value={loc}
-//                       onChange={(e) => {
-//                         if (isEditing) {
-//                           const newLocs = [...jobToEdit.location];
-//                           newLocs[index] = e.target.value;
-//                           setSelectedJob({ ...jobToEdit, location: newLocs });
-//                         } else {
-//                           updateLocationField(index, e.target.value);
-//                         }
-//                       }}
-//                       required={index === 0}
-//                       placeholder="e.g., Hyderabad"
-//                       disabled={loading}
-//                     />
-//                     {jobToEdit.location.length > 1 && (
-//                       <button type="button" className="btn-icon" onClick={() => {
-//                         if (isEditing) {
-//                           const newLocs = jobToEdit.location.filter((_, i) => i !== index);
-//                           setSelectedJob({ ...jobToEdit, location: newLocs });
-//                         } else {
-//                           removeLocationField(index);
-//                         }
-//                       }} disabled={loading}><X size={16} /></button>
-//                     )}
-//                   </div>
-//                 ))}
-//                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}>
-//                   <Plus size={16} /> Add Another Location
-//                 </button>
-//               </div>
-
-//               <div className="form-row">
-//                 <div className="form-group">
-//                   <label><span className="required">*</span> Number of Openings</label>
-//                   <input
-//                     type="number"
-//                     className="form-control"
-//                     value={jobToEdit.openings}
-//                     onChange={(e) => {
-//                       const val = parseInt(e.target.value) || 1;
-//                       if (isEditing) {
-//                         setSelectedJob({ ...jobToEdit, openings: val });
-//                       } else {
-//                         setNewJob({ ...newJob, openings: val });
-//                       }
-//                     }}
-//                     min="1"
-//                     required
-//                     disabled={loading}
-//                   />
-//                 </div>
-//                 <div className="form-group">
-//                   <label><Calendar size={16} /> Expiry Date</label>
-//                   <input
-//                     type="date"
-//                     className="form-control"
-//                     value={jobToEdit.expiryDate}
-//                     onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })}
-//                     disabled={loading}
-//                   />
-//                 </div>
-//               </div>
-//             </div>
-
-//             <div className="form-section">
-//               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
-//               <div className="form-group">
-//                 <label><span className="required">*</span> Technical Skills</label>
-//                 <div className="skills-input">
-//                   <input
-//                     type="text"
-//                     className="form-control"
-//                     placeholder="Type technical skill and press Enter or comma"
-//                     onKeyDown={handleTechSkillAdd}
-//                     disabled={loading}
-//                   />
-//                   <div className="skills-tags">
-//                     {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
-//                       <span key={index} className="skill-tag tech-tag">
-//                         {skill}
-//                         <button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button>
-//                       </span>
-//                     ))}
-//                   </div>
-//                 </div>
-//               </div>
-
-//               <div className="form-group">
-//                 <label>Soft Skills</label>
-//                 <div className="skills-input">
-//                   <input
-//                     type="text"
-//                     className="form-control"
-//                     placeholder="Type soft skill and press Enter or comma"
-//                     onKeyDown={handleSoftSkillAdd}
-//                     disabled={loading}
-//                   />
-//                   <div className="skills-tags">
-//                     {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
-//                       <span key={index} className="skill-tag soft-tag">
-//                         {skill}
-//                         <button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button>
-//                       </span>
-//                     ))}
-//                   </div>
-//                 </div>
-//               </div>
-
-//               <div className="form-group">
-//                 <label><span className="required">*</span> Job Description</label>
-//                 <textarea
-//                   className="form-control"
-//                   rows="4"
-//                   value={jobToEdit.description}
-//                   onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })}
-//                   placeholder="Describe the job role, responsibilities, and expectations..."
-//                   required
-//                   disabled={loading}
-//                 ></textarea>
-//               </div>
-
-//               <div className="form-group">
-//                 <label><span className="required">*</span> Requirements & Qualifications</label>
-//                 <textarea
-//                   className="form-control"
-//                   rows="4"
-//                   value={jobToEdit.requirements}
-//                   onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })}
-//                   placeholder="List the required experience, education, certifications, etc."
-//                   required
-//                   disabled={loading}
-//                 ></textarea>
-//               </div>
-//             </div>
-
-//             <div className="form-actions">
-//               <button type="button" className="btn-secondary" onClick={() => {
-//                 setSelectedJob(null);
-//                 setIsEditMode(false);
-//                 setActiveTab('jobs');
-//                 setNewJob({
-//                   title: '',
-//                   department: '',
-//                   location: [''],
-//                   openings: 1,
-//                   requirements: '',
-//                   techSkills: [],
-//                   softSkills: [],
-//                   description: '',
-//                   salary: '',
-//                   expiryDate: '',
-//                   is_public: true,
-//                 });
-//                 setTechSkills([]);
-//                 setSoftSkills([]);
-//               }} disabled={loading}>
-//                 Cancel
-//               </button>
-//               <button type="submit" className="btn-primary" disabled={loading}>
-//                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job Profile'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job Profile'}</>}
-//               </button>
-//             </div>
-//           </form>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Trainees List
-//   const renderTraineesList = () => {
-//     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
-//     const openPoolCount = traineesWithNoMatches.length;
-
-//     return (
-//       <div className="trainees-list">
-//         <div className="section-header">
-//           <div className="header-title">
-//             <h2><Users size={24} /> Trainees Management</h2>
-//             <p className="subtitle">Manage and track all trainees in the system</p>
-//           </div>
-//           <div className="view-options">
-//             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All Trainees</button>
-//             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
-//             <button className={`btn-view-option ${activeTab === 'unmapped' ? 'active' : ''}`} onClick={() => setActiveTab('unmapped')}><AlertCircle size={16} /> Unmapped ({stats.unmappedTrainees})</button>
-//             <button className={`btn-view-option ${activeTab === 'openPool' ? 'active' : ''}`} onClick={() => setActiveTab('openPool')}><Users2 size={16} /> Open Pool ({openPoolCount})</button>
-//           </div>
-//         </div>
-
-//         <div className="search-filter">
-//           <div className="search-box">
-//             <input type="text" className="search-input" placeholder="Search trainees by name, skills, or location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-//           </div>
-//           <div className="filter-group">
-//             <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
-//               <option value="">All Locations</option>
-//               {uniqueLocations.map((loc) => (
-//                 <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>
-//               ))}
-//             </select>
-//             <button className="btn-icon" onClick={() => { setSearchQuery(''); setLocationFilter(''); }}><X size={18} /></button>
-//           </div>
-//         </div>
-
-//         {checkingMatches && activeTab === 'openPool' && (
-//           <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking trainee matches for Open Pool...</p></div>
-//         )}
-//         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading trainees...</p></div>}
-//         {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-
-//         {trainees.length === 0 && !loading && !checkingMatches && (
-//           <div className="no-data">
-//             <Users size={48} />
-//             <h3>No Trainees Found</h3>
-//             <p>No trainees match your search criteria or no trainees available</p>
-//             {activeTab === 'openPool' && (
-//               <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}>
-//                 <Search size={18} /> Re-check for Open Pool
-//               </button>
-//             )}
-//           </div>
-//         )}
-
-//         <div className="trainees-grid">
-//           {trainees.map((trainee) => (
-//             <div key={trainee.id} className="trainee-card">
-//               <div className="trainee-header">
-//                 <div className="trainee-info-main">
-//                   <div className="trainee-avatar">{trainee.name.charAt(0)}</div>
-//                   <div className="trainee-info">
-//                     <h4>{trainee.name}</h4>
-//                     <div className="trainee-meta">
-//                       <span className="trainee-email"><Mail size={14} /> {trainee.email}</span>
-//                       <span className="trainee-location"><MapPin size={14} /> {trainee.location}</span>
-//                     </div>
-//                   </div>
-//                 </div>
-//                 <div className={`mapping-indicator ${trainee.isMapped ? 'mapped' : 'unmapped'}`}>
-//                   {trainee.isMapped ? (
-//                     <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</>
-//                   ) : (
-//                     <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>
-//                   )}
-//                 </div>
-//               </div>
-
-//               <div className="trainee-skills">
-//                 {trainee.skills.slice(0, 4).map((skill) => (
-//                   <span key={skill} className="skill-tag">{skill}</span>
-//                 ))}
-//                 {trainee.skills.length > 4 && <span className="skill-tag-more">+{trainee.skills.length - 4}</span>}
-//               </div>
-
-//               <div className="trainee-stats">
-//                 <div className="trainee-stat">
-//                   <span className="stat-label">Average Score</span>
-//                   <div className="score-progress">
-//                     <div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div>
-//                     <span className="score-value">{trainee.score}%</span>
-//                   </div>
-//                 </div>
-//               </div>
-
-//               <div className="trainee-actions">
-//                 <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}>
-//                   <User size={16} /> View Profile
-//                 </button>
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Job Modal (view details)
-//   const renderJobModal = () => {
-//     if (!selectedJob || isEditMode) return null;
-//     const handleDelete = async () => {
-//       if (window.confirm('Are you sure you want to delete this job?')) {
-//         await handleDeleteJob(selectedJob.id);
-//         setSelectedJob(null);
-//       }
-//     };
-//     return (
-//       <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
-//         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-//           <div className="modal-header">
-//             <div className="modal-title"><Briefcase size={24} /><h2>{selectedJob.title}</h2></div>
-//             <button className="modal-close" onClick={() => setSelectedJob(null)} disabled={loading}><X size={24} /></button>
-//           </div>
-//           <div className="modal-body">
-//             {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
-//             <div className="job-details-grid">
-//               <div className="detail-item"><Building size={16} /><div><span className="detail-label">Department</span><span className="detail-value">{selectedJob.department}</span></div></div>
-//               <div className="detail-item"><MapPin size={16} /><div><span className="detail-label">Location</span><span className="detail-value">{Array.isArray(selectedJob.location) ? selectedJob.location.join(', ') : selectedJob.location}</span></div></div>
-//               <div className="detail-item"><BriefcaseBusiness size={16} /><div><span className="detail-label">Openings</span><span className="detail-value">{selectedJob.openings} ({selectedJob.filled} filled)</span></div></div>
-//               <div className="detail-item"><Dollar size={16} /><div><span className="detail-label">Salary</span><span className="detail-value">{selectedJob.salary}</span></div></div>
-//               <div className="detail-item"><div className={`status-badge status-${selectedJob.status}`}>{selectedJob.status === 'active' ? 'Active' : 'Inactive'}</div></div>
-//               <div className="detail-item"><CalendarDays size={16} /><div><span className="detail-label">Posted</span><span className="detail-value">{selectedJob.postedDate}</span></div></div>
-//               <div className="detail-item"><Calendar size={16} /><div><span className="detail-label">Expires</span><span className="detail-value">{selectedJob.expiryDate}</span></div></div>
-//             </div>
-//             <div className="job-section"><h3>Job Description</h3><p>{selectedJob.description}</p></div>
-//             <div className="job-section"><h3>Requirements</h3><p>{selectedJob.requirements}</p></div>
-//             <div className="job-section"><h3>Technical Skills</h3><div className="skills-list">{selectedJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}</div></div>
-//             <div className="job-section"><h3>Soft Skills</h3><div className="skills-list">{selectedJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}</div></div>
-//             <div className="modal-actions">
-//               <button className="btn-secondary" onClick={() => setSelectedJob(null)} disabled={loading}>Close</button>
-//               <button className="btn-danger" onClick={handleDelete} disabled={loading}><Trash2 size={18} /> Delete Job</button>
-//               <button className="btn-primary" onClick={() => {
-//                 setIsEditMode(true);
-//                 setActiveTab('createJob');
-//                 setTechSkills(selectedJob.techSkills || []);
-//                 setSoftSkills(selectedJob.softSkills || []);
-//               }} disabled={loading}><Edit size={18} /> Edit Job</button>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Job Matches Modal (with checkboxes and lock)
-//   const renderJobMatchesModal = () => {
-//     if (!selectedJob || jobMatches === null) return null;
-
-//     const bucketConfig = {
-//       perfect_match: { title: 'Perfect Match', color: 'bucket-perfect' },
-//       skills_only: { title: 'Skills Only', color: 'bucket-skills' },
-//       location_only: { title: 'Location Only', color: 'bucket-location' },
-//       nearby: { title: 'Nearby', color: 'bucket-nearby' },
-//       no_match: { title: 'No Match', color: 'bucket-no-match' },
-//     };
-//     const mappedTraineeNames = getMappedTraineeNames();
-
-//     return (
-//       <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>
-//         <div className="modal-content job-matches-modal" onClick={(e) => e.stopPropagation()}>
-//           <div className="modal-header">
-//             <div className="modal-title">
-//               <Users size={24} />
-//               <div>
-//                 <h2>{jobMatches.job_title} - Matches</h2>
-//                 <p className="subtitle">Total Matches: {jobMatches.total_matches} | Available: {jobMatches.total_matches - mappedTraineeNames.length}</p>
-//               </div>
-//             </div>
-//             <button className="modal-close" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}><X size={24} /></button>
-//           </div>
-
-//           <div className="modal-body">
-//             {jobMatchesLoading ? (
-//               <div className="loading-state">...</div>
-//             ) : (
-//               <>
-//                 <div className="modal-actions" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
-//                   <span>Selected: {selectedTraineeIds.length}</span>
-//                   <button
-//                     className="btn-primary"
-//                     onClick={() => { fetchInterviewers(); setShowLockModal(true); }}
-//                     disabled={selectedTraineeIds.length === 0}
-//                   >
-//                     <Lock size={18} /> Lock for Interview ({selectedTraineeIds.length})
-//                   </button>
-//                 </div>
-
-//                 <div className="job-matches-content">
-//                   {Object.entries(bucketConfig).map(([bucketKey, config]) => {
-//                     const bucketData = jobMatches[bucketKey];
-//                     if (!bucketData || bucketData.length === 0) return null;
-//                     const availableMatches = bucketData.filter(match => !mappedTraineeNames.includes(match.trainee_name));
-//                     if (availableMatches.length === 0) return null;
-
-//                     return (
-//                       <div key={bucketKey} className={`bucket-section ${config.color}`}>
-//                         <h3 className="bucket-title">{config.title} ({availableMatches.length} available of {bucketData.length})</h3>
-//                         <div className="bucket-grid">
-//                           {availableMatches.map((match) => (
-//                             <div key={match.id || match.trainee_id} className="trainee-match-card">
-//                               <input
-//                                 type="checkbox"
-//                                 className="trainee-checkbox"
-//                                 checked={selectedTraineeIds.includes(match.trainee_id)}
-//                                 onChange={(e) => {
-//                                   if (e.target.checked) {
-//                                     setSelectedTraineeIds([...selectedTraineeIds, match.trainee_id]);
-//                                   } else {
-//                                     setSelectedTraineeIds(selectedTraineeIds.filter(id => id !== match.trainee_id));
-//                                   }
-//                                 }}
-//                               />
-//                               <div className="match-percentage">{match.total_percentage.toFixed(1)}%</div>
-//                               <div className="bucket-tag">{match.bucket?.replace('_', ' ') || config.title}</div>
-//                               <h4>{match.trainee_name}</h4>
-//                               <div className="match-breakdown">
-//                                 <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
-//                                 <span>Location: {match.location_percentage.toFixed(1)}%</span>
-//                               </div>
-//                               <p className="location-info"><MapPin size={14} /> {match.trainee_location}</p>
-//                               <div className="match-actions">
-//                                 <button className="view-trainee-btn" onClick={() => handleViewTraineeProfileFromJob(match)}>
-//                                   <User size={16} /> View Profile
-//                                 </button>
-//                                 <button
-//                                   className="map-to-project-btn"
-//                                   onClick={() => {
-//                                     if (selectedJob.openings <= 0) {
-//                                       toast.error('This job has no openings available.');
-//                                       return;
-//                                     }
-//                                     handleMapToProject(match, selectedJob);
-//                                   }}
-//                                   disabled={selectedJob.openings <= 0}
-//                                 >
-//                                   <Link size={16} /> {selectedJob.openings <= 0 ? 'Job Full' : 'Map to Project'}
-//                                 </button>
-//                               </div>
-//                             </div>
-//                           ))}
-//                         </div>
-//                       </div>
-//                     );
-//                   })}
-//                 </div>
-//               </>
-//             )}
-//           </div>
-
-//           <div className="modal-footer">
-//             <button className="btn-secondary" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>Close</button>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Trainee Profile Modal
-//   const renderTraineeModal = () => {
-//     if (!selectedTrainee) return null;
-//     const traineeData = selectedTrainee.traineeData || selectedTrainee;
-//     const userInfo = traineeData.userInfo || {};
-
-//     return (
-//       <div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>
-//         <div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}>
-//           <div className="modal-header">
-//             <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div>
-//             <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
-//           </div>
-
-//           <div className="modal-body">
-//             {traineeMatchesLoading ? (
-//               <div className="loading-state"><div className="loading-spinner"></div><p>Loading trainee matches...</p></div>
-//             ) : (
-//               <>
-//                 <div className="trainee-details-section">
-//                   <div className="mapping-status-section">
-//                     <h4>Project Mapping</h4>
-//                     <div className={`mapping-status ${selectedTrainee.isMapped ? 'mapped' : 'unmapped'}`}>
-//                       <div className="status-indicator">
-//                         {selectedTrainee.isMapped ? (
-//                           <><CheckCircle size={20} /><div><strong>Mapped to Project</strong><p>{selectedTrainee.projectName || 'Unknown Project'}</p><small>Project ID: {selectedTrainee.projectId || 'N/A'}</small></div></>
-//                         ) : (
-//                           <><AlertCircle size={20} /><div><strong>Not Assigned</strong><p>This trainee is available for project assignment</p></div></>
-//                         )}
-//                       </div>
-//                       {selectedTrainee.isMapped ? (
-//                         <button className="btn-danger" onClick={() => handleUnmapFromProject(selectedTrainee)} disabled={loading}>
-//                           <X size={18} /> Unmap from Project
-//                         </button>
-//                       ) : (
-//                         <div className="available-for-mapping"><p>Available for mapping to matching projects</p></div>
-//                       )}
-//                     </div>
-//                   </div>
-
-//                   <div className="profile-header">
-//                     <div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div>
-//                     <div className="profile-info">
-//                       <h3>{userInfo.name || selectedTrainee.name}</h3>
-//                       <div className="profile-role">TRAINEE</div>
-//                       <div className="profile-meta">
-//                         <span className="profile-meta-item"><MapPin size={16} /> {userInfo.location || selectedTrainee.location}</span>
-//                         <span className="profile-meta-item"><Mail size={16} /> {selectedTrainee.email}</span>
-//                         <span className="profile-meta-item"><Target size={16} /> DPI: {traineeData.dpi || 'N/A'}</span>
-//                         <span className="profile-meta-item"><BarChart2 size={16} /> Score: {userInfo.averageScore || selectedTrainee.score}%</span>
-//                       </div>
-//                     </div>
-//                   </div>
-
-//                   <div className="trainee-details-grid">
-//                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
-//                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
-//                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
-//                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
-//                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
-//                     <div className="detail-item"><span className="detail-label">Average Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
-//                   </div>
-
-//                   <div className="skills-section">
-//                     <h4>Strengths</h4>
-//                     <div className="skills-list">
-//                       {traineeData.strengths?.map((strength, index) => (
-//                         <span key={index} className="skill-tag tech-tag">{strength.courseName} ({strength.avgScore}%)</span>
-//                       )) || <span className="no-data">No strengths data</span>}
-//                     </div>
-//                     <h4>Weaknesses</h4>
-//                     <div className="skills-list">
-//                       {traineeData.weaknesses?.map((weakness, index) => (
-//                         <span key={index} className="skill-tag soft-tag">{weakness.courseName} ({weakness.avgScore}%)</span>
-//                       )) || <span className="no-data">No weaknesses data</span>}
-//                     </div>
-//                     <h4>Certificates</h4>
-//                     <div className="skills-list">
-//                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">No certificates</span>}
-//                     </div>
-//                   </div>
-//                 </div>
-
-//                 {!selectedTrainee.isMapped && (
-//                   <div className="projects-section">
-//                     <div className="projects-header">
-//                       <h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3>
-//                     </div>
-
-//                     {traineeMatches ? (
-//                       <>
-//                         {traineeMatches.total_matches === 0 ? (
-//                           <div className="no-matches open-pool-message">
-//                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches with any existing jobs.</p>
-//                             <div className="open-pool-info"><p><strong>This trainee is in the Open Pool.</strong></p><p>Consider creating a new job or reassessing skill requirements.</p>
-//                               <button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button>
-//                             </div>
-//                           </div>
-//                         ) : (
-//                           <>
-//                             {traineeMatches.perfect_match && traineeMatches.perfect_match.length > 0 && (
-//                               <div className="bucket-section bucket-perfect">
-//                                 <h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3>
-//                                 <div className="projects-grid">
-//                                   {traineeMatches.perfect_match.map((match) => {
-//                                     const job = jobs.find(j => j.id === match.job_id);
-//                                     if (job && job.openings <= 0) return null;
-//                                     return (
-//                                       <div key={match.match_id} className="project-match-card">
-//                                         <div className="match-card-header">
-//                                           <div className="project-title">
-//                                             <h4>{match.job_title}</h4>
-//                                             <div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div>
-//                                           </div>
-//                                           <div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div>
-//                                         </div>
-//                                         <div className="match-details">
-//                                           <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
-//                                           <span>Location: {match.location_percentage.toFixed(1)}%</span>
-//                                           <span><Calendar size={14} /> Posted: {match.posted_date}</span>
-//                                         </div>
-//                                         <div className="project-actions">
-//                                           <button className="map-to-project-btn" onClick={() => {
-//                                             const job = jobs.find(j => j.id === match.job_id);
-//                                             if (job) {
-//                                               if (job.openings <= 0) { toast.error('This job has no openings available.'); return; }
-//                                               handleMapToProject(selectedTrainee, job);
-//                                             }
-//                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Job Full' : 'Map to Project'}</button>
-//                                         </div>
-//                                       </div>
-//                                     );
-//                                   })}
-//                                 </div>
-//                               </div>
-//                             )}
-//                             {/* skills_only, location_only, nearby, no_match sections omitted for brevity */}
-//                           </>
-//                         )}
-//                       </>
-//                     ) : (
-//                       <div className="no-matches-data">
-//                         <Users size={48} /><h3>No match data loaded</h3><p>Click the button below to fetch project matches for this trainee</p>
-//                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}>
-//                           <Search size={18} /> Find Project Matches
-//                         </button>
-//                       </div>
-//                     )}
-//                   </div>
-//                 )}
-//               </>
-//             )}
-//           </div>
-
-//           <div className="modal-footer">
-//             <div className="footer-actions">
-//               <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
-//               {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
-//                 <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}>
-//                   <Search size={18} /> Find Matches
-//                 </button>
-//               )}
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Interview Locks Tab
-//   const renderInterviewLocks = () => {
-//     return (
-//       <div className="interview-locks">
-//         <div className="section-header">
-//           <div className="header-title">
-//             <h2><Lock size={24} /> Interview Locks Management</h2>
-//             <p className="subtitle">Track and manage locked candidates</p>
-//           </div>
-//           <div className="header-actions">
-//             <button className="btn-secondary" onClick={() => downloadLockReport()}>
-//               <Download size={18} /> Download All
-//             </button>
-//             <button className="btn-secondary" onClick={() => downloadLockReport('selected')}>
-//               <CheckCircle size={18} /> Download Selected
-//             </button>
-//             <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}>
-//               <XCircle size={18} /> Download Rejected
-//             </button>
-//           </div>
-//         </div>
-
-//         {lockStats && (
-//           <div className="stats-grid small">
-//             <div className="stat-card">
-//               <div className="stat-icon"><Lock size={20} /></div>
-//               <div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div>
-//             </div>
-//             <div className="stat-card">
-//               <div className="stat-icon"><CheckCircle size={20} /></div>
-//               <div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div>
-//             </div>
-//             <div className="stat-card">
-//               <div className="stat-icon"><XCircle size={20} /></div>
-//               <div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div>
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="search-filter">
-//           <div className="filter-group">
-//             <select className="filter-select" value={lockFilter.status} onChange={(e) => setLockFilter({ ...lockFilter, status: e.target.value })}>
-//               <option value="">All Status</option>
-//               <option value="locked">Locked</option>
-//               <option value="selected">Selected</option>
-//               <option value="rejected">Rejected</option>
-//               <option value="cancelled">Cancelled</option>
-//             </select>
-//             <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
-//               <option value="">All Jobs</option>
-//               {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
-//             </select>
-//             <button className="btn-icon" onClick={() => setLockFilter({ status: '', job: '' })}><X size={18} /></button>
-//           </div>
-//         </div>
-
-//         {loading ? (
-//           <div className="loading-overlay"><div className="loading-spinner"></div></div>
-//         ) : (
-//           <div className="table-container">
-//             <table className="data-table">
-//               <thead>
-//                 <tr>
-//                   <th>Trainee</th>
-//                   <th>Job</th>
-//                   <th>Interviewer</th>
-//                   <th>Interview Date/Time</th>
-//                   <th>Status</th>
-//                   <th>Comments</th>
-//                   <th>Locked By</th>
-//                   <th>Actions</th>
-//                 </tr>
-//               </thead>
-//               <tbody>
-//                 {interviewLocks.map(lock => (
-//                   <tr key={lock.id}>
-//                     <td><div className="trainee-info"><span className="font-medium">{lock.trainee_name}</span></div></td>
-//                     <td>{lock.job_title}</td>
-//                     <td>{lock.assigned_to_name || '-'}</td>
-//                     <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
-//                     <td>
-//                       <select
-//                         value={lock.status}
-//                         onChange={(e) => updateLockStatus(lock.id, e.target.value)}
-//                         className={`status-badge status-${lock.status}`}
-//                       >
-//                         <option value="locked">Locked</option>
-//                         <option value="selected">Selected</option>
-//                         <option value="rejected">Rejected</option>
-//                         <option value="cancelled">Cancelled</option>
-//                       </select>
-//                     </td>
-//                     <td>{lock.comments || '-'}</td>
-//                     <td>{lock.locked_by_name}</td>
-//                     <td>
-//                       <button className="btn-icon btn-icon-view" onClick={() => {
-//                         const trainee = allTrainees.find(t => t.id === lock.trainee);
-//                         if (trainee) handleViewTraineeProfile(trainee);
-//                       }}><Eye size={16} /></button>
-//                     </td>
-//                   </tr>
-//                 ))}
-//                 {interviewLocks.length === 0 && <tr><td colSpan="8" className="no-data">No interview locks found</td></tr>}
-//               </tbody>
-//             </table>
-//           </div>
-//         )}
-//       </div>
-//     );
-//   };
-
-//   // NEW: Selected Tab
-//   const renderSelected = () => (
-//     <div className="selected-tab">
-//       <div className="section-header">
-//         <h2><CheckCircle size={24} /> Selected Candidates</h2>
-//         <button className="btn-secondary" onClick={() => downloadLockReport('selected')}>
-//           <Download size={18} /> Download Selected
-//         </button>
-//       </div>
-//       <div className="table-container">
-//         <table className="data-table">
-//           <thead>
-//             <tr>
-//               <th>Trainee</th>
-//               <th>Job</th>
-//               <th>Interviewer</th>
-//               <th>Interview Date</th>
-//               <th>Feedback</th>
-//               <th>Actions</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {selectedLocks.map(lock => (
-//               <tr key={lock.id}>
-//                 <td>{lock.trainee_name}</td>
-//                 <td>{lock.job_title}</td>
-//                 <td>{lock.assigned_to_name || '-'}</td>
-//                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
-//                 <td>
-//                   {lock.feedback ? (
-//                     <button className="btn-icon" onClick={() => alert(JSON.stringify(lock.feedback, null, 2))}>
-//                       <Eye size={16} />
-//                     </button>
-//                   ) : '-'}
-//                 </td>
-//                 <td>
-//                   <button className="btn-icon" onClick={() => {
-//                     const trainee = allTrainees.find(t => t.id === lock.trainee);
-//                     if (trainee) handleViewTraineeProfile(trainee);
-//                   }}><User size={16} /></button>
-//                 </td>
-//               </tr>
-//             ))}
-//             {selectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No selected candidates</td></tr>}
-//           </tbody>
-//         </table>
-//       </div>
-//     </div>
-//   );
-
-//   // NEW: Rejected Tab
-//   const renderRejected = () => (
-//     <div className="rejected-tab">
-//       <div className="section-header">
-//         <h2><XCircle size={24} /> Rejected Candidates</h2>
-//         <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}>
-//           <Download size={18} /> Download Rejected
-//         </button>
-//       </div>
-//       <div className="table-container">
-//         <table className="data-table">
-//           <thead>
-//             <tr>
-//               <th>Trainee</th>
-//               <th>Job</th>
-//               <th>Interviewer</th>
-//               <th>Interview Date</th>
-//               <th>Feedback</th>
-//               <th>Actions</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {rejectedLocks.map(lock => (
-//               <tr key={lock.id}>
-//                 <td>{lock.trainee_name}</td>
-//                 <td>{lock.job_title}</td>
-//                 <td>{lock.assigned_to_name || '-'}</td>
-//                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
-//                 <td>
-//                   {lock.feedback ? (
-//                     <button className="btn-icon" onClick={() => alert(JSON.stringify(lock.feedback, null, 2))}>
-//                       <Eye size={16} />
-//                     </button>
-//                   ) : '-'}
-//                 </td>
-//                 <td>
-//                   <button className="btn-icon" onClick={() => {
-//                     const trainee = allTrainees.find(t => t.id === lock.trainee);
-//                     if (trainee) handleViewTraineeProfile(trainee);
-//                   }}><User size={16} /></button>
-//                 </td>
-//               </tr>
-//             ))}
-//             {rejectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No rejected candidates</td></tr>}
-//           </tbody>
-//         </table>
-//       </div>
-//     </div>
-//   );
-
-//   // Lock Interview Modal (updated with interviewer dropdown)
-//   const renderLockInterviewModal = () => {
-//     if (!showLockModal) return null;
-//     return (
-//       <div className="modal-overlay" onClick={() => setShowLockModal(false)}>
-//         <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-//           <div className="modal-header">
-//             <h3><Lock size={20} /> Lock for Interview</h3>
-//             <button className="modal-close" onClick={() => setShowLockModal(false)}><X /></button>
-//           </div>
-//           <div className="modal-body">
-//             <div className="form-group">
-//               <label>Interview Date & Time *</label>
-//               <input
-//                 type="datetime-local"
-//                 className="form-control"
-//                 value={lockInterviewDatetime}
-//                 onChange={(e) => setLockInterviewDatetime(e.target.value)}
-//                 required
-//               />
-//             </div>
-//             <div className="form-group">
-//               <label>Assign to Interviewer *</label>
-//               <select
-//                 className="form-control"
-//                 value={assignedToId}
-//                 onChange={(e) => setAssignedToId(e.target.value)}
-//                 required
-//               >
-//                 <option value="">Select Interviewer</option>
-//                 {interviewers.map(usr => (
-//                   <option key={usr.id} value={usr.id}>{usr.username}</option>
-//                 ))}
-//               </select>
-//             </div>
-//             <div className="form-group">
-//               <label>Comments (optional)</label>
-//               <textarea
-//                 className="form-control"
-//                 rows="3"
-//                 value={lockComments}
-//                 onChange={(e) => setLockComments(e.target.value)}
-//                 placeholder="Add any notes or instructions..."
-//               />
-//             </div>
-//             <p>Selected trainees: {selectedTraineeIds.length}</p>
-//           </div>
-//           <div className="modal-actions">
-//             <button className="btn-secondary" onClick={() => setShowLockModal(false)}>Cancel</button>
-//             <button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || !assignedToId || loading}>
-//               {loading ? 'Locking...' : 'Lock for Interview'}
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   // Sidebar items (including new tabs)
-//   const sidebarItems = [
-//     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-//     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
-//     { id: 'trainees', label: 'Trainees List', icon: <Users size={20} /> },
-//     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
-//     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
-//     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
-//   ];
-
-//   const renderContent = () => {
-//     switch (activeTab) {
-//       case 'dashboard': return renderDashboard();
-//       case 'jobs': return renderJobManagement();
-//       case 'createJob': return renderCreateJob();
-//       case 'trainees':
-//       case 'mapped':
-//       case 'unmapped':
-//       case 'openPool':
-//         return renderTraineesList();
-//       case 'interviewLocks':
-//         return renderInterviewLocks();
-//       case 'selected':
-//         return renderSelected();
-//       case 'rejected':
-//         return renderRejected();
-//       default: return renderDashboard();
-//     }
-//   };
-
-//   return (
-//     <div className="dashboard">
-//       <Toaster richColors position="top-right" />
-//       <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
-//       <div className="main-content">
-//         <div className="dashboard-header">
-//           <div className="header-title">
-//             <h1><LayoutDashboard size={28} /> HR Dashboard</h1>
-//             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management & Job Allocation</div>
-//           </div>
-//           <div className="header-actions">
-//             {loading && <div className="loading-indicator"><div className="loading-spinner small"></div><span>Processing...</span></div>}
-//           </div>
-//         </div>
-//         {renderContent()}
-//       </div>
-
-//       {renderHiddenFileInputs()}
-//       {renderExcelTemplateModal()}
-//       {renderWordTemplateModal()}
-//       {renderJobModal()}
-//       {renderJobMatchesModal()}
-//       {renderTraineeModal()}
-//       {renderLockInterviewModal()}
-//     </div>
-//   );
-// }
-
-// export default DashboardHR;
-
-
-
-// // DashboardHR.js – Complete, bug‑free version
+// // DashboardHR.js – FINAL VERSION
 // import React, { useState, useEffect } from 'react';
 // import { Toaster, toast } from 'sonner';
 // import {
@@ -4607,6 +6650,10 @@
 //   Users2,
 //   Lock,
 //   XCircle,
+//   Sliders,
+//   Grid,
+//   List,
+//   RefreshCw,
 // } from 'lucide-react';
 // import Sidebar from './Sidebar';
 // import api from '../api/axios';
@@ -4615,7 +6662,7 @@
 // function DashboardHR({ userData, onLogout }) {
 //   // ==================== Core State ====================
 //   const [activeTab, setActiveTab] = useState('dashboard');
-//   const [selectedJob, setSelectedJob] = useState(null);
+//   const [selectedJob, setSelectedJob] = useState(null); // for edit or job details modal
 //   const [selectedTrainee, setSelectedTrainee] = useState(null);
 //   const [isEditMode, setIsEditMode] = useState(false);
 //   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
@@ -4657,10 +6704,17 @@
 //   const [lockStats, setLockStats] = useState(null);
 //   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
 
-//   // Selected & Rejected lists
-//   const [selectedLocks, setSelectedLocks] = useState([]);
+//   // Selected & Rejected lists (combined)
+//   const [selectedCandidates, setSelectedCandidates] = useState([]);
 //   const [rejectedLocks, setRejectedLocks] = useState([]);
-//   const [viewingFeedback, setViewingFeedback] = useState(null); // for feedback modal
+//   const [viewingFeedback, setViewingFeedback] = useState(null);
+
+//   // Job Details Modal
+//   const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
+//   const [jobDetailsJob, setJobDetailsJob] = useState(null);
+//   const [jobDetailsTab, setJobDetailsTab] = useState('overview');
+//   const [mappedTrainees, setMappedTrainees] = useState([]);
+//   const [rejectedTrainees, setRejectedTrainees] = useState([]);
 
 //   // New Job State
 //   const [newJob, setNewJob] = useState({
@@ -4676,6 +6730,21 @@
 //     expiryDate: '',
 //     is_public: true,
 //   });
+
+//   // ========== Talent Search Tab State ==========
+//   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
+//   const [searchJobMatches, setSearchJobMatches] = useState(null);
+//   const [searchFilters, setSearchFilters] = useState({
+//     bucket: '',
+//     location: '',
+//     minTotal: 0,
+//     skillKeyword: '',
+//   });
+//   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
+//   const [selectAll, setSelectAll] = useState(false);
+
+//   // ========== Per‑Job Matching ==========
+//   const [selectedJobForMatching, setSelectedJobForMatching] = useState('');
 
 //   // ==================== Helper Functions ====================
 //   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
@@ -4765,7 +6834,7 @@
 //     }
 //   };
 
-//   // Check Open Pool (unchanged)
+//   // Check Open Pool
 //   const checkTraineesForOpenPool = async () => {
 //     if (allTrainees.length === 0) return;
 //     setCheckingMatches(true);
@@ -4832,69 +6901,113 @@
 //     }
 //   };
 
-//   // Map trainee to project
-//   const handleMapToProject = async (trainee, job) => {
+//   // Map trainee to project (used by Talent Search and Job Matches)
+//   const handleMapToProject = async (traineeOrMatch, job) => {
 //     try {
 //       setLoading(true);
+//       let userId = null;
+//       let traineeName = '';
+
+//       if (traineeOrMatch.traineeData) {
+//         userId = traineeOrMatch.traineeData.userInfo.userId;
+//         traineeName = traineeOrMatch.name;
+//       } else {
+//         const match = traineeOrMatch;
+//         const found = allTrainees.find(t => t.userId === match.trainee_id);
+//         if (found) {
+//           userId = found.userId;
+//           traineeName = found.name;
+//         } else {
+//           toast.error('Trainee not found in local data');
+//           console.error('Trainee not found for userId:', match.trainee_id);
+//           return;
+//         }
+//       }
+
+//       if (!userId) {
+//         toast.error('Could not find user ID');
+//         return;
+//       }
+
+//       // Check if job still has openings
+//       if (job.openings <= 0) {
+//         toast.error('No openings left for this job');
+//         return;
+//       }
+
 //       const mappingData = {
 //         isMapped: true,
 //         projectId: job.id.toString(),
 //         projectName: job.title,
 //       };
-//       let userId = null;
-//       if (trainee.traineeData) {
-//         userId = trainee.traineeData.userInfo.userId;
-//       } else {
-//         const found = allTrainees.find(
-//           (t) =>
-//             t.traineeData.userInfo.name === trainee.trainee_name &&
-//             t.traineeData.userInfo.location === trainee.trainee_location
-//         );
-//         if (found) userId = found.traineeData.userInfo.userId;
-//       }
-//       if (!userId) {
-//         toast.error('Could not find user ID');
-//         return;
-//       }
 //       await mappingAPI.updateMapping(userId, mappingData);
-//       await updateJobVacancies(job);
+//       const updatedJob = await updateJobVacancies(job);
+
+//       // Update selectedJobForSearch if it's the same job
+//       if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
+//         setSelectedJobForSearch(updatedJob);
+//       }
 
 //       // Remove from open pool
-//       setTraineesWithNoMatches((prev) =>
-//         prev.filter((t) => t.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
-//       );
+//       setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
 
 //       // Update local trainee lists
-//       const updateTrainee = (t) => {
-//         if (trainee.traineeData) {
-//           return t.traineeData.userInfo.name === trainee.traineeData.userInfo.name
-//             ? { ...t, ...mappingData }
-//             : t;
-//         } else {
-//           return t.traineeData.userInfo.name === trainee.trainee_name ? { ...t, ...mappingData } : t;
-//         }
-//       };
-//       setAllTrainees((prev) => prev.map(updateTrainee));
-//       setTrainees((prev) => prev.filter(updateTrainee));
+//       setAllTrainees((prev) =>
+//         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+//       );
+//       setTrainees((prev) =>
+//         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+//       );
 
 //       // Update jobMatches if open
 //       if (jobMatches) {
 //         const bucket = Object.keys(jobMatches).find((key) =>
-//           jobMatches[key]?.some((m) => m.trainee_name === (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
+//           Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
 //         );
 //         if (bucket) {
 //           setJobMatches((prev) => ({
 //             ...prev,
-//             [bucket]: prev[bucket].filter(
-//               (m) => m.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-//             ),
+//             [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
 //             total_matches: prev.total_matches - 1,
 //           }));
 //         }
 //       }
-//       toast.success(`Mapped ${trainee.traineeData?.userInfo?.name || trainee.trainee_name} to ${job.title}`);
+
+//       // Update searchJobMatches if open
+//       if (searchJobMatches) {
+//         const bucket = Object.keys(searchJobMatches).find((key) =>
+//           Array.isArray(searchJobMatches[key]) && searchJobMatches[key].some((m) => m.trainee_id === userId)
+//         );
+//         if (bucket) {
+//           setSearchJobMatches((prev) => ({
+//             ...prev,
+//             [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+//             total_matches: prev.total_matches - 1,
+//           }));
+//         } else {
+//           // Fallback: remove from all buckets if bucket not found
+//           const newSearchMatches = { ...searchJobMatches };
+//           let removed = false;
+//           Object.keys(newSearchMatches).forEach(key => {
+//             if (Array.isArray(newSearchMatches[key])) {
+//               const filtered = newSearchMatches[key].filter(m => m.trainee_id !== userId);
+//               if (filtered.length !== newSearchMatches[key].length) {
+//                 newSearchMatches[key] = filtered;
+//                 removed = true;
+//               }
+//             }
+//           });
+//           if (removed) {
+//             newSearchMatches.total_matches = (newSearchMatches.total_matches || 0) - 1;
+//             setSearchJobMatches(newSearchMatches);
+//           }
+//         }
+//       }
+
+//       toast.success(`Mapped ${traineeName} to ${job.title}`);
 //     } catch (err) {
-//       toast.error('Failed to map trainee');
+//       console.error('Mapping error:', err);
+//       toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
 //     } finally {
 //       setLoading(false);
 //     }
@@ -4931,12 +7044,7 @@
 //     }
 //   };
 
-//   // Get mapped trainee names (project mapping)
-//   const getMappedTraineeNames = () => {
-//     return allTrainees.filter((t) => t.isMapped).map((t) => t.traineeData?.userInfo?.name || t.name);
-//   };
-
-//   // Fetch job matches (backend now filters out locked/selected)
+//   // Fetch job matches (backend filters out locked/selected)
 //   const fetchJobMatches = async (jobId) => {
 //     setJobMatchesLoading(true);
 //     try {
@@ -4962,16 +7070,43 @@
 //     }
 //   };
 
+//   // Fetch mapped trainees for a job (from UserInfo where projectId matches)
+//   const fetchMappedForJob = async (jobId) => {
+//     try {
+//       const mapped = allTrainees.filter(t => t.isMapped && t.projectId === jobId.toString());
+//       setMappedTrainees(mapped);
+//     } catch (err) {
+//       toast.error('Failed to fetch mapped trainees');
+//     }
+//   };
+
+//   // Fetch rejected trainees for a job (from InterviewLock with status='rejected')
+//   const fetchRejectedForJob = async (jobId) => {
+//     try {
+//       const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected`);
+//       setRejectedTrainees(res.data);
+//     } catch (err) {
+//       toast.error('Failed to fetch rejected trainees');
+//     }
+//   };
+
 //   const handleViewTraineeProfileFromJob = (match) => {
-//     const trainee = allTrainees.find((at) => at.traineeData.userInfo.name === match.trainee_name);
+//     const trainee = allTrainees.find((at) => at.userId === match.trainee_id);
 //     if (trainee) {
 //       setSelectedTrainee(trainee);
-//       setJobMatches(null);
-//       setSelectedJob(null);
+//       setShowJobDetailsModal(false);
 //       fetchTraineeMatches(trainee.id);
 //     } else {
 //       toast.error('Trainee not found');
 //     }
+//   };
+
+//   const handleViewJobDetails = (job) => {
+//     setJobDetailsJob(job);
+//     setJobDetailsTab('overview');
+//     fetchMappedForJob(job.id);
+//     fetchRejectedForJob(job.id);
+//     setShowJobDetailsModal(true);
 //   };
 
 //   const handleViewJobMatches = (job) => {
@@ -5183,21 +7318,48 @@
 //       toast.success('Status updated');
 //       fetchInterviewLocks();
 //       fetchLockStats();
-//       if (activeTab === 'selected') fetchSelectedLocks();
+//       if (activeTab === 'selected') fetchSelectedCandidates();
 //       if (activeTab === 'rejected') fetchRejectedLocks();
 //     } catch (err) {
 //       toast.error('Failed to update status');
 //     }
 //   };
 
-//   const downloadLockReport = (status = '') => {
-//     let url = '/api/interview-locks/report/';
-//     if (status) url += `?status=${status}`;
-//     window.open(url, '_blank');
+//   // Download functions (using axios with auth)
+//   const downloadLockReport = async (status = '') => {
+//     try {
+//       let url = '/interview-locks/report/';
+//       if (status) url += `?status=${status}`;
+//       const response = await api.get(url, { responseType: 'blob' });
+//       const blob = new Blob([response.data], { type: 'text/csv' });
+//       const downloadUrl = window.URL.createObjectURL(blob);
+//       const a = document.createElement('a');
+//       a.href = downloadUrl;
+//       a.download = `interview_locks${status ? '_' + status : ''}.csv`;
+//       document.body.appendChild(a);
+//       a.click();
+//       window.URL.revokeObjectURL(downloadUrl);
+//       document.body.removeChild(a);
+//     } catch (err) {
+//       toast.error('Failed to download report');
+//     }
 //   };
 
-//   const downloadReport = (type) => {
-//     window.open(`/api/reports/${type}/`, '_blank');
+//   const downloadReport = async (type) => {
+//     try {
+//       const response = await api.get(`/reports/${type}/`, { responseType: 'blob' });
+//       const blob = new Blob([response.data], { type: 'text/csv' });
+//       const downloadUrl = window.URL.createObjectURL(blob);
+//       const a = document.createElement('a');
+//       a.href = downloadUrl;
+//       a.download = `${type}_report.csv`;
+//       document.body.appendChild(a);
+//       a.click();
+//       window.URL.revokeObjectURL(downloadUrl);
+//       document.body.removeChild(a);
+//     } catch (err) {
+//       toast.error('Failed to download report');
+//     }
 //   };
 
 //   const fetchInterviewers = async () => {
@@ -5209,10 +7371,36 @@
 //     }
 //   };
 
-//   const fetchSelectedLocks = async () => {
+//   // ========== Selected Candidates (Interview + Direct) ==========
+//   const fetchSelectedCandidates = async () => {
 //     try {
-//       const res = await api.get('/interview-locks/?status=selected');
-//       setSelectedLocks(res.data);
+//       const [locksRes, traineesRes] = await Promise.all([
+//         api.get('/interview-locks/?status=selected'),
+//         Promise.resolve(allTrainees) // already have
+//       ]);
+//       const interviewSelected = locksRes.data;
+//       const directMapped = traineesRes.filter(t => t.isMapped);
+      
+//       // Combine and add source field
+//       const combined = [
+//         ...interviewSelected.map(lock => ({
+//           ...lock,
+//           source: 'Interview',
+//           trainee_id: lock.trainee_id, // string userId
+//           name: lock.trainee_name,
+//           projectName: lock.job_title,
+//         })),
+//         ...directMapped.map(t => ({
+//           trainee_id: t.userId,
+//           trainee_name: t.name,
+//           job_title: t.projectName,
+//           assigned_to_name: 'HR Direct',
+//           interview_datetime: null,
+//           feedback: null,
+//           source: 'Direct',
+//         }))
+//       ];
+//       setSelectedCandidates(combined);
 //     } catch (err) {
 //       toast.error('Failed to fetch selected candidates');
 //     }
@@ -5228,6 +7416,7 @@
 //   };
 
 //   const handleLockForInterview = async () => {
+//     console.log('Locking IDs (before):', selectedTraineeIds);
 //     if (selectedTraineeIds.length === 0) {
 //       toast.error('Select at least one trainee');
 //       return;
@@ -5243,7 +7432,7 @@
 //     try {
 //       setLoading(true);
 //       await api.post('/interview-locks/bulk_create/', {
-//         trainee_ids: selectedTraineeIds,
+//         trainee_ids: selectedTraineeIds.map(id => String(id)), // ensure strings
 //         job_id: selectedJob.id,
 //         interview_datetime: lockInterviewDatetime,
 //         comments: lockComments,
@@ -5255,7 +7444,6 @@
 //       setLockInterviewDatetime('');
 //       setLockComments('');
 //       setAssignedToId('');
-//       // Refresh job matches to remove locked trainees
 //       if (selectedJob) fetchJobMatches(selectedJob.id);
 //     } catch (err) {
 //       toast.error('Failed to lock trainees');
@@ -5264,13 +7452,157 @@
 //     }
 //   };
 
+//   // ==================== Talent Search Functions ====================
+//   const handleJobSelectForSearch = (jobId) => {
+//     const job = jobs.find(j => j.id === parseInt(jobId));
+//     setSelectedJobForSearch(job);
+//     if (job) {
+//       setJobMatchesLoading(true);
+//       api.get(`/matches/${job.id}/`)
+//         .then(res => {
+//           setSearchJobMatches(res.data);
+//           setSelectedSearchTraineeIds([]);
+//           setSelectAll(false);
+//         })
+//         .catch(() => toast.error('Failed to fetch matches'))
+//         .finally(() => setJobMatchesLoading(false));
+//     } else {
+//       setSearchJobMatches(null);
+//     }
+//   };
+
+//   const filteredSearchMatches = () => {
+//     if (!searchJobMatches) return [];
+//     const allMatches = [
+//       ...(searchJobMatches.perfect_match || []),
+//       ...(searchJobMatches.skills_only || []),
+//       ...(searchJobMatches.location_only || []),
+//       ...(searchJobMatches.nearby || []),
+//       ...(searchJobMatches.no_match || []),
+//     ];
+//     return allMatches.filter(m => {
+//       if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
+//       if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
+//       if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
+//       if (searchFilters.skillKeyword) {
+//         const skills = m.matched_skills || [];
+//         if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false;
+//       }
+//       return true;
+//     });
+//   };
+
+//   const handleSelectAllSearch = () => {
+//     const baseFiltered = filteredSearchMatches();
+//     const filtered = baseFiltered.filter(m => {
+//       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+//       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+//     });
+//     if (selectAll) {
+//       setSelectedSearchTraineeIds([]);
+//     } else {
+//       setSelectedSearchTraineeIds(filtered.map(m => m.trainee_id));
+//     }
+//     setSelectAll(!selectAll);
+//   };
+
+//   const handleLockFromSearch = async () => {
+//     if (selectedSearchTraineeIds.length === 0) {
+//       toast.error('Select at least one trainee');
+//       return;
+//     }
+//     if (!lockInterviewDatetime) {
+//       toast.error('Select interview date and time');
+//       return;
+//     }
+//     if (!assignedToId) {
+//       toast.error('Select an interviewer');
+//       return;
+//     }
+//     try {
+//       setLoading(true);
+//       await api.post('/interview-locks/bulk_create/', {
+//         trainee_ids: selectedSearchTraineeIds.map(id => String(id)),
+//         job_id: selectedJobForSearch.id,
+//         interview_datetime: lockInterviewDatetime,
+//         comments: lockComments,
+//         assigned_to: assignedToId,
+//       });
+//       toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
+//       setShowLockModal(false);
+//       setSelectedSearchTraineeIds([]);
+//       setSelectAll(false);
+//       setLockInterviewDatetime('');
+//       setLockComments('');
+//       setAssignedToId('');
+//       handleJobSelectForSearch(selectedJobForSearch.id);
+//     } catch (err) {
+//       toast.error('Failed to lock trainees');
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   const downloadFilteredSearch = () => {
+//     const baseFiltered = filteredSearchMatches();
+//     const filtered = baseFiltered.filter(m => {
+//       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+//       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+//     });
+//     if (filtered.length === 0) {
+//       toast.error('No data to download');
+//       return;
+//     }
+//     const csvRows = [];
+//     csvRows.push(['Trainee Name', 'Location', 'Bucket', 'Skills %', 'Location %', 'Total %', 'Matched Skills'].join(','));
+//     filtered.forEach(m => {
+//       csvRows.push([
+//         `"${m.trainee_name}"`,
+//         `"${m.trainee_location || ''}"`,
+//         m.bucket,
+//         m.skills_percentage,
+//         m.location_percentage,
+//         m.total_percentage,
+//         `"${(m.matched_skills || []).join('; ')}"`,
+//       ].join(','));
+//     });
+//     const csvString = csvRows.join('\n');
+//     const blob = new Blob([csvString], { type: 'text/csv' });
+//     const url = window.URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.href = url;
+//     a.download = `job_matches_${selectedJobForSearch?.title}_filtered.csv`;
+//     document.body.appendChild(a);
+//     a.click();
+//     window.URL.revokeObjectURL(url);
+//     document.body.removeChild(a);
+//   };
+
+//   // ==================== Per‑Job Matching Trigger ====================
+//   const runMatchingEngine = async (jobId = '') => {
+//     try {
+//       setLoading(true);
+//       await api.post('/run-matching/', { job_id: jobId });
+//       toast.success('Matching engine triggered successfully');
+//       if (jobId && selectedJob && selectedJob.id === parseInt(jobId)) {
+//         fetchJobMatches(jobId); // refresh matches if modal is open
+//       }
+//     } catch (err) {
+//       toast.error('Failed to trigger matching engine');
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
 //   // ==================== Effects ====================
 //   useEffect(() => {
-//     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool'].includes(activeTab)) fetchTrainees();
+//     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
+//       fetchTrainees();
+//     }
 //   }, [activeTab]);
 
 //   useEffect(() => {
-//     if (['dashboard', 'jobs', 'createJob'].includes(activeTab)) fetchJobs();
+//     if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
 //   }, [activeTab]);
 
 //   useEffect(() => {
@@ -5280,6 +7612,10 @@
 //   useEffect(() => {
 //     setSkillTrends(computeSkillTrends(jobs));
 //   }, [jobs]);
+
+//   useEffect(() => {
+//     if (activeTab === 'dashboard') fetchLockStats();
+//   }, [activeTab]);
 
 //   // Filter trainees
 //   useEffect(() => {
@@ -5304,7 +7640,6 @@
 //     setTrainees(filtered);
 //   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
 
-//   // Fetch locks when tab changes
 //   useEffect(() => {
 //     if (activeTab === 'interviewLocks') {
 //       fetchInterviewLocks();
@@ -5313,9 +7648,9 @@
 //   }, [activeTab, lockFilter]);
 
 //   useEffect(() => {
-//     if (activeTab === 'selected') fetchSelectedLocks();
+//     if (activeTab === 'selected') fetchSelectedCandidates();
 //     if (activeTab === 'rejected') fetchRejectedLocks();
-//   }, [activeTab]);
+//   }, [activeTab, allTrainees]);
 
 //   // Compute skill trends
 //   const computeSkillTrends = (jobs) => {
@@ -5530,6 +7865,15 @@
 //         <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
 //         <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
 //       </div>
+
+//       {lockStats && (
+//         <div className="stats-grid small" style={{ marginTop: '1rem' }}>
+//           <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
+//           <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
+//           <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
+//         </div>
+//       )}
+
 //       <h2 className="section-title">Top Skills in Demand</h2>
 //       <div className="skills-section">
 //         <div className="content-card">
@@ -5566,6 +7910,27 @@
 //       <div className="section-header">
 //         <div className="header-title"><h2><Briefcase size={24} /> Job Profiles</h2><p className="subtitle">Manage all job positions</p></div>
 //         <div className="header-actions">
+//           {/* Matching controls */}
+//           <div className="matching-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem', width: '100%' }}>
+//             <select
+//               value={selectedJobForMatching}
+//               onChange={(e) => setSelectedJobForMatching(e.target.value)}
+//               className="form-control"
+//               style={{ width: '300px' }}
+//             >
+//               <option value="">All Jobs</option>
+//               {jobs.map(job => (
+//                 <option key={job.id} value={job.id}>{job.title}</option>
+//               ))}
+//             </select>
+//             <button
+//               className="btn-primary"
+//               onClick={() => runMatchingEngine(selectedJobForMatching)}
+//               disabled={loading}
+//             >
+//               <RefreshCw size={18} /> Generate Matches{selectedJobForMatching ? ' for Selected' : ''}
+//             </button>
+//           </div>
 //           <div className="upload-buttons">
 //             <button className="btn-secondary" onClick={() => setShowExcelTemplate(true)} disabled={loading}><FileSpreadsheet size={18} /> Upload Excel</button>
 //             <button className="btn-secondary" onClick={() => setShowWordTemplate(true)} disabled={loading}><File size={18} /> Upload Word</button>
@@ -5592,7 +7957,7 @@
 //                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
 //                   <td><button className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`} onClick={() => toggleJobStatus(job.id)} disabled={loading}>{job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}</button></td>
 //                   <td><div className="action-buttons">
-//                     <button className="btn-icon btn-icon-view" onClick={() => handleViewJobMatches(job)} disabled={loading}><Eye size={16} /></button>
+//                     <button className="btn-icon btn-icon-view" onClick={() => handleViewJobDetails(job)} disabled={loading}><Eye size={16} /></button>
 //                     <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading}><Edit size={16} /></button>
 //                     <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
 //                   </div></td>
@@ -5605,10 +7970,125 @@
 //     </div>
 //   );
 
-//   // Create/Edit Job Form (unchanged – keep your existing one)
+//   // Create/Edit Job Form
 //   const renderCreateJob = () => {
-//     // ... (your existing renderCreateJob function, unchanged) ...
-//     // (I'm omitting it here for brevity, but keep your current implementation)
+//     const jobToEdit = selectedJob || newJob;
+//     const isEditing = !!selectedJob && isEditMode;
+
+//     const handleSubmit = async (e) => {
+//       e.preventDefault();
+//       if (isEditing) {
+//         await handleUpdateJob(jobToEdit);
+//       } else {
+//         await handleCreateJob();
+//       }
+//     };
+
+//     return (
+//       <div className="create-job">
+//         <div className="section-header">
+//           <div className="header-title">
+//             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
+//             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
+//           </div>
+//           <button className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
+//         </div>
+//         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating...' : 'Creating...'}</p></div>}
+//         <div className="form-card">
+//           <form onSubmit={handleSubmit}>
+//             <div className="form-section">
+//               <h3 className="form-section-title"><Briefcase size={20} /> Basic Information</h3>
+//               <div className="form-row">
+//                 <div className="form-group">
+//                   <label><span className="required">*</span> Job Title</label>
+//                   <input type="text" className="form-control" value={jobToEdit.title} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })} required placeholder="e.g., Senior Frontend Developer" disabled={loading} />
+//                 </div>
+//                 <div className="form-group">
+//                   <label><span className="required">*</span> Department</label>
+//                   <select className="form-control" value={jobToEdit.department} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })} required disabled={loading}>
+//                     <option value="">Select Department</option>
+//                     <option value="Technology">Technology</option>
+//                     <option value="Analytics">Analytics</option>
+//                     <option value="Design">Design</option>
+//                     <option value="Operations">Operations</option>
+//                     <option value="Marketing">Marketing</option>
+//                     <option value="Sales">Sales</option>
+//                   </select>
+//                 </div>
+//               </div>
+//               <div className="form-row">
+//                 <div className="form-group">
+//                   <label>Visibility</label>
+//                   <select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}>
+//                     <option value="public">Public</option>
+//                     <option value="private">Private</option>
+//                   </select>
+//                 </div>
+//               </div>
+//               <div className="form-group">
+//                 <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple)</span></label>
+//                 {jobToEdit.location.map((loc, index) => (
+//                   <div key={index} className="location-input-group">
+//                     <input type="text" className="form-control" value={loc} onChange={(e) => { if (isEditing) { const newLocs = [...jobToEdit.location]; newLocs[index] = e.target.value; setSelectedJob({ ...jobToEdit, location: newLocs }); } else updateLocationField(index, e.target.value); }} required={index === 0} placeholder="e.g., Hyderabad" disabled={loading} />
+//                     {jobToEdit.location.length > 1 && <button type="button" className="btn-icon" onClick={() => { if (isEditing) { const newLocs = jobToEdit.location.filter((_, i) => i !== index); setSelectedJob({ ...jobToEdit, location: newLocs }); } else removeLocationField(index); }} disabled={loading}><X size={16} /></button>}
+//                   </div>
+//                 ))}
+//                 <button type="button" className="btn-secondary" onClick={addLocationField} disabled={loading}><Plus size={16} /> Add Another</button>
+//               </div>
+//               <div className="form-row">
+//                 <div className="form-group">
+//                   <label><span className="required">*</span> Openings</label>
+//                   <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
+//                 </div>
+//                 <div className="form-group">
+//                   <label><Calendar size={16} /> Expiry Date</label>
+//                   <input type="date" className="form-control" value={jobToEdit.expiryDate} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })} disabled={loading} />
+//                 </div>
+//               </div>
+//             </div>
+//             <div className="form-section">
+//               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
+//               <div className="form-group">
+//                 <label><span className="required">*</span> Technical Skills</label>
+//                 <div className="skills-input">
+//                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleTechSkillAdd} disabled={loading} />
+//                   <div className="skills-tags">
+//                     {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
+//                       <span key={index} className="skill-tag tech-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button></span>
+//                     ))}
+//                   </div>
+//                 </div>
+//               </div>
+//               <div className="form-group">
+//                 <label>Soft Skills</label>
+//                 <div className="skills-input">
+//                   <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleSoftSkillAdd} disabled={loading} />
+//                   <div className="skills-tags">
+//                     {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
+//                       <span key={index} className="skill-tag soft-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button></span>
+//                     ))}
+//                   </div>
+//                 </div>
+//               </div>
+//               <div className="form-group">
+//                 <label><span className="required">*</span> Job Description</label>
+//                 <textarea className="form-control" rows="4" value={jobToEdit.description} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })} placeholder="Describe the role..." required disabled={loading} />
+//               </div>
+//               <div className="form-group">
+//                 <label><span className="required">*</span> Requirements</label>
+//                 <textarea className="form-control" rows="4" value={jobToEdit.requirements} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })} placeholder="List required qualifications..." required disabled={loading} />
+//               </div>
+//             </div>
+//             <div className="form-actions">
+//               <button type="button" className="btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}>Cancel</button>
+//               <button type="submit" className="btn-primary" disabled={loading}>
+//                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job'}</>}
+//               </button>
+//             </div>
+//           </form>
+//         </div>
+//       </div>
+//     );
 //   };
 
 //   // Trainees List
@@ -5673,116 +8153,259 @@
 //     );
 //   };
 
-//   // Job Modal (view details) – keep your existing one
-//   const renderJobModal = () => {
-//     if (!selectedJob || isEditMode) return null;
-//     const handleDelete = async () => {
-//       if (window.confirm('Delete this job?')) { await handleDeleteJob(selectedJob.id); setSelectedJob(null); }
-//     };
+//   // Job Details Modal
+//   const renderJobDetailsModal = () => {
+//     if (!showJobDetailsModal || !jobDetailsJob) return null;
+
 //     return (
-//       <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
-//         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-//           <div className="modal-header"><div className="modal-title"><Briefcase size={24} /><h2>{selectedJob.title}</h2></div><button className="modal-close" onClick={() => setSelectedJob(null)} disabled={loading}><X size={24} /></button></div>
+//       <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
+//         <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
+//           <div className="modal-header">
+//             <h2><Briefcase size={24} /> {jobDetailsJob.title}</h2>
+//             <button className="modal-close" onClick={() => setShowJobDetailsModal(false)}><X /></button>
+//           </div>
+//           <div className="modal-tabs">
+//             <button className={jobDetailsTab === 'overview' ? 'active' : ''} onClick={() => setJobDetailsTab('overview')}>Overview</button>
+//             <button className={jobDetailsTab === 'mapped' ? 'active' : ''} onClick={() => setJobDetailsTab('mapped')}>Mapped ({mappedTrainees.length})</button>
+//             <button className={jobDetailsTab === 'rejected' ? 'active' : ''} onClick={() => setJobDetailsTab('rejected')}>Rejected ({rejectedTrainees.length})</button>
+//           </div>
 //           <div className="modal-body">
-//             {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
-//             <div className="job-details-grid">
-//               <div className="detail-item"><Building size={16} /><div><span className="detail-label">Department</span><span className="detail-value">{selectedJob.department}</span></div></div>
-//               <div className="detail-item"><MapPin size={16} /><div><span className="detail-label">Location</span><span className="detail-value">{Array.isArray(selectedJob.location) ? selectedJob.location.join(', ') : selectedJob.location}</span></div></div>
-//               <div className="detail-item"><BriefcaseBusiness size={16} /><div><span className="detail-label">Openings</span><span className="detail-value">{selectedJob.openings} ({selectedJob.filled} filled)</span></div></div>
-//               <div className="detail-item"><Dollar size={16} /><div><span className="detail-label">Salary</span><span className="detail-value">{selectedJob.salary}</span></div></div>
-//               <div className="detail-item"><div className={`status-badge status-${selectedJob.status}`}>{selectedJob.status === 'active' ? 'Active' : 'Inactive'}</div></div>
-//               <div className="detail-item"><CalendarDays size={16} /><div><span className="detail-label">Posted</span><span className="detail-value">{selectedJob.postedDate}</span></div></div>
-//               <div className="detail-item"><Calendar size={16} /><div><span className="detail-label">Expires</span><span className="detail-value">{selectedJob.expiryDate}</span></div></div>
-//             </div>
-//             <div className="job-section"><h3>Description</h3><p>{selectedJob.description}</p></div>
-//             <div className="job-section"><h3>Requirements</h3><p>{selectedJob.requirements}</p></div>
-//             <div className="job-section"><h3>Technical Skills</h3><div className="skills-list">{selectedJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}</div></div>
-//             <div className="job-section"><h3>Soft Skills</h3><div className="skills-list">{selectedJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}</div></div>
-//             <div className="modal-actions">
-//               <button className="btn-secondary" onClick={() => setSelectedJob(null)} disabled={loading}>Close</button>
-//               <button className="btn-danger" onClick={handleDelete} disabled={loading}><Trash2 size={18} /> Delete</button>
-//               <button className="btn-primary" onClick={() => { setIsEditMode(true); setActiveTab('createJob'); setTechSkills(selectedJob.techSkills || []); setSoftSkills(selectedJob.softSkills || []); }} disabled={loading}><Edit size={18} /> Edit</button>
-//             </div>
+//             {jobDetailsTab === 'overview' && (
+//               <div className="job-details">
+//                 <p><strong>Department:</strong> {jobDetailsJob.department}</p>
+//                 <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
+//                 <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
+//                 <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
+//                 <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
+//                 <p><strong>Expires:</strong> {jobDetailsJob.expiryDate}</p>
+//                 <p><strong>Salary:</strong> {jobDetailsJob.salary}</p>
+//                 <div className="job-section">
+//                   <h4>Description</h4>
+//                   <p>{jobDetailsJob.description}</p>
+//                 </div>
+//                 <div className="job-section">
+//                   <h4>Requirements</h4>
+//                   <p>{jobDetailsJob.requirements}</p>
+//                 </div>
+//                 <div className="job-section">
+//                   <h4>Technical Skills</h4>
+//                   <div className="skills-list">
+//                     {jobDetailsJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}
+//                   </div>
+//                 </div>
+//                 <div className="job-section">
+//                   <h4>Soft Skills</h4>
+//                   <div className="skills-list">
+//                     {jobDetailsJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}
+//                   </div>
+//                 </div>
+//               </div>
+//             )}
+//             {jobDetailsTab === 'mapped' && (
+//               <div>
+//                 {mappedTrainees.length === 0 ? (
+//                   <p className="no-data">No trainees mapped to this job.</p>
+//                 ) : (
+//                   <div className="trainee-list">
+//                     {mappedTrainees.map(t => (
+//                       <div key={t.id} className="trainee-item">
+//                         <User size={18} />
+//                         <span>{t.name}</span>
+//                         <span className="trainee-location">({t.location})</span>
+//                         <button className="btn-icon" onClick={() => { setSelectedTrainee(t); setShowJobDetailsModal(false); fetchTraineeMatches(t.id); }}><Eye size={16} /></button>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+//               </div>
+//             )}
+//             {jobDetailsTab === 'rejected' && (
+//               <div>
+//                 {rejectedTrainees.length === 0 ? (
+//                   <p className="no-data">No rejected trainees for this job.</p>
+//                 ) : (
+//                   <div className="trainee-list">
+//                     {rejectedTrainees.map(lock => (
+//                       <div key={lock.id} className="trainee-item">
+//                         <User size={18} />
+//                         <span>{lock.trainee_name}</span>
+//                         <span className="trainee-location">({lock.trainee_location})</span>
+//                         {lock.feedback && (
+//                           <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><FileText size={16} /></button>
+//                         )}
+//                         <button className="btn-icon" onClick={() => {
+//                           const trainee = allTrainees.find(t => t.id === lock.trainee);
+//                           if (trainee) { setSelectedTrainee(trainee); setShowJobDetailsModal(false); fetchTraineeMatches(trainee.id); }
+//                         }}><Eye size={16} /></button>
+//                       </div>
+//                     ))}
+//                   </div>
+//                 )}
+//               </div>
+//             )}
+//           </div>
+//           <div className="modal-actions">
+//             <button className="btn-secondary" onClick={() => setShowJobDetailsModal(false)}>Close</button>
 //           </div>
 //         </div>
 //       </div>
 //     );
 //   };
 
-//   // Job Matches Modal (with checkboxes)
-//   const renderJobMatchesModal = () => {
-//     if (!selectedJob || jobMatches === null) return null;
-//     const bucketConfig = {
-//       perfect_match: { title: 'Perfect Match', color: 'bucket-perfect' },
-//       skills_only: { title: 'Skills Only', color: 'bucket-skills' },
-//       location_only: { title: 'Location Only', color: 'bucket-location' },
-//       nearby: { title: 'Nearby', color: 'bucket-nearby' },
-//       no_match: { title: 'No Match', color: 'bucket-no-match' },
-//     };
-//     // We don't filter by mappedTraineeNames here because backend already excludes locked/selected.
+//   // Trainee Profile Modal
+//   const renderTraineeModal = () => {
+//     if (!selectedTrainee) return null;
+//     const traineeData = selectedTrainee.traineeData || selectedTrainee;
+//     const userInfo = traineeData.userInfo || {};
+
 //     return (
-//       <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>
-//         <div className="modal-content job-matches-modal" onClick={(e) => e.stopPropagation()}>
+//       <div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>
+//         <div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}>
 //           <div className="modal-header">
-//             <div className="modal-title"><Users size={24} /><div><h2>{jobMatches.job_title} - Matches</h2><p className="subtitle">Total Matches: {jobMatches.total_matches}</p></div></div>
-//             <button className="modal-close" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}><X size={24} /></button>
+//             <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div>
+//             <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
 //           </div>
 //           <div className="modal-body">
-//             {jobMatchesLoading ? <div className="loading-state">...</div> : (
+//             {traineeMatchesLoading ? (
+//               <div className="loading-state"><div className="loading-spinner"></div><p>Loading trainee matches...</p></div>
+//             ) : (
 //               <>
-//                 <div className="modal-actions" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
-//                   <span>Selected: {selectedTraineeIds.length}</span>
-//                   <button className="btn-primary" onClick={() => { fetchInterviewers(); setShowLockModal(true); }} disabled={selectedTraineeIds.length === 0}>
-//                     <Lock size={18} /> Lock for Interview ({selectedTraineeIds.length})
-//                   </button>
-//                 </div>
-//                 <div className="job-matches-content">
-//                   {Object.entries(bucketConfig).map(([bucketKey, config]) => {
-//                     const bucketData = jobMatches[bucketKey];
-//                     if (!bucketData || bucketData.length === 0) return null;
-//                     return (
-//                       <div key={bucketKey} className={`bucket-section ${config.color}`}>
-//                         <h3 className="bucket-title">{config.title} ({bucketData.length})</h3>
-//                         <div className="bucket-grid">
-//                           {bucketData.map((match) => (
-//                             <div key={match.id || match.trainee_id} className="trainee-match-card">
-//                               <input type="checkbox" className="trainee-checkbox" checked={selectedTraineeIds.includes(match.trainee_id)} onChange={(e) => {
-//                                 if (e.target.checked) setSelectedTraineeIds([...selectedTraineeIds, match.trainee_id]);
-//                                 else setSelectedTraineeIds(selectedTraineeIds.filter(id => id !== match.trainee_id));
-//                               }} />
-//                               <div className="match-percentage">{match.total_percentage.toFixed(1)}%</div>
-//                               <div className="bucket-tag">{match.bucket?.replace('_', ' ') || config.title}</div>
-//                               <h4>{match.trainee_name}</h4>
-//                               <div className="match-breakdown"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span></div>
-//                               <p className="location-info"><MapPin size={14} /> {match.trainee_location}</p>
-//                               <div className="match-actions">
-//                                 <button className="view-trainee-btn" onClick={() => handleViewTraineeProfileFromJob(match)}><User size={16} /> Profile</button>
-//                                 <button className="map-to-project-btn" onClick={() => {
-//                                   if (selectedJob.openings <= 0) { toast.error('No openings'); return; }
-//                                   handleMapToProject(match, selectedJob);
-//                                 }} disabled={selectedJob.openings <= 0}><Link size={16} /> {selectedJob.openings <= 0 ? 'Job Full' : 'Map'}
-//                                 </button>
-//                               </div>
-//                             </div>
-//                           ))}
-//                         </div>
+//                 <div className="trainee-details-section">
+//                   <div className="mapping-status-section">
+//                     <h4>Project Mapping</h4>
+//                     <div className={`mapping-status ${selectedTrainee.isMapped ? 'mapped' : 'unmapped'}`}>
+//                       <div className="status-indicator">
+//                         {selectedTrainee.isMapped ? (
+//                           <><CheckCircle size={20} /><div><strong>Mapped to Project</strong><p>{selectedTrainee.projectName || 'Unknown Project'}</p><small>Project ID: {selectedTrainee.projectId || 'N/A'}</small></div></>
+//                         ) : (
+//                           <><AlertCircle size={20} /><div><strong>Not Assigned</strong><p>This trainee is available for project assignment</p></div></>
+//                         )}
 //                       </div>
-//                     );
-//                   })}
+//                       {selectedTrainee.isMapped ? (
+//                         <button className="btn-danger" onClick={() => handleUnmapFromProject(selectedTrainee)} disabled={loading}>
+//                           <X size={18} /> Unmap
+//                         </button>
+//                       ) : (
+//                         <div className="available-for-mapping"><p>Available for mapping</p></div>
+//                       )}
+//                     </div>
+//                   </div>
+//                   <div className="profile-header">
+//                     <div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div>
+//                     <div className="profile-info">
+//                       <h3>{userInfo.name || selectedTrainee.name}</h3>
+//                       <div className="profile-role">TRAINEE</div>
+//                       <div className="profile-meta">
+//                         <span className="profile-meta-item"><MapPin size={16} /> {userInfo.location || selectedTrainee.location}</span>
+//                         <span className="profile-meta-item"><Mail size={16} /> {selectedTrainee.email}</span>
+//                         <span className="profile-meta-item"><Target size={16} /> DPI: {traineeData.dpi || 'N/A'}</span>
+//                         <span className="profile-meta-item"><BarChart2 size={16} /> Score: {userInfo.averageScore || selectedTrainee.score}%</span>
+//                       </div>
+//                     </div>
+//                   </div>
+//                   <div className="trainee-details-grid">
+//                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
+//                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
+//                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
+//                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
+//                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
+//                     <div className="detail-item"><span className="detail-label">Avg Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
+//                   </div>
+//                   <div className="skills-section">
+//                     <h4>Strengths</h4>
+//                     <div className="skills-list">
+//                       {traineeData.strengths?.map((strength, index) => (
+//                         <span key={index} className="skill-tag tech-tag">{strength.courseName} ({strength.avgScore}%)</span>
+//                       )) || <span className="no-data">None</span>}
+//                     </div>
+//                     <h4>Weaknesses</h4>
+//                     <div className="skills-list">
+//                       {traineeData.weaknesses?.map((weakness, index) => (
+//                         <span key={index} className="skill-tag soft-tag">{weakness.courseName} ({weakness.avgScore}%)</span>
+//                       )) || <span className="no-data">None</span>}
+//                     </div>
+//                     <h4>Certificates</h4>
+//                     <div className="skills-list">
+//                       {traineeData.certificates ? <span className="skill-tag">{traineeData.certificates}</span> : <span className="no-data">None</span>}
+//                     </div>
+//                   </div>
 //                 </div>
+//                 {!selectedTrainee.isMapped && (
+//                   <div className="projects-section">
+//                     <div className="projects-header">
+//                       <h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3>
+//                     </div>
+//                     {traineeMatches ? (
+//                       <>
+//                         {traineeMatches.total_matches === 0 ? (
+//                           <div className="no-matches open-pool-message">
+//                             <Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p>
+//                             <div className="open-pool-info"><p><strong>Open Pool</strong></p>
+//                               <button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button>
+//                             </div>
+//                           </div>
+//                         ) : (
+//                           <>
+//                             {traineeMatches.perfect_match?.length > 0 && (
+//                               <div className="bucket-section bucket-perfect">
+//                                 <h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3>
+//                                 <div className="projects-grid">
+//                                   {traineeMatches.perfect_match.map((match) => {
+//                                     const job = jobs.find(j => j.id === match.job_id);
+//                                     if (job && job.openings <= 0) return null;
+//                                     return (
+//                                       <div key={match.match_id} className="project-match-card">
+//                                         <div className="match-card-header">
+//                                           <div className="project-title">
+//                                             <h4>{match.job_title}</h4>
+//                                             <div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div>
+//                                           </div>
+//                                           <div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div>
+//                                         </div>
+//                                         <div className="match-details">
+//                                           <span>Skills: {match.skills_percentage.toFixed(1)}%</span>
+//                                           <span>Location: {match.location_percentage.toFixed(1)}%</span>
+//                                           <span><Calendar size={14} /> Posted: {match.posted_date}</span>
+//                                         </div>
+//                                         <div className="project-actions">
+//                                           <button className="map-to-project-btn" onClick={() => {
+//                                             const job = jobs.find(j => j.id === match.job_id);
+//                                             if (job) {
+//                                               if (job.openings <= 0) { toast.error('No openings'); return; }
+//                                               handleMapToProject(selectedTrainee, job);
+//                                             }
+//                                           }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Full' : 'Map'}</button>
+//                                         </div>
+//                                       </div>
+//                                     );
+//                                   })}
+//                                 </div>
+//                               </div>
+//                             )}
+//                             {/* Similarly for skills_only, location_only, nearby, no_match – can be added if needed */}
+//                           </>
+//                         )}
+//                       </>
+//                     ) : (
+//                       <div className="no-matches-data">
+//                         <Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p>
+//                         <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+//                       </div>
+//                     )}
+//                   </div>
+//                 )}
 //               </>
 //             )}
 //           </div>
-//           <div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>Close</button></div>
+//           <div className="modal-footer">
+//             <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
+//             {!selectedTrainee.isMapped && !traineeMatches && !traineeMatchesLoading && (
+//               <button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button>
+//             )}
+//           </div>
 //         </div>
 //       </div>
 //     );
-//   };
-
-//   // Trainee Profile Modal – keep your existing one (omitted for brevity)
-//   const renderTraineeModal = () => {
-//     // ... (your existing code) ...
-//     return null; // placeholder – keep your full version
 //   };
 
 //   // Interview Locks Tab
@@ -5854,41 +8477,100 @@
 //             </table>
 //           </div>
 //         )}
+//         <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+//           <button className="btn-secondary" onClick={() => {
+//             const filtered = interviewLocks;
+//             if (filtered.length === 0) { toast.error('No data to download'); return; }
+//             const csvRows = [];
+//             csvRows.push(['Trainee Name','Job Title','Interviewer','Interview DateTime','Status','Comments','Locked By','Created At'].join(','));
+//             filtered.forEach(lock => {
+//               csvRows.push([
+//                 `"${lock.trainee_name}"`,
+//                 `"${lock.job_title}"`,
+//                 `"${lock.assigned_to_name || ''}"`,
+//                 lock.interview_datetime,
+//                 lock.status,
+//                 `"${lock.comments || ''}"`,
+//                 `"${lock.locked_by_name || ''}"`,
+//                 lock.created_at,
+//               ].join(','));
+//             });
+//             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+//             const url = window.URL.createObjectURL(blob);
+//             const a = document.createElement('a');
+//             a.href = url;
+//             a.download = `interview_locks_filtered.csv`;
+//             document.body.appendChild(a);
+//             a.click();
+//             window.URL.revokeObjectURL(url);
+//             document.body.removeChild(a);
+//           }}><Download size={18} /> Download Filtered</button>
+//         </div>
 //       </div>
 //     );
 //   };
 
-//   // Selected Tab
+//   // Selected Tab (Interview + Direct Mapping)
 //   const renderSelected = () => (
 //     <div className="selected-tab">
 //       <div className="section-header">
 //         <h2><CheckCircle size={24} /> Selected Candidates</h2>
-//         <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><Download size={18} /> Download Selected</button>
+//         <div style={{ display: 'flex', gap: '1rem' }}>
+//           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+//             <option value="">All Jobs</option>
+//             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+//           </select>
+//           <button className="btn-secondary" onClick={async () => {
+//             const filtered = selectedCandidates; // already filtered by job if job filter set? We'll implement simple download of all selected
+//             if (filtered.length === 0) { toast.error('No data to download'); return; }
+//             const csvRows = [];
+//             csvRows.push(['Trainee Name','Project','Source','Interviewer','Interview Date'].join(','));
+//             filtered.forEach(c => {
+//               csvRows.push([
+//                 `"${c.trainee_name}"`,
+//                 `"${c.job_title || c.projectName}"`,
+//                 c.source,
+//                 c.assigned_to_name || '',
+//                 c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '',
+//               ].join(','));
+//             });
+//             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+//             const url = window.URL.createObjectURL(blob);
+//             const a = document.createElement('a');
+//             a.href = url;
+//             a.download = 'selected_candidates.csv';
+//             document.body.appendChild(a);
+//             a.click();
+//             window.URL.revokeObjectURL(url);
+//             document.body.removeChild(a);
+//           }}><Download size={18} /> Download All</button>
+//         </div>
 //       </div>
 //       <div className="table-container">
 //         <table className="data-table">
-//           <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+//           <thead><tr><th>Trainee</th><th>Project</th><th>Source</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
 //           <tbody>
-//             {selectedLocks.map(lock => (
-//               <tr key={lock.id}>
-//                 <td>{lock.trainee_name}</td>
-//                 <td>{lock.job_title}</td>
-//                 <td>{lock.assigned_to_name || '-'}</td>
-//                 <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+//             {selectedCandidates.map((c, idx) => (
+//               <tr key={c.trainee_id || idx}>
+//                 <td>{c.trainee_name}</td>
+//                 <td>{c.job_title || c.projectName}</td>
+//                 <td><span className={`source-badge source-${c.source === 'Interview' ? 'interview' : 'direct'}`}>{c.source}</span></td>
+//                 <td>{c.assigned_to_name || (c.source === 'Direct' ? 'HR Direct' : '-')}</td>
+//                 <td>{c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '-'}</td>
 //                 <td>
-//                   {lock.feedback ? (
-//                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+//                   {c.feedback ? (
+//                     <button className="btn-icon" onClick={() => setViewingFeedback(c.feedback)}><Eye size={16} /></button>
 //                   ) : '-'}
 //                 </td>
 //                 <td>
 //                   <button className="btn-icon" onClick={() => {
-//                     const trainee = allTrainees.find(t => t.id === lock.trainee);
+//                     const trainee = allTrainees.find(t => t.userId === c.trainee_id);
 //                     if (trainee) handleViewTraineeProfile(trainee);
 //                   }}><User size={16} /></button>
 //                 </td>
 //               </tr>
 //             ))}
-//             {selectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No selected candidates</td></tr>}
+//             {selectedCandidates.length === 0 && <tr><td colSpan="7" className="no-data">No selected candidates</td></tr>}
 //           </tbody>
 //         </table>
 //       </div>
@@ -5900,7 +8582,36 @@
 //     <div className="rejected-tab">
 //       <div className="section-header">
 //         <h2><XCircle size={24} /> Rejected Candidates</h2>
-//         <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><Download size={18} /> Download Rejected</button>
+//         <div style={{ display: 'flex', gap: '1rem' }}>
+//           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+//             <option value="">All Jobs</option>
+//             {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+//           </select>
+//           <button className="btn-secondary" onClick={async () => {
+//             const filtered = rejectedLocks;
+//             if (filtered.length === 0) { toast.error('No data to download'); return; }
+//             const csvRows = [];
+//             csvRows.push(['Trainee Name','Job','Interviewer','Interview Date','Comments'].join(','));
+//             filtered.forEach(lock => {
+//               csvRows.push([
+//                 `"${lock.trainee_name}"`,
+//                 `"${lock.job_title}"`,
+//                 `"${lock.assigned_to_name || ''}"`,
+//                 lock.interview_datetime ? new Date(lock.interview_datetime).toLocaleString() : '',
+//                 `"${lock.comments || ''}"`,
+//               ].join(','));
+//             });
+//             const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+//             const url = window.URL.createObjectURL(blob);
+//             const a = document.createElement('a');
+//             a.href = url;
+//             a.download = 'rejected_candidates.csv';
+//             document.body.appendChild(a);
+//             a.click();
+//             window.URL.revokeObjectURL(url);
+//             document.body.removeChild(a);
+//           }}><Download size={18} /> Download All</button>
+//         </div>
 //       </div>
 //       <div className="table-container">
 //         <table className="data-table">
@@ -6003,11 +8714,208 @@
 //     );
 //   };
 
+//   // Talent Search Tab
+//   const renderTalentSearch = () => {
+//     const baseFiltered = filteredSearchMatches();
+//     const filtered = baseFiltered.filter(m => {
+//       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+//       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+//     });
+//     return (
+//       <div className="talent-search">
+//         <div className="section-header">
+//           <h2><Users size={24} /> Talent Search</h2>
+//           <p className="subtitle">Find the best candidates for your job</p>
+//         </div>
+
+//         <div className="search-job-selector">
+//           <label>Select Job:</label>
+//           <select
+//             className="form-control"
+//             value={selectedJobForSearch?.id || ''}
+//             onChange={(e) => handleJobSelectForSearch(e.target.value)}
+//             style={{ maxWidth: '400px' }}
+//           >
+//             <option value="">-- Choose a job --</option>
+//             {jobs.map(job => (
+//               <option key={job.id} value={job.id}>{job.title} (Openings: {job.openings})</option>
+//             ))}
+//           </select>
+//         </div>
+
+//         {selectedJobForSearch && (
+//           <>
+//             <div className="filters-panel">
+//               <div className="filter-row">
+//                 <div className="filter-group">
+//                   <label>Bucket</label>
+//                   <select
+//                     className="filter-select"
+//                     value={searchFilters.bucket}
+//                     onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}
+//                   >
+//                     <option value="">All Buckets</option>
+//                     <option value="PERFECT_MATCH">Perfect Match</option>
+//                     <option value="SKILLS_ONLY">Skills Only</option>
+//                     <option value="LOCATION_ONLY">Location Only</option>
+//                     <option value="NEARBY">Nearby</option>
+//                     <option value="NO_MATCH">No Match</option>
+//                   </select>
+//                 </div>
+//                 <div className="filter-group">
+//                   <label>Location</label>
+//                   <input
+//                     type="text"
+//                     className="form-control"
+//                     placeholder="Filter by location"
+//                     value={searchFilters.location}
+//                     onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
+//                   />
+//                 </div>
+//                 <div className="filter-group">
+//                   <label>Min Total %</label>
+//                   <input
+//                     type="number"
+//                     className="form-control"
+//                     min="0"
+//                     max="100"
+//                     value={searchFilters.minTotal}
+//                     onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })}
+//                   />
+//                 </div>
+//                 <div className="filter-group">
+//                   <label>Skill Keyword</label>
+//                   <input
+//                     type="text"
+//                     className="form-control"
+//                     placeholder="e.g., React"
+//                     value={searchFilters.skillKeyword}
+//                     onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })}
+//                   />
+//                 </div>
+//                 <button className="btn-icon" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}>
+//                   <X size={18} /> Clear
+//                 </button>
+//               </div>
+//             </div>
+
+//             <div className="table-actions">
+//               <div>
+//                 <input
+//                   type="checkbox"
+//                   checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(m.trainee_id))}
+//                   onChange={handleSelectAllSearch}
+//                 /> Select All ({filtered.length} matches)
+//               </div>
+//               <div className="action-buttons">
+//                 <button
+//                   className="btn-primary"
+//                   onClick={() => {
+//                     fetchInterviewers();
+//                     setShowLockModal(true);
+//                   }}
+//                   disabled={selectedSearchTraineeIds.length === 0}
+//                 >
+//                   <Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})
+//                 </button>
+//                 <button className="btn-secondary" onClick={downloadFilteredSearch} disabled={filtered.length === 0}>
+//                   <Download size={18} /> Download Filtered
+//                 </button>
+//               </div>
+//             </div>
+
+//             {jobMatchesLoading ? (
+//               <div className="loading-overlay"><div className="loading-spinner"></div></div>
+//             ) : (
+//               <div className="table-container">
+//                 <table className="data-table">
+//                   <thead>
+//                     <tr>
+//                       <th>Select</th>
+//                       <th>Trainee Name</th>
+//                       <th>Location</th>
+//                       <th>Bucket</th>
+//                       <th>Skills %</th>
+//                       <th>Location %</th>
+//                       <th>Total %</th>
+//                       <th>Matched Skills</th>
+//                       <th>Actions</th>
+//                     </tr>
+//                   </thead>
+//                   <tbody>
+//                     {filtered.map((match) => (
+//                       <tr key={match.trainee_id}>
+//                         <td>
+//                           <input
+//                             type="checkbox"
+//                             checked={selectedSearchTraineeIds.includes(match.trainee_id)}
+//                             onChange={(e) => {
+//                               if (e.target.checked) {
+//                                 setSelectedSearchTraineeIds([...selectedSearchTraineeIds, match.trainee_id]);
+//                               } else {
+//                                 setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(id => id !== match.trainee_id));
+//                                 setSelectAll(false);
+//                               }
+//                             }}
+//                           />
+//                         </td>
+//                         <td><span className="font-medium">{match.trainee_name}</span></td>
+//                         <td>{match.trainee_location}</td>
+//                         <td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket?.replace('_', ' ')}</span></td>
+//                         <td>{match.skills_percentage.toFixed(1)}%</td>
+//                         <td>{match.location_percentage.toFixed(1)}%</td>
+//                         <td><strong>{match.total_percentage.toFixed(1)}%</strong></td>
+//                         <td>
+//                           {match.matched_skills?.length > 0
+//                             ? match.matched_skills.join(', ')
+//                             : '-'}
+//                         </td>
+//                         <td>
+//                           <div className="action-buttons">
+//                             <button
+//                               className="btn-icon btn-icon-view"
+//                               onClick={() => handleViewTraineeProfileFromJob(match)}
+//                               title="View Profile"
+//                             >
+//                               <User size={16} />
+//                             </button>
+//                             <button
+//                               className="btn-icon btn-icon-map"
+//                               onClick={() => {
+//                                 if (selectedJobForSearch.openings <= 0) {
+//                                   toast.error('No openings');
+//                                   return;
+//                                 }
+//                                 handleMapToProject(match, selectedJobForSearch);
+//                               }}
+//                               disabled={selectedJobForSearch.openings <= 0}
+//                               title="Map to Project"
+//                             >
+//                               <Link size={16} />
+//                             </button>
+//                           </div>
+//                         </td>
+//                       </tr>
+//                     ))}
+//                     {filtered.length === 0 && (
+//                       <tr><td colSpan="9" className="no-data">No matches match your filters</td></tr>
+//                     )}
+//                   </tbody>
+//                 </table>
+//               </div>
+//             )}
+//           </>
+//         )}
+//       </div>
+//     );
+//   };
+
 //   // Sidebar items
 //   const sidebarItems = [
 //     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
 //     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
 //     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
+//     { id: 'talentSearch', label: 'Talent Search', icon: <Search size={20} /> },
 //     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
 //     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
 //     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
@@ -6023,12 +8931,10 @@
 //       case 'unmapped':
 //       case 'openPool':
 //         return renderTraineesList();
-//       case 'interviewLocks':
-//         return renderInterviewLocks();
-//       case 'selected':
-//         return renderSelected();
-//       case 'rejected':
-//         return renderRejected();
+//       case 'talentSearch': return renderTalentSearch();
+//       case 'interviewLocks': return renderInterviewLocks();
+//       case 'selected': return renderSelected();
+//       case 'rejected': return renderRejected();
 //       default: return renderDashboard();
 //     }
 //   };
@@ -6052,8 +8958,7 @@
 //       {renderHiddenFileInputs()}
 //       {renderExcelTemplateModal()}
 //       {renderWordTemplateModal()}
-//       {renderJobModal()}
-//       {renderJobMatchesModal()}
+//       {renderJobDetailsModal()}
 //       {renderTraineeModal()}
 //       {renderLockInterviewModal()}
 //       {renderFeedbackModal()}
@@ -6064,7 +8969,8 @@
 // export default DashboardHR;
 
 
-// DashboardHR.js – Fully corrected version
+
+// DashboardHR.js – FINAL VERSION with all fixes and enhancements
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import {
@@ -6121,6 +9027,10 @@ import {
   Users2,
   Lock,
   XCircle,
+  Sliders,
+  Grid,
+  List,
+  RefreshCw,
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import api from '../api/axios';
@@ -6129,7 +9039,7 @@ import './styles/HrDashboard.css';
 function DashboardHR({ userData, onLogout }) {
   // ==================== Core State ====================
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null); // for edit or job details modal
   const [selectedTrainee, setSelectedTrainee] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showExcelTemplate, setShowExcelTemplate] = useState(false);
@@ -6171,10 +9081,17 @@ function DashboardHR({ userData, onLogout }) {
   const [lockStats, setLockStats] = useState(null);
   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
 
-  // Selected & Rejected lists
-  const [selectedLocks, setSelectedLocks] = useState([]);
+  // Selected & Rejected lists (combined)
+  const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [rejectedLocks, setRejectedLocks] = useState([]);
-  const [viewingFeedback, setViewingFeedback] = useState(null); // for feedback modal
+  const [viewingFeedback, setViewingFeedback] = useState(null);
+
+  // Job Details Modal
+  const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
+  const [jobDetailsJob, setJobDetailsJob] = useState(null);
+  const [jobDetailsTab, setJobDetailsTab] = useState('overview');
+  const [mappedTrainees, setMappedTrainees] = useState([]);
+  const [rejectedTrainees, setRejectedTrainees] = useState([]);
 
   // New Job State
   const [newJob, setNewJob] = useState({
@@ -6190,6 +9107,30 @@ function DashboardHR({ userData, onLogout }) {
     expiryDate: '',
     is_public: true,
   });
+
+  // ========== Talent Search Tab State ==========
+  const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
+  const [searchJobMatches, setSearchJobMatches] = useState(null);
+  const [searchFilters, setSearchFilters] = useState({
+    bucket: '',
+    location: '',
+    minTotal: 0,
+    skillKeyword: '',
+  });
+  const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+
+  // ========== Analytics State ==========
+  const [totalMatchesCount, setTotalMatchesCount] = useState(0);
+  const [avgMatchPercent, setAvgMatchPercent] = useState(0);
+  const [bucketDistribution, setBucketDistribution] = useState({
+    PERFECT_MATCH: 0,
+    SKILLS_ONLY: 0,
+    LOCATION_ONLY: 0,
+    NEARBY: 0,
+    NO_MATCH: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState([]); // recent locks/mappings
 
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
@@ -6346,69 +9287,119 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // Map trainee to project
-  const handleMapToProject = async (trainee, job) => {
+  // Map trainee to project (used by Talent Search and Job Matches)
+  const handleMapToProject = async (traineeOrMatch, job) => {
     try {
       setLoading(true);
+      let userId = null;
+      let traineeName = '';
+
+      if (traineeOrMatch.traineeData) {
+        userId = traineeOrMatch.traineeData.userInfo.userId;
+        traineeName = traineeOrMatch.name;
+      } else {
+        const match = traineeOrMatch;
+        const found = allTrainees.find(t => t.userId === match.trainee_id);
+        if (found) {
+          userId = found.userId;
+          traineeName = found.name;
+        } else {
+          toast.error('Trainee not found in local data');
+          console.error('Trainee not found for userId:', match.trainee_id);
+          return;
+        }
+      }
+
+      if (!userId) {
+        toast.error('Could not find user ID');
+        return;
+      }
+
+      // Check if job still has openings
+      if (job.openings <= 0) {
+        toast.error('No openings left for this job');
+        return;
+      }
+
       const mappingData = {
         isMapped: true,
         projectId: job.id.toString(),
         projectName: job.title,
       };
-      let userId = null;
-      if (trainee.traineeData) {
-        userId = trainee.traineeData.userInfo.userId;
-      } else {
-        const found = allTrainees.find(
-          (t) =>
-            t.traineeData.userInfo.name === trainee.trainee_name &&
-            t.traineeData.userInfo.location === trainee.trainee_location
-        );
-        if (found) userId = found.traineeData.userInfo.userId;
-      }
-      if (!userId) {
-        toast.error('Could not find user ID');
-        return;
-      }
       await mappingAPI.updateMapping(userId, mappingData);
-      await updateJobVacancies(job);
+      const updatedJob = await updateJobVacancies(job);
+
+      // Update selectedJobForSearch if it's the same job
+      if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
+        setSelectedJobForSearch(updatedJob);
+      }
 
       // Remove from open pool
-      setTraineesWithNoMatches((prev) =>
-        prev.filter((t) => t.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
-      );
+      setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
 
       // Update local trainee lists
-      const updateTrainee = (t) => {
-        if (trainee.traineeData) {
-          return t.traineeData.userInfo.name === trainee.traineeData.userInfo.name
-            ? { ...t, ...mappingData }
-            : t;
-        } else {
-          return t.traineeData.userInfo.name === trainee.trainee_name ? { ...t, ...mappingData } : t;
-        }
-      };
-      setAllTrainees((prev) => prev.map(updateTrainee));
-      setTrainees((prev) => prev.filter(updateTrainee));
+      setAllTrainees((prev) =>
+        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+      );
+      setTrainees((prev) =>
+        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+      );
 
       // Update jobMatches if open
       if (jobMatches) {
         const bucket = Object.keys(jobMatches).find((key) =>
-          jobMatches[key]?.some((m) => m.trainee_name === (trainee.traineeData?.userInfo?.name || trainee.trainee_name))
+          Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
         );
         if (bucket) {
           setJobMatches((prev) => ({
             ...prev,
-            [bucket]: prev[bucket].filter(
-              (m) => m.trainee_name !== (trainee.traineeData?.userInfo?.name || trainee.trainee_name)
-            ),
+            [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
             total_matches: prev.total_matches - 1,
           }));
         }
       }
-      toast.success(`Mapped ${trainee.traineeData?.userInfo?.name || trainee.trainee_name} to ${job.title}`);
+
+      // Update searchJobMatches if open
+      if (searchJobMatches) {
+        const bucket = Object.keys(searchJobMatches).find((key) =>
+          Array.isArray(searchJobMatches[key]) && searchJobMatches[key].some((m) => m.trainee_id === userId)
+        );
+        if (bucket) {
+          setSearchJobMatches((prev) => ({
+            ...prev,
+            [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+            total_matches: prev.total_matches - 1,
+          }));
+        } else {
+          // Fallback: remove from all buckets if bucket not found
+          const newSearchMatches = { ...searchJobMatches };
+          let removed = false;
+          Object.keys(newSearchMatches).forEach(key => {
+            if (Array.isArray(newSearchMatches[key])) {
+              const filtered = newSearchMatches[key].filter(m => m.trainee_id !== userId);
+              if (filtered.length !== newSearchMatches[key].length) {
+                newSearchMatches[key] = filtered;
+                removed = true;
+              }
+            }
+          });
+          if (removed) {
+            newSearchMatches.total_matches = (newSearchMatches.total_matches || 0) - 1;
+            setSearchJobMatches(newSearchMatches);
+          }
+        }
+      }
+
+      // Add to recent activity
+      setRecentActivity(prev => [
+        { type: 'Mapped', trainee: traineeName, job: job.title, time: new Date().toLocaleString() },
+        ...prev.slice(0, 4)
+      ]);
+
+      toast.success(`Mapped ${traineeName} to ${job.title}`);
     } catch (err) {
-      toast.error('Failed to map trainee');
+      console.error('Mapping error:', err);
+      toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -6445,12 +9436,7 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // Get mapped trainee names (project mapping)
-  const getMappedTraineeNames = () => {
-    return allTrainees.filter((t) => t.isMapped).map((t) => t.traineeData?.userInfo?.name || t.name);
-  };
-
-  // Fetch job matches (backend now filters out locked/selected)
+  // Fetch job matches (backend filters out locked/selected)
   const fetchJobMatches = async (jobId) => {
     setJobMatchesLoading(true);
     try {
@@ -6476,16 +9462,43 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
+  // Fetch mapped trainees for a job (from UserInfo where projectId matches)
+  const fetchMappedForJob = async (jobId) => {
+    try {
+      const mapped = allTrainees.filter(t => t.isMapped && t.projectId === jobId.toString());
+      setMappedTrainees(mapped);
+    } catch (err) {
+      toast.error('Failed to fetch mapped trainees');
+    }
+  };
+
+  // Fetch rejected trainees for a job (from InterviewLock with status='rejected')
+  const fetchRejectedForJob = async (jobId) => {
+    try {
+      const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected`);
+      setRejectedTrainees(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch rejected trainees');
+    }
+  };
+
   const handleViewTraineeProfileFromJob = (match) => {
-    const trainee = allTrainees.find((at) => at.traineeData.userInfo.name === match.trainee_name);
+    const trainee = allTrainees.find((at) => at.userId === match.trainee_id);
     if (trainee) {
       setSelectedTrainee(trainee);
-      setJobMatches(null);
-      setSelectedJob(null);
+      setShowJobDetailsModal(false);
       fetchTraineeMatches(trainee.id);
     } else {
       toast.error('Trainee not found');
     }
+  };
+
+  const handleViewJobDetails = (job) => {
+    setJobDetailsJob(job);
+    setJobDetailsTab('overview');
+    fetchMappedForJob(job.id);
+    fetchRejectedForJob(job.id);
+    setShowJobDetailsModal(true);
   };
 
   const handleViewJobMatches = (job) => {
@@ -6697,21 +9710,48 @@ function DashboardHR({ userData, onLogout }) {
       toast.success('Status updated');
       fetchInterviewLocks();
       fetchLockStats();
-      if (activeTab === 'selected') fetchSelectedLocks();
+      if (activeTab === 'selected') fetchSelectedCandidates();
       if (activeTab === 'rejected') fetchRejectedLocks();
     } catch (err) {
       toast.error('Failed to update status');
     }
   };
 
-  const downloadLockReport = (status = '') => {
-    let url = `${api.defaults.baseURL}/interview-locks/report/`;
-    if (status) url += `?status=${status}`;
-    window.open(url, '_blank');
+  // Download functions (using axios with auth)
+  const downloadLockReport = async (status = '') => {
+    try {
+      let url = '/interview-locks/report/';
+      if (status) url += `?status=${status}`;
+      const response = await api.get(url, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `interview_locks${status ? '_' + status : ''}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error('Failed to download report');
+    }
   };
 
-  const downloadReport = (type) => {
-    window.open(`${api.defaults.baseURL}/reports/${type}/`, '_blank');
+  const downloadReport = async (type) => {
+    try {
+      const response = await api.get(`/reports/${type}/`, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `${type}_report.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      toast.error('Failed to download report');
+    }
   };
 
   const fetchInterviewers = async () => {
@@ -6723,10 +9763,36 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  const fetchSelectedLocks = async () => {
+  // ========== Selected Candidates (Interview + Direct) ==========
+  const fetchSelectedCandidates = async () => {
     try {
-      const res = await api.get('/interview-locks/?status=selected');
-      setSelectedLocks(res.data);
+      const [locksRes, traineesRes] = await Promise.all([
+        api.get('/interview-locks/?status=selected'),
+        Promise.resolve(allTrainees) // already have
+      ]);
+      const interviewSelected = locksRes.data;
+      const directMapped = traineesRes.filter(t => t.isMapped);
+      
+      // Combine and add source field
+      const combined = [
+        ...interviewSelected.map(lock => ({
+          ...lock,
+          source: 'Interview',
+          trainee_id: lock.trainee_id, // string userId
+          name: lock.trainee_name,
+          projectName: lock.job_title,
+        })),
+        ...directMapped.map(t => ({
+          trainee_id: t.userId,
+          trainee_name: t.name,
+          job_title: t.projectName,
+          assigned_to_name: 'HR Direct',
+          interview_datetime: null,
+          feedback: null,
+          source: 'Direct',
+        }))
+      ];
+      setSelectedCandidates(combined);
     } catch (err) {
       toast.error('Failed to fetch selected candidates');
     }
@@ -6742,6 +9808,7 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const handleLockForInterview = async () => {
+    console.log('Locking IDs (before):', selectedTraineeIds);
     if (selectedTraineeIds.length === 0) {
       toast.error('Select at least one trainee');
       return;
@@ -6757,24 +9824,253 @@ function DashboardHR({ userData, onLogout }) {
     try {
       setLoading(true);
       await api.post('/interview-locks/bulk_create/', {
-        trainee_ids: selectedTraineeIds,
+        trainee_ids: selectedTraineeIds.map(id => String(id)), // ensure strings
         job_id: selectedJob.id,
         interview_datetime: lockInterviewDatetime,
         comments: lockComments,
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
+      
+      // Add to recent activity
+      setRecentActivity(prev => [
+        { type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.title, time: new Date().toLocaleString() },
+        ...prev.slice(0, 4)
+      ]);
+
       setShowLockModal(false);
       setSelectedTraineeIds([]);
       setLockInterviewDatetime('');
       setLockComments('');
       setAssignedToId('');
-      // Refresh job matches to remove locked trainees
       if (selectedJob) fetchJobMatches(selectedJob.id);
     } catch (err) {
       toast.error('Failed to lock trainees');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ==================== Talent Search Functions ====================
+  const handleJobSelectForSearch = (jobId) => {
+    const job = jobs.find(j => j.id === parseInt(jobId));
+    setSelectedJobForSearch(job);
+    if (job) {
+      setJobMatchesLoading(true);
+      api.get(`/matches/${job.id}/?_=${Date.now()}`)
+        .then(res => {
+          setSearchJobMatches(res.data);
+          setSelectedSearchTraineeIds([]);
+          setSelectAll(false);
+        })
+        .catch(() => toast.error('Failed to fetch matches'))
+        .finally(() => setJobMatchesLoading(false));
+    } else {
+      setSearchJobMatches(null);
+    }
+  };
+
+  const filteredSearchMatches = () => {
+    if (!searchJobMatches) return [];
+    const allMatches = [
+      ...(searchJobMatches.perfect_match || []),
+      ...(searchJobMatches.skills_only || []),
+      ...(searchJobMatches.location_only || []),
+      ...(searchJobMatches.nearby || []),
+      ...(searchJobMatches.no_match || []),
+    ];
+    return allMatches.filter(m => {
+      if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
+      if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
+      if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
+      if (searchFilters.skillKeyword) {
+        const skills = m.matched_skills || [];
+        if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false;
+      }
+      return true;
+    });
+  };
+
+  const handleSelectAllSearch = () => {
+    const baseFiltered = filteredSearchMatches();
+    const filtered = baseFiltered.filter(m => {
+      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+    });
+    if (selectAll) {
+      setSelectedSearchTraineeIds([]);
+    } else {
+      setSelectedSearchTraineeIds(filtered.map(m => String(m.trainee_id)));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const handleLockFromSearch = async () => {
+    if (selectedSearchTraineeIds.length === 0) {
+      toast.error('Select at least one trainee');
+      return;
+    }
+    if (!lockInterviewDatetime) {
+      toast.error('Select interview date and time');
+      return;
+    }
+    if (!assignedToId) {
+      toast.error('Select an interviewer');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.post('/interview-locks/bulk_create/', {
+        trainee_ids: selectedSearchTraineeIds.map(id => String(id)),
+        job_id: selectedJobForSearch.id,
+        interview_datetime: lockInterviewDatetime,
+        comments: lockComments,
+        assigned_to: assignedToId,
+      });
+      toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
+      
+      setRecentActivity(prev => [
+        { type: 'Locked', trainee: `${selectedSearchTraineeIds.length} trainees`, job: selectedJobForSearch.title, time: new Date().toLocaleString() },
+        ...prev.slice(0, 4)
+      ]);
+
+      setShowLockModal(false);
+      setSelectedSearchTraineeIds([]);
+      setSelectAll(false);
+      setLockInterviewDatetime('');
+      setLockComments('');
+      setAssignedToId('');
+      handleJobSelectForSearch(selectedJobForSearch.id);
+    } catch (err) {
+      toast.error('Failed to lock trainees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadFilteredSearch = () => {
+    const baseFiltered = filteredSearchMatches();
+    const filtered = baseFiltered.filter(m => {
+      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+    });
+    if (filtered.length === 0) {
+      toast.error('No data to download');
+      return;
+    }
+    const csvRows = [];
+    csvRows.push(['Trainee Name', 'Location', 'Bucket', 'Skills %', 'Location %', 'Total %', 'Matched Skills'].join(','));
+    filtered.forEach(m => {
+      csvRows.push([
+        `"${m.trainee_name}"`,
+        `"${m.trainee_location || ''}"`,
+        m.bucket,
+        m.skills_percentage,
+        m.location_percentage,
+        m.total_percentage,
+        `"${(m.matched_skills || []).join('; ')}"`,
+      ].join(','));
+    });
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `job_matches_${selectedJobForSearch?.title}_filtered.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  // ==================== Per‑Job Matching Trigger ====================
+  const runMatchingEngine = async (jobId = '') => {
+    try {
+      setLoading(true);
+      await api.post('/run-matching/', { job_id: jobId });
+      toast.success('Matching engine triggered successfully');
+      if (jobId) {
+        // If a specific job was matched, refresh its matches if the modal is open
+        if (selectedJob && selectedJob.id === parseInt(jobId)) {
+          fetchJobMatches(jobId);
+        }
+        if (selectedJobForSearch && selectedJobForSearch.id === parseInt(jobId)) {
+          handleJobSelectForSearch(jobId);
+        }
+      } else {
+        // If global matching, refresh everything? (optional)
+        fetchJobs();
+      }
+    } catch (err) {
+      toast.error('Failed to trigger matching engine');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================== Analytics Functions ====================
+  const fetchAnalytics = async () => {
+    try {
+      // Get all matches to compute totals and bucket distribution
+      // Ideally, you'd have an API endpoint for aggregated stats. For now, we'll approximate by fetching matches for each job.
+      // To avoid too many requests, we'll use the jobMatches data that's already fetched when viewing jobs.
+      // We can also create a new backend endpoint, but for simplicity, we'll rely on existing data.
+      let totalMatches = 0;
+      let totalPercentSum = 0;
+      const buckets = { PERFECT_MATCH: 0, SKILLS_ONLY: 0, LOCATION_ONLY: 0, NEARBY: 0, NO_MATCH: 0 };
+
+      // We'll use the jobs list to fetch matches for each job (only active ones? maybe all)
+      for (const job of jobs) {
+        try {
+          const res = await api.get(`/matches/${job.id}/`);
+          const data = res.data;
+          totalMatches += data.total_matches || 0;
+          // Sum percentages (if we have match objects, we'd need to aggregate)
+          // For simplicity, we'll just count buckets if the API returns buckets with counts.
+          // The current API returns lists, so we'd have to count lengths.
+          if (data.perfect_match) totalPercentSum += data.perfect_match.reduce((acc, m) => acc + m.total_percentage, 0);
+          if (data.skills_only) totalPercentSum += data.skills_only.reduce((acc, m) => acc + m.total_percentage, 0);
+          if (data.location_only) totalPercentSum += data.location_only.reduce((acc, m) => acc + m.total_percentage, 0);
+          if (data.nearby) totalPercentSum += data.nearby.reduce((acc, m) => acc + m.total_percentage, 0);
+          if (data.no_match) totalPercentSum += data.no_match.reduce((acc, m) => acc + m.total_percentage, 0);
+          
+          buckets.PERFECT_MATCH += data.perfect_match?.length || 0;
+          buckets.SKILLS_ONLY += data.skills_only?.length || 0;
+          buckets.LOCATION_ONLY += data.location_only?.length || 0;
+          buckets.NEARBY += data.nearby?.length || 0;
+          buckets.NO_MATCH += data.no_match?.length || 0;
+        } catch (err) {
+          console.error(`Failed to fetch matches for job ${job.id}`, err);
+        }
+      }
+      setTotalMatchesCount(totalMatches);
+      setAvgMatchPercent(totalMatches > 0 ? Math.round(totalPercentSum / totalMatches) : 0);
+      setBucketDistribution(buckets);
+    } catch (err) {
+      console.error('Analytics fetch error:', err);
+    }
+  };
+
+  // Fetch recent activity (locks and mappings) – we can combine from state or fetch from backend.
+  const fetchRecentActivity = async () => {
+    try {
+      const [locksRes] = await Promise.all([
+        api.get('/interview-locks/?limit=5'), // assume backend supports limit? if not, we'll slice.
+      ]);
+      const locks = locksRes.data.slice(0,5).map(lock => ({
+        type: 'Locked',
+        trainee: lock.trainee_name,
+        job: lock.job_title,
+        time: new Date(lock.created_at).toLocaleString(),
+      }));
+      // For mappings, we can use the local state's recentActivity or fetch from a dedicated endpoint.
+      // For now, we'll combine with existing recentActivity state (which is updated on map).
+      setRecentActivity(prev => {
+        const combined = [...locks, ...prev].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,5);
+        return combined;
+      });
+    } catch (err) {
+      console.error('Failed to fetch recent activity', err);
     }
   };
 
@@ -6786,7 +10082,7 @@ function DashboardHR({ userData, onLogout }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (['dashboard', 'jobs', 'createJob'].includes(activeTab)) fetchJobs();
+    if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
   }, [activeTab]);
 
   useEffect(() => {
@@ -6797,10 +10093,13 @@ function DashboardHR({ userData, onLogout }) {
     setSkillTrends(computeSkillTrends(jobs));
   }, [jobs]);
 
-  // Fetch lock stats when dashboard loads
   useEffect(() => {
-    if (activeTab === 'dashboard') fetchLockStats();
-  }, [activeTab]);
+    if (activeTab === 'dashboard') {
+      fetchLockStats();
+      fetchAnalytics();
+      fetchRecentActivity();
+    }
+  }, [activeTab, jobs]);
 
   // Filter trainees
   useEffect(() => {
@@ -6825,7 +10124,6 @@ function DashboardHR({ userData, onLogout }) {
     setTrainees(filtered);
   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
 
-  // Fetch locks when tab changes
   useEffect(() => {
     if (activeTab === 'interviewLocks') {
       fetchInterviewLocks();
@@ -6834,9 +10132,9 @@ function DashboardHR({ userData, onLogout }) {
   }, [activeTab, lockFilter]);
 
   useEffect(() => {
-    if (activeTab === 'selected') fetchSelectedLocks();
+    if (activeTab === 'selected') fetchSelectedCandidates();
     if (activeTab === 'rejected') fetchRejectedLocks();
-  }, [activeTab]);
+  }, [activeTab, allTrainees]);
 
   // Compute skill trends
   const computeSkillTrends = (jobs) => {
@@ -7038,7 +10336,7 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Dashboard render
+  // Dashboard render (enhanced analytics)
   const renderDashboard = () => (
     <div className="dashboard-content">
       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
@@ -7052,7 +10350,6 @@ function DashboardHR({ userData, onLogout }) {
         <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
       </div>
 
-      {/* Lock Stats */}
       {lockStats && (
         <div className="stats-grid small" style={{ marginTop: '1rem' }}>
           <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
@@ -7060,6 +10357,58 @@ function DashboardHR({ userData, onLogout }) {
           <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
         </div>
       )}
+
+      {/* Additional Analytics Section */}
+      <div className="analytics-section" style={{ marginTop: '2rem' }}>
+        <h2 className="section-title">Matching Analytics</h2>
+        <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+          <div className="analytics-card">
+            <h3>Total Matches</h3>
+            <div className="analytics-value">{totalMatchesCount}</div>
+          </div>
+          <div className="analytics-card">
+            <h3>Avg Match %</h3>
+            <div className="analytics-value">{avgMatchPercent}%</div>
+          </div>
+          <div className="analytics-card">
+            <h3>Perfect Matches</h3>
+            <div className="analytics-value">{bucketDistribution.PERFECT_MATCH}</div>
+          </div>
+          <div className="analytics-card">
+            <h3>Skills Only</h3>
+            <div className="analytics-value">{bucketDistribution.SKILLS_ONLY}</div>
+          </div>
+          <div className="analytics-card">
+            <h3>Location Only</h3>
+            <div className="analytics-value">{bucketDistribution.LOCATION_ONLY}</div>
+          </div>
+          <div className="analytics-card">
+            <h3>Nearby</h3>
+            <div className="analytics-value">{bucketDistribution.NEARBY}</div>
+          </div>
+          <div className="analytics-card">
+            <h3>No Match</h3>
+            <div className="analytics-value">{bucketDistribution.NO_MATCH}</div>
+          </div>
+        </div>
+
+        <h2 className="section-title">Recent Activity</h2>
+        <div className="recent-activity">
+          {recentActivity.length > 0 ? (
+            <ul className="activity-list">
+              {recentActivity.map((act, idx) => (
+                <li key={idx} className="activity-item">
+                  <span className={`activity-type ${act.type.toLowerCase()}`}>{act.type}</span>
+                  <span className="activity-detail">{act.trainee} → {act.job}</span>
+                  <span className="activity-time">{act.time}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No recent activity</p>
+          )}
+        </div>
+      </div>
 
       <h2 className="section-title">Top Skills in Demand</h2>
       <div className="skills-section">
@@ -7091,7 +10440,7 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Job Management
+  // Job Management (with per‑job generate matches button)
   const renderJobManagement = () => (
     <div className="job-management">
       <div className="section-header">
@@ -7123,9 +10472,10 @@ function DashboardHR({ userData, onLogout }) {
                   <td><div className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}/{job.openings}</div></td>
                   <td><button className={`status-button ${job.status === 'active' ? 'status-active' : 'status-inactive'}`} onClick={() => toggleJobStatus(job.id)} disabled={loading}>{job.status === 'active' ? <><CheckCircle size={12} /> Active</> : <><X size={12} /> Inactive</>}</button></td>
                   <td><div className="action-buttons">
-                    <button className="btn-icon btn-icon-view" onClick={() => handleViewJobMatches(job)} disabled={loading}><Eye size={16} /></button>
-                    <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading}><Edit size={16} /></button>
-                    <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading}><Trash2 size={16} /></button>
+                    <button className="btn-icon btn-icon-view" onClick={() => handleViewJobDetails(job)} disabled={loading} title="View Details"><Eye size={16} /></button>
+                    <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading} title="Edit"><Edit size={16} /></button>
+                    <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading} title="Delete"><Trash2 size={16} /></button>
+                    <button className="btn-icon btn-icon-match" onClick={() => runMatchingEngine(job.id)} disabled={loading} title="Generate Matches"><RefreshCw size={16} /></button>
                   </div></td>
                 </tr>
               ))}
@@ -7136,7 +10486,7 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Create/Edit Job Form – keep your existing implementation
+  // Create/Edit Job Form (unchanged)
   const renderCreateJob = () => {
     const jobToEdit = selectedJob || newJob;
     const isEditing = !!selectedJob && isEditMode;
@@ -7257,7 +10607,7 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Trainees List
+  // Trainees List (with download buttons)
   const renderTraineesList = () => {
     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
     const openPoolCount = traineesWithNoMatches.length;
@@ -7270,6 +10620,10 @@ function DashboardHR({ userData, onLogout }) {
             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
             <button className={`btn-view-option ${activeTab === 'unmapped' ? 'active' : ''}`} onClick={() => setActiveTab('unmapped')}><AlertCircle size={16} /> Unmapped ({stats.unmappedTrainees})</button>
             <button className={`btn-view-option ${activeTab === 'openPool' ? 'active' : ''}`} onClick={() => setActiveTab('openPool')}><Users2 size={16} /> Open Pool ({openPoolCount})</button>
+          </div>
+          <div className="download-buttons" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+            <button className="btn-secondary" onClick={() => downloadReport('mapped')}><Download size={16} /> Mapped</button>
+            <button className="btn-secondary" onClick={() => downloadReport('unmapped')}><Download size={16} /> Unmapped</button>
           </div>
         </div>
         <div className="search-filter">
@@ -7319,112 +10673,106 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Job Modal (view details)
-  const renderJobModal = () => {
-    if (!selectedJob || isEditMode) return null;
-    const handleDelete = async () => {
-      if (window.confirm('Delete this job?')) { await handleDeleteJob(selectedJob.id); setSelectedJob(null); }
-    };
-    return (
-      <div className="modal-overlay" onClick={() => setSelectedJob(null)}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header"><div className="modal-title"><Briefcase size={24} /><h2>{selectedJob.title}</h2></div><button className="modal-close" onClick={() => setSelectedJob(null)} disabled={loading}><X size={24} /></button></div>
-          <div className="modal-body">
-            {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
-            <div className="job-details-grid">
-              <div className="detail-item"><Building size={16} /><div><span className="detail-label">Department</span><span className="detail-value">{selectedJob.department}</span></div></div>
-              <div className="detail-item"><MapPin size={16} /><div><span className="detail-label">Location</span><span className="detail-value">{Array.isArray(selectedJob.location) ? selectedJob.location.join(', ') : selectedJob.location}</span></div></div>
-              <div className="detail-item"><BriefcaseBusiness size={16} /><div><span className="detail-label">Openings</span><span className="detail-value">{selectedJob.openings} ({selectedJob.filled} filled)</span></div></div>
-              <div className="detail-item"><Dollar size={16} /><div><span className="detail-label">Salary</span><span className="detail-value">{selectedJob.salary}</span></div></div>
-              <div className="detail-item"><div className={`status-badge status-${selectedJob.status}`}>{selectedJob.status === 'active' ? 'Active' : 'Inactive'}</div></div>
-              <div className="detail-item"><CalendarDays size={16} /><div><span className="detail-label">Posted</span><span className="detail-value">{selectedJob.postedDate}</span></div></div>
-              <div className="detail-item"><Calendar size={16} /><div><span className="detail-label">Expires</span><span className="detail-value">{selectedJob.expiryDate}</span></div></div>
-            </div>
-            <div className="job-section"><h3>Description</h3><p>{selectedJob.description}</p></div>
-            <div className="job-section"><h3>Requirements</h3><p>{selectedJob.requirements}</p></div>
-            <div className="job-section"><h3>Technical Skills</h3><div className="skills-list">{selectedJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}</div></div>
-            <div className="job-section"><h3>Soft Skills</h3><div className="skills-list">{selectedJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}</div></div>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setSelectedJob(null)} disabled={loading}>Close</button>
-              <button className="btn-danger" onClick={handleDelete} disabled={loading}><Trash2 size={18} /> Delete</button>
-              <button className="btn-primary" onClick={() => { setIsEditMode(true); setActiveTab('createJob'); setTechSkills(selectedJob.techSkills || []); setSoftSkills(selectedJob.softSkills || []); }} disabled={loading}><Edit size={18} /> Edit</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Job Details Modal (unchanged)
+  const renderJobDetailsModal = () => {
+    if (!showJobDetailsModal || !jobDetailsJob) return null;
 
-  // Job Matches Modal (with checkboxes)
-  const renderJobMatchesModal = () => {
-    if (!selectedJob || jobMatches === null) return null;
-    const bucketConfig = {
-      perfect_match: { title: 'Perfect Match', color: 'bucket-perfect' },
-      skills_only: { title: 'Skills Only', color: 'bucket-skills' },
-      location_only: { title: 'Location Only', color: 'bucket-location' },
-      nearby: { title: 'Nearby', color: 'bucket-nearby' },
-      no_match: { title: 'No Match', color: 'bucket-no-match' },
-    };
     return (
-      <div className="modal-overlay" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>
-        <div className="modal-content job-matches-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
+        <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <div className="modal-title"><Users size={24} /><div><h2>{jobMatches.job_title} - Matches</h2><p className="subtitle">Total Matches: {jobMatches.total_matches}</p></div></div>
-            <button className="modal-close" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}><X size={24} /></button>
+            <h2><Briefcase size={24} /> {jobDetailsJob.title}</h2>
+            <button className="modal-close" onClick={() => setShowJobDetailsModal(false)}><X /></button>
+          </div>
+          <div className="modal-tabs">
+            <button className={jobDetailsTab === 'overview' ? 'active' : ''} onClick={() => setJobDetailsTab('overview')}>Overview</button>
+            <button className={jobDetailsTab === 'mapped' ? 'active' : ''} onClick={() => setJobDetailsTab('mapped')}>Mapped ({mappedTrainees.length})</button>
+            <button className={jobDetailsTab === 'rejected' ? 'active' : ''} onClick={() => setJobDetailsTab('rejected')}>Rejected ({rejectedTrainees.length})</button>
           </div>
           <div className="modal-body">
-            {jobMatchesLoading ? <div className="loading-state">...</div> : (
-              <>
-                <div className="modal-actions" style={{ justifyContent: 'space-between', marginBottom: '1rem' }}>
-                  <span>Selected: {selectedTraineeIds.length}</span>
-                  <button className="btn-primary" onClick={() => { fetchInterviewers(); setShowLockModal(true); }} disabled={selectedTraineeIds.length === 0}>
-                    <Lock size={18} /> Lock for Interview ({selectedTraineeIds.length})
-                  </button>
+            {jobDetailsTab === 'overview' && (
+              <div className="job-details">
+                <p><strong>Department:</strong> {jobDetailsJob.department}</p>
+                <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
+                <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
+                <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
+                <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
+                <p><strong>Expires:</strong> {jobDetailsJob.expiryDate}</p>
+                <p><strong>Salary:</strong> {jobDetailsJob.salary}</p>
+                <div className="job-section">
+                  <h4>Description</h4>
+                  <p>{jobDetailsJob.description}</p>
                 </div>
-                <div className="job-matches-content">
-                  {Object.entries(bucketConfig).map(([bucketKey, config]) => {
-                    const bucketData = jobMatches[bucketKey];
-                    if (!bucketData || bucketData.length === 0) return null;
-                    return (
-                      <div key={bucketKey} className={`bucket-section ${config.color}`}>
-                        <h3 className="bucket-title">{config.title} ({bucketData.length})</h3>
-                        <div className="bucket-grid">
-                          {bucketData.map((match) => (
-                            <div key={match.id || match.trainee_id} className="trainee-match-card">
-                              <input type="checkbox" className="trainee-checkbox" checked={selectedTraineeIds.includes(match.trainee_id)} onChange={(e) => {
-                                if (e.target.checked) setSelectedTraineeIds([...selectedTraineeIds, match.trainee_id]);
-                                else setSelectedTraineeIds(selectedTraineeIds.filter(id => id !== match.trainee_id));
-                              }} />
-                              <div className="match-percentage">{match.total_percentage.toFixed(1)}%</div>
-                              <div className="bucket-tag">{match.bucket?.replace('_', ' ') || config.title}</div>
-                              <h4>{match.trainee_name}</h4>
-                              <div className="match-breakdown"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span></div>
-                              <p className="location-info"><MapPin size={14} /> {match.trainee_location}</p>
-                              <div className="match-actions">
-                                <button className="view-trainee-btn" onClick={() => handleViewTraineeProfileFromJob(match)}><User size={16} /> Profile</button>
-                                <button className="map-to-project-btn" onClick={() => {
-                                  if (selectedJob.openings <= 0) { toast.error('No openings'); return; }
-                                  handleMapToProject(match, selectedJob);
-                                }} disabled={selectedJob.openings <= 0}><Link size={16} /> {selectedJob.openings <= 0 ? 'Job Full' : 'Map'}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                <div className="job-section">
+                  <h4>Requirements</h4>
+                  <p>{jobDetailsJob.requirements}</p>
+                </div>
+                <div className="job-section">
+                  <h4>Technical Skills</h4>
+                  <div className="skills-list">
+                    {jobDetailsJob.techSkills?.map(skill => <span key={skill} className="skill-tag tech-tag">{skill}</span>)}
+                  </div>
+                </div>
+                <div className="job-section">
+                  <h4>Soft Skills</h4>
+                  <div className="skills-list">
+                    {jobDetailsJob.softSkills?.map(skill => <span key={skill} className="skill-tag soft-tag">{skill}</span>)}
+                  </div>
+                </div>
+              </div>
+            )}
+            {jobDetailsTab === 'mapped' && (
+              <div>
+                {mappedTrainees.length === 0 ? (
+                  <p className="no-data">No trainees mapped to this job.</p>
+                ) : (
+                  <div className="trainee-list">
+                    {mappedTrainees.map(t => (
+                      <div key={t.id} className="trainee-item">
+                        <User size={18} />
+                        <span>{t.name}</span>
+                        <span className="trainee-location">({t.location})</span>
+                        <button className="btn-icon" onClick={() => { setSelectedTrainee(t); setShowJobDetailsModal(false); fetchTraineeMatches(t.id); }}><Eye size={16} /></button>
                       </div>
-                    );
-                  })}
-                </div>
-              </>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {jobDetailsTab === 'rejected' && (
+              <div>
+                {rejectedTrainees.length === 0 ? (
+                  <p className="no-data">No rejected trainees for this job.</p>
+                ) : (
+                  <div className="trainee-list">
+                    {rejectedTrainees.map(lock => (
+                      <div key={lock.id} className="trainee-item">
+                        <User size={18} />
+                        <span>{lock.trainee_name}</span>
+                        <span className="trainee-location">({lock.trainee_location})</span>
+                        {lock.feedback && (
+                          <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><FileText size={16} /></button>
+                        )}
+                        <button className="btn-icon" onClick={() => {
+                          const trainee = allTrainees.find(t => t.id === lock.trainee);
+                          if (trainee) { setSelectedTrainee(trainee); setShowJobDetailsModal(false); fetchTraineeMatches(trainee.id); }
+                        }}><Eye size={16} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-          <div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedJob(null); setJobMatches(null); setSelectedTraineeIds([]); }}>Close</button></div>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => setShowJobDetailsModal(false)}>Close</button>
+          </div>
         </div>
       </div>
     );
   };
 
-  // Trainee Profile Modal – keep your existing implementation
+  // Trainee Profile Modal (unchanged)
   const renderTraineeModal = () => {
     if (!selectedTrainee) return null;
     const traineeData = selectedTrainee.traineeData || selectedTrainee;
@@ -7554,7 +10902,7 @@ function DashboardHR({ userData, onLogout }) {
                                 </div>
                               </div>
                             )}
-                            {/* Similar for skills_only, location_only, nearby, no_match – keep your existing code */}
+                            {/* Similarly for skills_only, location_only, nearby, no_match – can be added if needed */}
                           </>
                         )}
                       </>
@@ -7580,7 +10928,7 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Interview Locks Tab
+  // Interview Locks Tab (unchanged)
   const renderInterviewLocks = () => {
     return (
       <div className="interview-locks">
@@ -7649,53 +10997,141 @@ function DashboardHR({ userData, onLogout }) {
             </table>
           </div>
         )}
+        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn-secondary" onClick={() => {
+            const filtered = interviewLocks;
+            if (filtered.length === 0) { toast.error('No data to download'); return; }
+            const csvRows = [];
+            csvRows.push(['Trainee Name','Job Title','Interviewer','Interview DateTime','Status','Comments','Locked By','Created At'].join(','));
+            filtered.forEach(lock => {
+              csvRows.push([
+                `"${lock.trainee_name}"`,
+                `"${lock.job_title}"`,
+                `"${lock.assigned_to_name || ''}"`,
+                lock.interview_datetime,
+                lock.status,
+                `"${lock.comments || ''}"`,
+                `"${lock.locked_by_name || ''}"`,
+                lock.created_at,
+              ].join(','));
+            });
+            const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `interview_locks_filtered.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }}><Download size={18} /> Download Filtered</button>
+        </div>
       </div>
     );
   };
 
-  // Selected Tab
+  // Selected Tab (unchanged)
   const renderSelected = () => (
     <div className="selected-tab">
       <div className="section-header">
         <h2><CheckCircle size={24} /> Selected Candidates</h2>
-        <button className="btn-secondary" onClick={() => downloadLockReport('selected')}><Download size={18} /> Download Selected</button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+            <option value="">All Jobs</option>
+            {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+          </select>
+          <button className="btn-secondary" onClick={async () => {
+            const filtered = selectedCandidates; // already filtered by job if job filter set? We'll implement simple download of all selected
+            if (filtered.length === 0) { toast.error('No data to download'); return; }
+            const csvRows = [];
+            csvRows.push(['Trainee Name','Project','Source','Interviewer','Interview Date'].join(','));
+            filtered.forEach(c => {
+              csvRows.push([
+                `"${c.trainee_name}"`,
+                `"${c.job_title || c.projectName}"`,
+                c.source,
+                c.assigned_to_name || '',
+                c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '',
+              ].join(','));
+            });
+            const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'selected_candidates.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }}><Download size={18} /> Download All</button>
+        </div>
       </div>
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Trainee</th><th>Project</th><th>Source</th><th>Interviewer</th><th>Interview Date</th><th>Feedback</th><th>Actions</th></tr></thead>
           <tbody>
-            {selectedLocks.map(lock => (
-              <tr key={lock.id}>
-                <td>{lock.trainee_name}</td>
-                <td>{lock.job_title}</td>
-                <td>{lock.assigned_to_name || '-'}</td>
-                <td>{new Date(lock.interview_datetime).toLocaleString()}</td>
+            {selectedCandidates.map((c, idx) => (
+              <tr key={c.trainee_id || idx}>
+                <td>{c.trainee_name}</td>
+                <td>{c.job_title || c.projectName}</td>
+                <td><span className={`source-badge source-${c.source === 'Interview' ? 'interview' : 'direct'}`}>{c.source}</span></td>
+                <td>{c.assigned_to_name || (c.source === 'Direct' ? 'HR Direct' : '-')}</td>
+                <td>{c.interview_datetime ? new Date(c.interview_datetime).toLocaleString() : '-'}</td>
                 <td>
-                  {lock.feedback ? (
-                    <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
+                  {c.feedback ? (
+                    <button className="btn-icon" onClick={() => setViewingFeedback(c.feedback)}><Eye size={16} /></button>
                   ) : '-'}
                 </td>
                 <td>
                   <button className="btn-icon" onClick={() => {
-                    const trainee = allTrainees.find(t => t.id === lock.trainee);
+                    const trainee = allTrainees.find(t => t.userId === c.trainee_id);
                     if (trainee) handleViewTraineeProfile(trainee);
                   }}><User size={16} /></button>
                 </td>
               </tr>
             ))}
-            {selectedLocks.length === 0 && <tr><td colSpan="6" className="no-data">No selected candidates</td></tr>}
+            {selectedCandidates.length === 0 && <tr><td colSpan="7" className="no-data">No selected candidates</td></tr>}
           </tbody>
         </table>
       </div>
     </div>
   );
 
-  // Rejected Tab
+  // Rejected Tab (unchanged)
   const renderRejected = () => (
     <div className="rejected-tab">
       <div className="section-header">
         <h2><XCircle size={24} /> Rejected Candidates</h2>
-        <button className="btn-secondary" onClick={() => downloadLockReport('rejected')}><Download size={18} /> Download Rejected</button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
+            <option value="">All Jobs</option>
+            {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+          </select>
+          <button className="btn-secondary" onClick={async () => {
+            const filtered = rejectedLocks;
+            if (filtered.length === 0) { toast.error('No data to download'); return; }
+            const csvRows = [];
+            csvRows.push(['Trainee Name','Job','Interviewer','Interview Date','Comments'].join(','));
+            filtered.forEach(lock => {
+              csvRows.push([
+                `"${lock.trainee_name}"`,
+                `"${lock.job_title}"`,
+                `"${lock.assigned_to_name || ''}"`,
+                lock.interview_datetime ? new Date(lock.interview_datetime).toLocaleString() : '',
+                `"${lock.comments || ''}"`,
+              ].join(','));
+            });
+            const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rejected_candidates.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }}><Download size={18} /> Download All</button>
+        </div>
       </div>
       <div className="table-container">
         <table className="data-table">
@@ -7727,7 +11163,7 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Feedback Modal
+  // Feedback Modal (unchanged)
   const renderFeedbackModal = () => {
     if (!viewingFeedback) return null;
     const fb = viewingFeedback;
@@ -7759,7 +11195,7 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Lock Interview Modal
+  // Lock Interview Modal (unchanged)
   const renderLockInterviewModal = () => {
     if (!showLockModal) return null;
     return (
@@ -7798,11 +11234,211 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
+  // Talent Search Tab (unchanged)
+  const renderTalentSearch = () => {
+    const baseFiltered = filteredSearchMatches();
+    const filtered = baseFiltered.filter(m => {
+      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
+    });
+    return (
+      <div className="talent-search">
+        <div className="section-header">
+          <h2><Users size={24} /> Talent Search</h2>
+          <p className="subtitle">Find the best candidates for your job</p>
+        </div>
+
+        <div className="search-job-selector">
+          <label>Select Job:</label>
+          <select
+            className="form-control"
+            value={selectedJobForSearch?.id || ''}
+            onChange={(e) => handleJobSelectForSearch(e.target.value)}
+            style={{ maxWidth: '400px' }}
+          >
+            <option value="">-- Choose a job --</option>
+            {jobs.map(job => (
+              <option key={job.id} value={job.id}>{job.title} (Openings: {job.openings})</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedJobForSearch && (
+          <>
+            <div className="filters-panel">
+              <div className="filter-row">
+                <div className="filter-group">
+                  <label>Bucket</label>
+                  <select
+                    className="filter-select"
+                    value={searchFilters.bucket}
+                    onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}
+                  >
+                    <option value="">All Buckets</option>
+                    <option value="PERFECT_MATCH">Perfect Match</option>
+                    <option value="SKILLS_ONLY">Skills Only</option>
+                    <option value="LOCATION_ONLY">Location Only</option>
+                    <option value="NEARBY">Nearby</option>
+                    <option value="NO_MATCH">No Match</option>
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label>Location</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Filter by location"
+                    value={searchFilters.location}
+                    onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Min Total %</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="0"
+                    max="100"
+                    value={searchFilters.minTotal}
+                    onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Skill Keyword</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g., React"
+                    value={searchFilters.skillKeyword}
+                    onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })}
+                  />
+                </div>
+                <button className="btn-icon" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}>
+                  <X size={18} /> Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="table-actions">
+              <div>
+                <input
+                  type="checkbox"
+                  checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(String(m.trainee_id)))}
+                  onChange={handleSelectAllSearch}
+                /> Select All ({filtered.length} matches)
+              </div>
+              <div className="action-buttons">
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setSelectedTraineeIds(selectedSearchTraineeIds);  // copy search IDs to main selection
+                    setSelectedJob(selectedJobForSearch);             // set the job to lock for
+                    fetchInterviewers();
+                    setShowLockModal(true);
+                  }}
+                  disabled={selectedSearchTraineeIds.length === 0}
+                >
+                  <Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})
+                </button>
+                <button className="btn-secondary" onClick={downloadFilteredSearch} disabled={filtered.length === 0}>
+                  <Download size={18} /> Download Filtered
+                </button>
+              </div>
+            </div>
+
+            {jobMatchesLoading ? (
+              <div className="loading-overlay"><div className="loading-spinner"></div></div>
+            ) : (
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Select</th>
+                      <th>Trainee Name</th>
+                      <th>Location</th>
+                      <th>Bucket</th>
+                      <th>Skills %</th>
+                      <th>Location %</th>
+                      <th>Total %</th>
+                      <th>Matched Skills</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((match) => (
+                      <tr key={match.trainee_id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedSearchTraineeIds.includes(String(match.trainee_id))}
+                            onChange={(e) => {
+                              const id = String(match.trainee_id);
+                              if (e.target.checked) {
+                                setSelectedSearchTraineeIds([...selectedSearchTraineeIds, id]);
+                              } else {
+                                setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(pid => pid !== id));
+                                setSelectAll(false);
+                              }
+                            }}
+                          />
+                        </td>
+                        <td><span className="font-medium">{match.trainee_name}</span></td>
+                        <td>{match.trainee_location}</td>
+                        <td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket?.replace('_', ' ')}</span></td>
+                        <td>{match.skills_percentage.toFixed(1)}%</td>
+                        <td>{match.location_percentage.toFixed(1)}%</td>
+                        <td><strong>{match.total_percentage.toFixed(1)}%</strong></td>
+                        <td>
+                          {match.matched_skills?.length > 0
+                            ? match.matched_skills.join(', ')
+                            : '-'}
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="btn-icon btn-icon-view"
+                              onClick={() => handleViewTraineeProfileFromJob(match)}
+                              title="View Profile"
+                            >
+                              <User size={16} />
+                            </button>
+                            <button
+                              className="btn-icon btn-icon-map"
+                              onClick={() => {
+                                if (selectedJobForSearch.openings <= 0) {
+                                  toast.error('No openings');
+                                  return;
+                                }
+                                handleMapToProject(match, selectedJobForSearch);
+                              }}
+                              disabled={selectedJobForSearch.openings <= 0}
+                              title="Map to Project"
+                            >
+                              <Link size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr><td colSpan="9" className="no-data">No matches match your filters</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Sidebar items
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
+    { id: 'talentSearch', label: 'Talent Search', icon: <Search size={20} /> },
     { id: 'interviewLocks', label: 'Interview Locks', icon: <Lock size={20} /> },
     { id: 'selected', label: 'Selected', icon: <CheckCircle size={20} /> },
     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
@@ -7818,12 +11454,10 @@ function DashboardHR({ userData, onLogout }) {
       case 'unmapped':
       case 'openPool':
         return renderTraineesList();
-      case 'interviewLocks':
-        return renderInterviewLocks();
-      case 'selected':
-        return renderSelected();
-      case 'rejected':
-        return renderRejected();
+      case 'talentSearch': return renderTalentSearch();
+      case 'interviewLocks': return renderInterviewLocks();
+      case 'selected': return renderSelected();
+      case 'rejected': return renderRejected();
       default: return renderDashboard();
     }
   };
@@ -7847,8 +11481,7 @@ function DashboardHR({ userData, onLogout }) {
       {renderHiddenFileInputs()}
       {renderExcelTemplateModal()}
       {renderWordTemplateModal()}
-      {renderJobModal()}
-      {renderJobMatchesModal()}
+      {renderJobDetailsModal()}
       {renderTraineeModal()}
       {renderLockInterviewModal()}
       {renderFeedbackModal()}

@@ -1915,6 +1915,187 @@ select.form-control {
   }
 }
 
+
+/* Job Details Modal */
+.job-details-modal {
+  max-width: 800px;
+  width: 90%;
+}
+
+.job-details-modal .modal-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+}
+
+.job-details-modal .modal-tabs button {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.job-details-modal .modal-tabs button:hover {
+  color: #3b82f6;
+}
+
+.job-details-modal .modal-tabs button.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.job-details-modal .job-details p {
+  margin: 0.75rem 0;
+  line-height: 1.6;
+}
+
+.job-details-modal .job-section {
+  margin-top: 1.5rem;
+}
+
+.job-details-modal .job-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.job-details-modal .skills-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.job-details-modal .trainee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.job-details-modal .trainee-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.job-details-modal .trainee-item span {
+  flex: 1;
+}
+
+.job-details-modal .trainee-item .trainee-location {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* Analytics Cards */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.analytics-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.analytics-card h3 {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.analytics-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Recent Activity */
+.recent-activity {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.activity-list {
+  list-style: none;
+  padding: 0;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-type {
+  background: #e2e8f0;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 1rem;
+  min-width: 70px;
+  text-align: center;
+}
+
+.activity-type.mapped { background: #d4edda; color: #155724; }
+.activity-type.locked { background: #fff3cd; color: #856404; }
+.activity-type.selected { background: #cce5ff; color: #004085; }
+.activity-type.rejected { background: #f8d7da; color: #721c24; }
+
+.activity-detail {
+  flex: 1;
+  font-size: 0.95rem;
+}
+
+.activity-time {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* Download buttons in trainees header */
+.download-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Per‑job match button */
+.btn-icon-match {
+  color: #3b82f6;
+  background: #e0f2fe;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-icon-match:hover {
+  background: #bae6fd;
+  transform: scale(1.05);
+}
+
 @media (max-width: 640px) {
   .form-actions {
     flex-direction: column;

@@ -1316,6 +1316,155 @@ body {
   gap: 1rem;
 }
 
+/* Insights Cards */
+.insight-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  margin-bottom: 1.5rem;
+}
+
+.insight-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.insight-card .card-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.download-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #4b5563;
+  transition: all 0.2s;
+}
+.download-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.stacked-bar {
+  display: flex;
+  height: 30px;
+  border-radius: 15px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  height: 100%;
+}
+.bar-segment.perfect { background-color: #10b981; }
+.bar-segment.skills { background-color: #3b82f6; }
+.bar-segment.location { background-color: #f59e0b; }
+.bar-segment.nearby { background-color: #8b5cf6; }
+.bar-segment.direct { background-color: #6b7280; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+/* Dual Chart */
+.dual-chart {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.demand-chart h4, .supply-chart h4 {
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+  color: #4b5563;
+}
+.skill-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.skill-name {
+  width: 80px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-container {
+  flex: 1;
+  height: 20px;
+  background-color: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+}
+.bar-fill.demand { background-color: #3b82f6; }
+.bar-fill.supply { background-color: #10b981; }
+.skill-count {
+  width: 30px;
+  text-align: right;
+  font-size: 0.8rem;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* Table for project selection */
+.table-container {
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.data-table th {
+  background: #f8fafc;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+}
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+}
+.no-data {
+  text-align: center;
+  color: #94a3b8;
+  padding: 2rem !important;
+}
+
 /* Slide-in keyframes */
 @keyframes drawerSlideIn {
   from { opacity: 0; transform: translateX(24px); }
