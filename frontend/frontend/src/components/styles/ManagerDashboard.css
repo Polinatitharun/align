@@ -1215,6 +1215,34 @@ body {
   gap: 1.5rem;
 }
 
+/* Additional styles for manager dashboard */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 1rem; }
+.stat-icon { width: 48px; height: 48px; border-radius: 12px; background: #e0f2fe; display: flex; align-items: center; justify-content: center; color: #0284c7; }
+.stat-content h3 { margin: 0; font-size: 0.9rem; color: #64748b; }
+.stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+.stat-detail { font-size: 0.8rem; color: #94a3b8; }
+
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.chart-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.skills-chart .skill-row, .mapping-chart .bar-row { display: flex; align-items: center; margin: 0.5rem 0; gap: 0.5rem; }
+.skills-chart .bar, .mapping-chart .bar { height: 24px; background: #3b82f6; border-radius: 12px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: flex-end; padding-right: 0.5rem; }
+
+.talent-search .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.talent-search .filters select, .talent-search .filters input { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; }
+.table-actions { display: flex; justify-content: space-between; align-items: center; margin: 1rem 0; }
+.bucket-tag { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
+.bucket-tag.perfect_match { background: #d4edda; color: #155724; }
+.bucket-tag.skills_only { background: #cce5ff; color: #004085; }
+.bucket-tag.location_only { background: #fff3cd; color: #856404; }
+.bucket-tag.nearby { background: #d1c4e9; color: #4a148c; }
+.bucket-tag.no_match { background: #f8d7da; color: #721c24; }
+
+.modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index:1000; }
+.modal-content { background: white; border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%; }
+.modal-content label { display: block; margin-bottom: 1rem; }
+.modal-content input, .modal-content select, .modal-content textarea { width: 100%; padding: 0.5rem; margin-top: 0.3rem; border: 1px solid #cbd5e1; border-radius: 6px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 .sw-panel {
   background: var(--card);
   border: 1px solid var(--border);
