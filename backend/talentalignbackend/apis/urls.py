@@ -208,6 +208,7 @@ from .views import (
     # ℹ️ UserInfo & Mapping
     UserInfoDetailAPIView,
     UserInfoMappingUpdateAPIView,
+    CreateInterviewerView,
 
     # ========== ViewSets ==========
     JobViewSet,
@@ -279,6 +280,7 @@ urlpatterns = [
     path('api/profiles/', ProfileListCreateAPIView.as_view(), name='profiles-list-create'),
     path('api/profiles/<str:userId>/', ProfileDetailAPIView.as_view(), name='profiles-detail'),
     path('profiles/bulk-upload/', BulkUploadProfilesAPIView.as_view(), name='profiles-bulk-upload'),
+    path('users/create-interviewer/', CreateInterviewerView.as_view(), name='create-interviewer'),
 
     # 🔗 Recommendations
     path('jobs/recommendations/', recommendation_list_create, name='recommendation-list-create'),
