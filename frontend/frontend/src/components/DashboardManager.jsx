@@ -1,51 +1,49 @@
-// DashboardManager.js – Full Manager Dashboard with Enhanced LLM Context (Fixed)
-import React, { useState, useEffect, useMemo } from "react";
+// DashboardManager.js – Enhanced Manager Dashboard with batch filtering,
+// multi‑batch comparison, persistent chatbot, Recharts analytics, and more.
+
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import Sidebar from "./Sidebar";
 import "./styles/ManagerDashboard.css";
-
 import {
-  LayoutDashboard,
-  Briefcase,
-  Users,
-  CheckCircle,
-  MapPin,
-  Target,
-  BriefcaseBusiness,
-  Clock,
-  Calendar,
-  User,
-  Building,
-  AlertCircle,
-  Eye,
-  X,
-  BarChart2,
-  Search,
-  ArrowLeft,
-  TrendingUp,
-  TrendingDown,
-  Layers,
-  PieChart,
-  Database,
-  XCircle,
-  Download,
-  Lock,
-  RefreshCw,
-  Users2,
-  Activity,
-  Award,
-  Globe,
-  LineChart,
-  Sparkles,
-  GraduationCap,
-  TrendingUp as TrendingUpIcon,
-  MessageCircle,
-  Zap,
+  LayoutDashboard, Briefcase, Users, CheckCircle, MapPin, Target,
+  BriefcaseBusiness, Clock, Calendar, User, Building, AlertCircle,
+  Eye, X, BarChart2, Search, ArrowLeft, TrendingUp, TrendingDown,
+  Layers, PieChart, Database, XCircle, Download, Lock, RefreshCw,
+  Users2, Activity, Award, Globe, LineChart, Sparkles, GraduationCap,
+  TrendingUp as TrendingUpIcon, MessageCircle, Zap, Filter, ChevronDown,
+  ChevronUp, FileText, BarChart, Table, Grid, List, Sliders, Trash2,
+  PlusCircle, MinusCircle, Copy, Check, Send, Paperclip, MoreHorizontal,
+  BookOpen, Code, Cpu, Server, Wrench
 } from "lucide-react";
+import {
+  BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart as ReLineChart, Line, PieChart as RePieChart, Pie, Cell,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  ComposedChart, Area, Scatter
+} from 'recharts';
 import api from "../api/axios";
+
+// Helper: build batch param string
+const buildBatchParam = (batches) => {
+  if (!batches || batches.length === 0) return '';
+  if (Array.isArray(batches)) {
+    return batches.map(b => `batch=${encodeURIComponent(b)}`).join('&');
+  }
+  return `batch=${encodeURIComponent(batches)}`;
+};
 
 function DashboardManager({ userData, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
+
+  // ---- Batch Selection ----
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [unfilteredTrainees, setUnfilteredTrainees] = useState([]);
+  // For batch comparison tab
+  const [comparisonBatches, setComparisonBatches] = useState([]);
+  const [comparisonData, setComparisonData] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   // ---- Data States ----
   const [jobs, setJobs] = useState([]);
@@ -81,13 +79,14 @@ function DashboardManager({ userData, onLogout }) {
   });
 
   // ---- Chatbot State ----
-  const [chatMessages, setChatMessages] = useState([
-    { role: "bot", content: "Hello! I'm your AI HR assistant. Ask me anything about jobs, skill gaps, matches, or trainees." }
-  ]);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [aiModeEnabled, setAiModeEnabled] = useState(true);
   const [ollamaAvailable, setOllamaAvailable] = useState(true);
+  const chatContainerRef = useRef(null);
+  const chatInputRef = useRef(null);
 
   // ---- Filter States ----
   const [jobSearchTerm, setJobSearchTerm] = useState("");
@@ -99,10 +98,7 @@ function DashboardManager({ userData, onLogout }) {
   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
   const [searchJobMatches, setSearchJobMatches] = useState(null);
   const [searchFilters, setSearchFilters] = useState({
-    bucket: "",
-    location: "",
-    minTotal: 0,
-    skillKeyword: "",
+    bucket: "", location: "", minTotal: 0, skillKeyword: "",
   });
   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
@@ -119,19 +115,46 @@ function DashboardManager({ userData, onLogout }) {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [traineeMatchesLoading, setTraineeMatchesLoading] = useState(false);
 
+  // ---- Skill Gap Analyzer State ----
+  const [skillGapData, setSkillGapData] = useState([]);
+  const [skillGapFilter, setSkillGapFilter] = useState("all");
+
   // ==================== Data Fetching ====================
+  const fetchFullTraineeListForBatches = async () => {
+    try {
+      const response = await api.get("/api/profiles/");
+      const transformed = response.data.map(t => ({ ...t, batch_name: t.batch_name }));
+      setUnfilteredTrainees(transformed);
+      const batches = [...new Set(transformed.map(t => t.batch_name).filter(Boolean))];
+      setAvailableBatches(batches);
+    } catch (err) {
+      console.error("Failed to fetch batches", err);
+    }
+  };
+
   useEffect(() => {
+    fetchFullTraineeListForBatches();
     fetchJobs();
     fetchTrainees();
     fetchLocks();
     fetchRecommendations();
     checkOllamaAvailability();
+    fetchChatSessions();
   }, []);
+
+  useEffect(() => {
+    fetchJobs();
+    fetchTrainees();
+    fetchLocks();
+    fetchRecommendations();
+    if (activeTab === "open-pool") fetchOpenPoolTrainees();
+  }, [selectedBatch]);
 
   const fetchJobs = async () => {
     setJobsLoading(true);
     try {
-      const response = await api.get("/jobs/");
+      const url = `/jobs/${selectedBatch ? `?batch=${selectedBatch}` : ''}`;
+      const response = await api.get(url);
       setJobs(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       setJobsError(error?.response?.data || error?.message || "Unknown error");
@@ -142,7 +165,8 @@ function DashboardManager({ userData, onLogout }) {
 
   const fetchTrainees = async () => {
     try {
-      const response = await api.get("api/profiles/");
+      const url = `/api/profiles/${selectedBatch ? `?batch=${selectedBatch}` : ''}`;
+      const response = await api.get(url);
       if (Array.isArray(response.data)) setTraineesList(response.data);
     } catch (error) {
       toast.error("Failed to fetch trainee profiles");
@@ -151,7 +175,8 @@ function DashboardManager({ userData, onLogout }) {
 
   const fetchLocks = async () => {
     try {
-      const response = await api.get("/interview-locks/");
+      const url = `/interview-locks/${selectedBatch ? `?batch=${selectedBatch}` : ''}`;
+      const response = await api.get(url);
       setInterviewLocks(response.data);
     } catch (error) {
       console.error("Error fetching locks:", error);
@@ -170,7 +195,7 @@ function DashboardManager({ userData, onLogout }) {
 
   useEffect(() => {
     if (activeTab === "open-pool") fetchOpenPoolTrainees();
-  }, [activeTab, traineesList]);
+  }, [activeTab, traineesList, selectedBatch]);
 
   const fetchOpenPoolTrainees = async () => {
     setOpenPoolLoading(true);
@@ -180,13 +205,10 @@ function DashboardManager({ userData, onLogout }) {
       for (const trainee of allTrainees) {
         if (trainee.isMapped) continue;
         try {
-          const res = await api.get(`/trainee-matches/${trainee.traineeId}/`);
+          const res = await api.get(`/trainee-matches/${trainee.traineeId}/${selectedBatch ? `?batch=${selectedBatch}` : ''}`);
           const data = res.data;
-          const hasMatches =
-            (data.perfect_match && data.perfect_match.length > 0) ||
-            (data.skills_only && data.skills_only.length > 0) ||
-            (data.location_only && data.location_only.length > 0) ||
-            (data.nearby && data.nearby.length > 0);
+          const hasMatches = (data.perfect_match?.length || 0) + (data.skills_only?.length || 0) +
+                            (data.location_only?.length || 0) + (data.nearby?.length || 0) > 0;
           if (!hasMatches) noMatchTrainees.push(trainee);
         } catch {
           noMatchTrainees.push(trainee);
@@ -207,280 +229,281 @@ function DashboardManager({ userData, onLogout }) {
       await Promise.all([fetchJobs(), fetchTrainees(), fetchLocks(), fetchRecommendations()]);
       await fetchOpenPoolTrainees();
 
-      setTimeout(() => {
-        const currentJobs = jobs;
-        const currentTrainees = normalizedTrainees;
-        const currentLocks = interviewLocks;
-        const currentRecs = recommendations;
-        const currentOpenPool = openPoolTrainees;
+      const currentJobs = jobs;
+      const currentTrainees = normalizedTrainees;
+      const currentLocks = interviewLocks;
+      const currentRecs = recommendations;
+      const currentOpenPool = openPoolTrainees;
 
-        // ----- 1. Skill Proficiency -----
-        const skillScores = new Map();
-        currentTrainees.forEach(t => {
-          (t.strengths || []).forEach(s => {
-            const name = s.courseName;
-            const score = s.avgScore || 0;
-            if (!skillScores.has(name)) skillScores.set(name, { sum: 0, count: 0 });
-            const d = skillScores.get(name);
-            d.sum += score;
-            d.count++;
-          });
-          (t.weaknesses || []).forEach(w => {
-            const name = w.courseName;
-            const score = w.avgScore || 0;
-            if (!skillScores.has(name)) skillScores.set(name, { sum: 0, count: 0 });
-            const d = skillScores.get(name);
-            d.sum += score;
-            d.count++;
-          });
+      // ----- 1. Skill Proficiency -----
+      const skillScores = new Map();
+      currentTrainees.forEach(t => {
+        (t.strengths || []).forEach(s => {
+          const name = s.courseName;
+          const score = s.avgScore || 0;
+          if (!skillScores.has(name)) skillScores.set(name, { sum: 0, count: 0 });
+          const d = skillScores.get(name);
+          d.sum += score;
+          d.count++;
         });
-        const skillProficiency = Array.from(skillScores.entries())
-          .map(([skill, { sum, count }]) => ({ skill, avgScore: sum / count }))
-          .sort((a, b) => b.avgScore - a.avgScore)
-          .slice(0, 10);
-
-        // ----- 2. Interview Success by Job -----
-        const jobSuccessMap = new Map();
-        currentLocks.forEach(lock => {
-          const jobTitle = lock.job_title;
-          if (!jobSuccessMap.has(jobTitle)) {
-            jobSuccessMap.set(jobTitle, { locked: 0, selected: 0, rejected: 0 });
-          }
-          const stats = jobSuccessMap.get(jobTitle);
-          if (lock.status === "locked") stats.locked++;
-          else if (lock.status === "selected") stats.selected++;
-          else if (lock.status === "rejected") stats.rejected++;
+        (t.weaknesses || []).forEach(w => {
+          const name = w.courseName;
+          const score = w.avgScore || 0;
+          if (!skillScores.has(name)) skillScores.set(name, { sum: 0, count: 0 });
+          const d = skillScores.get(name);
+          d.sum += score;
+          d.count++;
         });
-        const interviewSuccessByJob = Array.from(jobSuccessMap.entries())
-          .map(([jobTitle, stats]) => ({ jobTitle, ...stats }));
+      });
+      const skillProficiency = Array.from(skillScores.entries())
+        .map(([skill, { sum, count }]) => ({ skill, avgScore: sum / count }))
+        .sort((a, b) => b.avgScore - a.avgScore)
+        .slice(0, 10);
 
-        // ----- 3. Trend Over Time (last 6 weeks) -----
-        const now = new Date();
-        const weeks = [];
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(now);
-          d.setDate(d.getDate() - i * 7);
-          weeks.push(d.toISOString().slice(0, 10));
+      // ----- 2. Interview Success by Job -----
+      const jobSuccessMap = new Map();
+      currentLocks.forEach(lock => {
+        const jobTitle = lock.job_title;
+        if (!jobSuccessMap.has(jobTitle)) {
+          jobSuccessMap.set(jobTitle, { locked: 0, selected: 0, rejected: 0 });
         }
-        const trendMap = new Map();
-        weeks.forEach(w => trendMap.set(w, { matches: 0, selections: 0 }));
-        currentLocks.forEach(lock => {
-          if (!lock.created_at) return;
-          const weekStart = new Date(lock.created_at);
-          weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-          const weekKey = weekStart.toISOString().slice(0, 10);
-          if (trendMap.has(weekKey)) {
-            if (lock.status === "selected") trendMap.get(weekKey).selections++;
+        const stats = jobSuccessMap.get(jobTitle);
+        if (lock.status === "locked") stats.locked++;
+        else if (lock.status === "selected") stats.selected++;
+        else if (lock.status === "rejected") stats.rejected++;
+      });
+      const interviewSuccessByJob = Array.from(jobSuccessMap.entries())
+        .map(([jobTitle, stats]) => ({ jobTitle, ...stats }));
+
+      // ----- 3. Trend Over Time (last 6 weeks) -----
+      const now = new Date();
+      const weeks = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * 7);
+        weeks.push(d.toISOString().slice(0, 10));
+      }
+      const trendMap = new Map();
+      weeks.forEach(w => trendMap.set(w, { matches: 0, selections: 0 }));
+      currentLocks.forEach(lock => {
+        if (!lock.created_at) return;
+        const weekStart = new Date(lock.created_at);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        if (trendMap.has(weekKey)) {
+          if (lock.status === "selected") trendMap.get(weekKey).selections++;
+        }
+      });
+      const trendOverTime = Array.from(trendMap.entries()).map(([period, data]) => ({ period, ...data }));
+
+      // ----- 4. Batch Comparison -----
+      const batchMap = new Map();
+      currentTrainees.forEach(t => {
+        const batch = t.batch_name || "Unknown";
+        if (!batchMap.has(batch)) {
+          batchMap.set(batch, { total: 0, sumScore: 0, openPool: 0 });
+        }
+        const stats = batchMap.get(batch);
+        stats.total++;
+        stats.sumScore += t.averageScore || 0;
+      });
+      currentOpenPool.forEach(t => {
+        const batch = t.batch_name || "Unknown";
+        if (batchMap.has(batch)) batchMap.get(batch).openPool++;
+        else batchMap.set(batch, { total: 0, sumScore: 0, openPool: 1 });
+      });
+      const batchComparison = Array.from(batchMap.entries()).map(([batch, stats]) => ({
+        batch,
+        avgScore: stats.total ? stats.sumScore / stats.total : 0,
+        matchRate: stats.total ? ((stats.total - stats.openPool) / stats.total) * 100 : 0,
+        openPoolCount: stats.openPool,
+      }));
+
+      // ----- 5. Recommendation Effectiveness -----
+      let recommendedCount = currentRecs.length;
+      let lockedCount = 0, selectedCount = 0;
+      currentRecs.forEach(rec => {
+        const lock = currentLocks.find(l => l.trainee_id == rec.trainee_id && l.job_id == rec.job_id);
+        if (lock) {
+          lockedCount++;
+          if (lock.status === "selected") selectedCount++;
+        }
+      });
+      const recommendationEffectiveness = { recommended: recommendedCount, locked: lockedCount, selected: selectedCount };
+
+      // ----- 6. Skill Clustering -----
+      const coOccurrence = new Map();
+      currentTrainees.forEach(t => {
+        const skills = t.skills || [];
+        for (let i = 0; i < skills.length; i++) {
+          for (let j = i + 1; j < skills.length; j++) {
+            const pair = [skills[i], skills[j]].sort().join("|");
+            coOccurrence.set(pair, (coOccurrence.get(pair) || 0) + 1);
           }
-        });
-        const trendOverTime = Array.from(trendMap.entries()).map(([period, data]) => ({ period, ...data }));
+        }
+      });
+      const skillClusters = Array.from(coOccurrence.entries())
+        .map(([pair, count]) => {
+          const [skill1, skill2] = pair.split("|");
+          return { skill1, skill2, cooccurrence: count };
+        })
+        .sort((a, b) => b.cooccurrence - a.cooccurrence)
+        .slice(0, 10);
 
-        // ----- 4. Batch Comparison -----
-        const batchMap = new Map();
-        currentTrainees.forEach(t => {
-          const batch = t.batch_name || "Unknown";
-          if (!batchMap.has(batch)) {
-            batchMap.set(batch, { total: 0, sumScore: 0, openPool: 0 });
-          }
-          const stats = batchMap.get(batch);
-          stats.total++;
-          stats.sumScore += t.averageScore || 0;
-        });
-        currentOpenPool.forEach(t => {
-          const batch = t.batch_name || "Unknown";
-          if (batchMap.has(batch)) batchMap.get(batch).openPool++;
-          else batchMap.set(batch, { total: 0, sumScore: 0, openPool: 1 });
-        });
-        const batchComparison = Array.from(batchMap.entries()).map(([batch, stats]) => ({
-          batch,
-          avgScore: stats.total ? stats.sumScore / stats.total : 0,
-          matchRate: stats.total ? ((stats.total - stats.openPool) / stats.total) * 100 : 0,
-          openPoolCount: stats.openPool,
-        }));
+      // ----- 7. Hiring Funnel -----
+      const matchesCount = currentJobs.reduce((acc, job) => acc + (job.matches || 0), 0);
+      const lockedCountFunnel = currentLocks.filter(l => l.status === "locked").length;
+      const interviewedCount = currentLocks.filter(l => ["locked", "selected", "rejected"].includes(l.status)).length;
+      const selectedCountFunnel = currentLocks.filter(l => l.status === "selected").length;
+      const mappedCount = currentTrainees.filter(t => t.isMapped).length;
+      const hiringFunnel = {
+        matches: matchesCount,
+        locked: lockedCountFunnel,
+        interviewed: interviewedCount,
+        selected: selectedCountFunnel,
+        mapped: mappedCount,
+      };
 
-        // ----- 5. Recommendation Effectiveness -----
-        let recommendedCount = currentRecs.length;
-        let lockedCount = 0, selectedCount = 0;
-        currentRecs.forEach(rec => {
-          const lock = currentLocks.find(l => l.trainee_id == rec.trainee_id && l.job_id == rec.job_id);
-          if (lock) {
-            lockedCount++;
-            if (lock.status === "selected") selectedCount++;
-          }
+      // ----- 8. Time-to-Fill -----
+      const timeToFill = currentJobs
+        .filter(job => job.filled >= job.openings && job.postedDate)
+        .map(job => {
+          const posted = new Date(job.postedDate);
+          const filled = new Date();
+          const days = Math.ceil((filled - posted) / (1000 * 60 * 60 * 24));
+          return { jobTitle: job.title, daysToFill: days };
         });
-        const recommendationEffectiveness = { recommended: recommendedCount, locked: lockedCount, selected: selectedCount };
 
-        // ----- 6. Skill Clustering -----
-        const coOccurrence = new Map();
-        currentTrainees.forEach(t => {
-          const skills = t.skills || [];
-          for (let i = 0; i < skills.length; i++) {
-            for (let j = i + 1; j < skills.length; j++) {
-              const pair = [skills[i], skills[j]].sort().join("|");
-              coOccurrence.set(pair, (coOccurrence.get(pair) || 0) + 1);
-            }
-          }
+      // ----- 9. Interviewer Performance -----
+      const interviewerMap = new Map();
+      currentLocks.forEach(lock => {
+        const name = lock.assigned_to_name || "Unknown";
+        if (!interviewerMap.has(name)) {
+          interviewerMap.set(name, { interviews: 0, selections: 0 });
+        }
+        const stats = interviewerMap.get(name);
+        stats.interviews++;
+        if (lock.status === "selected") stats.selections++;
+      });
+      const interviewerPerformance = Array.from(interviewerMap.entries())
+        .map(([name, { interviews, selections }]) => ({
+          name,
+          interviews,
+          selectionRate: interviews ? (selections / interviews) * 100 : 0,
+        }))
+        .sort((a, b) => b.selectionRate - a.selectionRate);
+
+      // ----- 10. Skill Development Recommendations -----
+      const demandMap = new Map();
+      currentJobs.forEach(job => {
+        [...(job.techSkills || []), ...(job.softSkills || [])].forEach(skill => {
+          demandMap.set(skill, (demandMap.get(skill) || 0) + 1);
         });
-        const skillClusters = Array.from(coOccurrence.entries())
-          .map(([pair, count]) => {
-            const [skill1, skill2] = pair.split("|");
-            return { skill1, skill2, cooccurrence: count };
-          })
-          .sort((a, b) => b.cooccurrence - a.cooccurrence)
-          .slice(0, 10);
-
-        // ----- 7. Hiring Funnel -----
-        const matchesCount = currentJobs.reduce((acc, job) => acc + (job.matches || 0), 0);
-        const lockedCountFunnel = currentLocks.filter(l => l.status === "locked").length;
-        const interviewedCount = currentLocks.filter(l => ["locked", "selected", "rejected"].includes(l.status)).length;
-        const selectedCountFunnel = currentLocks.filter(l => l.status === "selected").length;
-        const mappedCount = currentTrainees.filter(t => t.isMapped).length;
-        const hiringFunnel = {
-          matches: matchesCount,
-          locked: lockedCountFunnel,
-          interviewed: interviewedCount,
-          selected: selectedCountFunnel,
-          mapped: mappedCount,
-        };
-
-        // ----- 8. Time-to-Fill -----
-        const timeToFill = currentJobs
-          .filter(job => job.filled >= job.openings && job.postedDate)
-          .map(job => {
-            const posted = new Date(job.postedDate);
-            const filled = new Date();
-            const days = Math.ceil((filled - posted) / (1000 * 60 * 60 * 24));
-            return { jobTitle: job.title, daysToFill: days };
-          });
-
-        // ----- 9. Interviewer Performance -----
-        const interviewerMap = new Map();
-        currentLocks.forEach(lock => {
-          const name = lock.assigned_to_name || "Unknown";
-          if (!interviewerMap.has(name)) {
-            interviewerMap.set(name, { interviews: 0, selections: 0 });
-          }
-          const stats = interviewerMap.get(name);
-          stats.interviews++;
-          if (lock.status === "selected") stats.selections++;
+      });
+      const supplyMap = new Map();
+      currentTrainees.forEach(t => {
+        (t.skills || []).forEach(skill => {
+          supplyMap.set(skill, (supplyMap.get(skill) || 0) + 1);
         });
-        const interviewerPerformance = Array.from(interviewerMap.entries())
-          .map(([name, { interviews, selections }]) => ({
-            name,
-            interviews,
-            selectionRate: interviews ? (selections / interviews) * 100 : 0,
-          }))
-          .sort((a, b) => b.selectionRate - a.selectionRate);
+      });
+      const skillGaps = [];
+      demandMap.forEach((demand, skill) => {
+        const supply = supplyMap.get(skill) || 0;
+        if (demand > supply) {
+          skillGaps.push({ skill, demand, supply, gap: demand - supply });
+        }
+      });
+      skillGaps.sort((a, b) => b.gap - a.gap);
+      const skillDevelopmentRecs = skillGaps.slice(0, 5).map(gap => ({
+        skill: gap.skill,
+        recommendedCourses: [`Advanced ${gap.skill}`, `Practical ${gap.skill} Workshop`],
+      }));
 
-        // ----- 10. Skill Development Recommendations -----
-        const demandMap = new Map();
-        currentJobs.forEach(job => {
-          [...(job.techSkills || []), ...(job.softSkills || [])].forEach(skill => {
-            demandMap.set(skill, (demandMap.get(skill) || 0) + 1);
-          });
-        });
-        const supplyMap = new Map();
-        currentTrainees.forEach(t => {
-          (t.skills || []).forEach(skill => {
-            supplyMap.set(skill, (supplyMap.get(skill) || 0) + 1);
-          });
-        });
-        const skillGaps = [];
-        demandMap.forEach((demand, skill) => {
-          const supply = supplyMap.get(skill) || 0;
-          if (demand > supply) {
-            skillGaps.push({ skill, demand, supply, gap: demand - supply });
-          }
-        });
-        skillGaps.sort((a, b) => b.gap - a.gap);
-        const skillDevelopmentRecs = skillGaps.slice(0, 5).map(gap => ({
-          skill: gap.skill,
-          recommendedCourses: [`Advanced ${gap.skill}`, `Practical ${gap.skill} Workshop`],
-        }));
+      // Save skill gaps for the dedicated tab
+      setSkillGapData(skillGaps);
 
-        // ----- 11. Demand Forecast -----
-        const demandForecast = skillGaps.slice(0, 5).map(gap => ({
-          skill: gap.skill,
-          demandNextMonth: Math.ceil(gap.demand * 1.1),
-        }));
+      // ----- 11. Demand Forecast -----
+      const demandForecast = skillGaps.slice(0, 5).map(gap => ({
+        skill: gap.skill,
+        demandNextMonth: Math.ceil(gap.demand * 1.1),
+      }));
 
-        // ----- 12. Open Pool Depth per Job -----
-        const openPoolDepth = currentJobs.map(job => ({
-          jobTitle: job.title,
-          openPoolCandidates: currentOpenPool.length,
-        }));
+      // ----- 12. Open Pool Depth per Job -----
+      const openPoolDepth = currentJobs.map(job => ({
+        jobTitle: job.title,
+        openPoolCandidates: currentOpenPool.length,
+      }));
 
-        // ----- 13. Location vs Demand -----
-        const locationJobMap = new Map();
-        currentJobs.forEach(job => {
-          const locs = Array.isArray(job.location) ? job.location : [job.location];
-          locs.forEach(loc => {
-            if (loc) locationJobMap.set(loc, (locationJobMap.get(loc) || 0) + 1);
-          });
+      // ----- 13. Location vs Demand -----
+      const locationJobMap = new Map();
+      currentJobs.forEach(job => {
+        const locs = Array.isArray(job.location) ? job.location : [job.location];
+        locs.forEach(loc => {
+          if (loc) locationJobMap.set(loc, (locationJobMap.get(loc) || 0) + 1);
         });
-        const locationTraineeMap = new Map();
-        currentTrainees.forEach(t => {
-          if (t.location) locationTraineeMap.set(t.location, (locationTraineeMap.get(t.location) || 0) + 1);
-        });
-        const allLocations = new Set([...locationJobMap.keys(), ...locationTraineeMap.keys()]);
-        const locationDemand = Array.from(allLocations).map(loc => ({
-          location: loc,
-          jobCount: locationJobMap.get(loc) || 0,
-          traineeCount: locationTraineeMap.get(loc) || 0,
-        }));
+      });
+      const locationTraineeMap = new Map();
+      currentTrainees.forEach(t => {
+        if (t.location) locationTraineeMap.set(t.location, (locationTraineeMap.get(t.location) || 0) + 1);
+      });
+      const allLocations = new Set([...locationJobMap.keys(), ...locationTraineeMap.keys()]);
+      const locationDemand = Array.from(allLocations).map(loc => ({
+        location: loc,
+        jobCount: locationJobMap.get(loc) || 0,
+        traineeCount: locationTraineeMap.get(loc) || 0,
+      }));
 
-        // ----- 14. Retention Risk -----
-        const retentionRisk = [];
-        for (const trainee of currentTrainees) {
-          let matchPercent = 0;
-          try {
-            const res =  api.get(`/trainee-matches/${trainee.traineeId}/`);
-            const matches = res.data;
-            if (matches.total_matches > 0) {
-              let sum = 0;
-              const buckets = ["perfect_match", "skills_only", "location_only", "nearby", "no_match"];
-              buckets.forEach(b => {
-                (matches[b] || []).forEach(m => (sum += m.total_percentage));
-              });
-              matchPercent = sum / matches.total_matches;
-            }
-          } catch (e) {}
-          if (trainee.averageScore < 50 && matchPercent < 30) {
-            retentionRisk.push({
-              traineeName: trainee.name,
-              avgScore: trainee.averageScore,
-              matchPercent: matchPercent,
+      // ----- 14. Retention Risk -----
+      const retentionRisk = [];
+      for (const trainee of currentTrainees) {
+        let matchPercent = 0;
+        try {
+          const res = await api.get(`/trainee-matches/${trainee.traineeId}/`);
+          const matches = res.data;
+          if (matches.total_matches > 0) {
+            let sum = 0;
+            const buckets = ["perfect_match", "skills_only", "location_only", "nearby", "no_match"];
+            buckets.forEach(b => {
+              (matches[b] || []).forEach(m => (sum += m.total_percentage));
             });
+            matchPercent = sum / matches.total_matches;
           }
+        } catch (e) {}
+        if (trainee.averageScore < 50 && matchPercent < 30) {
+          retentionRisk.push({
+            traineeName: trainee.name,
+            avgScore: trainee.averageScore,
+            matchPercent: matchPercent,
+          });
         }
-        retentionRisk.sort((a, b) => a.avgScore - b.avgScore).slice(0, 10);
+      }
+      retentionRisk.sort((a, b) => a.avgScore - b.avgScore).slice(0, 10);
 
-        // ----- 15. AI Summary -----
-        const selectionRate = hiringFunnel.locked ? (hiringFunnel.selected / hiringFunnel.locked) * 100 : 0;
-        const mappingRate = currentTrainees.length ? (hiringFunnel.mapped / currentTrainees.length) * 100 : 0;
-        const topGaps = skillGaps.slice(0, 3).map(g => g.skill).join(", ");
-        const aiSummary = `📊 The talent pool has ${currentTrainees.length} trainees with a mapping rate of ${mappingRate.toFixed(1)}%. Top skill gaps are ${topGaps || "none"}. Focus upskilling on these areas to improve selection rates. The selection rate of locked candidates is ${selectionRate.toFixed(1)}%. Consider targeted training programs.`;
+      // ----- 15. AI Summary -----
+      const selectionRate = hiringFunnel.locked ? (hiringFunnel.selected / hiringFunnel.locked) * 100 : 0;
+      const mappingRate = currentTrainees.length ? (hiringFunnel.mapped / currentTrainees.length) * 100 : 0;
+      const topGaps = skillGaps.slice(0, 3).map(g => g.skill).join(", ");
+      const aiSummary = `📊 The talent pool has ${currentTrainees.length} trainees with a mapping rate of ${mappingRate.toFixed(1)}%. Top skill gaps are ${topGaps || "none"}. Focus upskilling on these areas to improve selection rates. The selection rate of locked candidates is ${selectionRate.toFixed(1)}%. Consider targeted training programs.`;
 
-        setAnalyticsData({
-          skillProficiency,
-          interviewSuccessByJob,
-          trendOverTime,
-          batchComparison,
-          recommendationEffectiveness,
-          skillClusters,
-          hiringFunnel,
-          timeToFill,
-          interviewerPerformance,
-          skillDevelopmentRecs,
-          demandForecast,
-          openPoolDepth,
-          locationDemand,
-          retentionRisk,
-          aiSummary,
-          isLoading: false,
-          lastAnalyzed: new Date().toLocaleString(),
-        });
-      }, 1000);
+      setAnalyticsData({
+        skillProficiency,
+        interviewSuccessByJob,
+        trendOverTime,
+        batchComparison,
+        recommendationEffectiveness,
+        skillClusters,
+        hiringFunnel,
+        timeToFill,
+        interviewerPerformance,
+        skillDevelopmentRecs,
+        demandForecast,
+        openPoolDepth,
+        locationDemand,
+        retentionRisk,
+        aiSummary,
+        isLoading: false,
+        lastAnalyzed: new Date().toLocaleString(),
+      });
     } catch (err) {
       toast.error("Failed to run analytics");
       setAnalyticsData(prev => ({ ...prev, isLoading: false }));
@@ -564,7 +587,7 @@ function DashboardManager({ userData, onLogout }) {
   const fetchJobMatches = async (jobId) => {
     setMatchesLoading(true);
     try {
-      const response = await api.get(`/matches/${jobId}/`);
+      const response = await api.get(`/matches/${jobId}/${selectedBatch ? `?batch=${selectedBatch}` : ''}`);
       setJobMatches(response.data);
     } catch {
       setJobMatches({ perfect_match: [], skills_only: [], location_only: [], nearby: [], no_match: [], total_matches: 0 });
@@ -583,7 +606,7 @@ function DashboardManager({ userData, onLogout }) {
   const fetchTraineeMatches = async (traineeIdx) => {
     setTraineeMatchesLoading(true);
     try {
-      const response = await api.get(`/trainee-matches/${traineeIdx}/`);
+      const response = await api.get(`/trainee-matches/${traineeIdx}/${selectedBatch ? `?batch=${selectedBatch}` : ''}`);
       setTraineeMatches(response.data);
     } catch {
       setTraineeMatches({ perfect_match: [], skills_only: [], location_only: [], nearby: [], no_match: [], total_matches: 0 });
@@ -598,7 +621,7 @@ function DashboardManager({ userData, onLogout }) {
     setSelectedJobForSearch(job);
     if (job) {
       setSearchLoading(true);
-      api.get(`/matches/${job.id}/`)
+      api.get(`/matches/${job.id}/${selectedBatch ? `?batch=${selectedBatch}` : ''}`)
         .then(res => setSearchJobMatches(res.data))
         .catch(() => toast.error("Failed to fetch matches"))
         .finally(() => setSearchLoading(false));
@@ -697,7 +720,7 @@ function DashboardManager({ userData, onLogout }) {
   // ==================== Download Reports ====================
   const downloadReport = async (type) => {
     try {
-      const response = await api.get(`/reports/${type}/`, { responseType: "blob" });
+      const response = await api.get(`/reports/${type}/${selectedBatch ? `?batch=${selectedBatch}` : ''}`, { responseType: "blob" });
       const url = URL.createObjectURL(new Blob([response.data]));
       const a = document.createElement("a");
       a.href = url;
@@ -711,7 +734,7 @@ function DashboardManager({ userData, onLogout }) {
 
   const downloadLockReport = async (status = "") => {
     try {
-      const url = `/interview-locks/report/${status ? `?status=${status}` : ""}`;
+      const url = `/interview-locks/report/${status ? `?status=${status}${selectedBatch ? `&batch=${selectedBatch}` : ''}` : `${selectedBatch ? `?batch=${selectedBatch}` : ''}`}`;
       const response = await api.get(url, { responseType: "blob" });
       const urlBlob = URL.createObjectURL(new Blob([response.data]));
       const a = document.createElement("a");
@@ -724,196 +747,170 @@ function DashboardManager({ userData, onLogout }) {
     }
   };
 
-  // ==================== Chatbot with Enhanced Context ====================
+  // ==================== Chatbot with Backend Persistence ====================
+  const fetchChatSessions = async () => {
+    try {
+      const res = await api.get('/manager/chat-sessions/');
+      setChatSessions(res.data);
+      if (res.data.length > 0) {
+        setActiveSessionId(res.data[0].id);
+        setChatMessages(res.data[0].messages || []);
+      } else {
+        createNewChatSession();
+      }
+    } catch (err) {
+      console.error("Failed to fetch chat sessions", err);
+      createNewChatSession();
+    }
+  };
+
+  const createNewChatSession = async () => {
+    try {
+      const res = await api.post('/manager/chat-sessions/', {});
+      setChatSessions(prev => [res.data, ...prev]);
+      setActiveSessionId(res.data.id);
+      setChatMessages([]);
+    } catch (err) {
+      toast.error("Failed to create chat session");
+    }
+  };
+
+const generateBasicResponse = (query) => {
+  const lower = query.toLowerCase();
+  if (lower.includes("skill gap")) return "Skill gaps are calculated by comparing job requirements with trainee skills. Check the Skill Gaps tab for details.";
+  if (lower.includes("mapped")) return `Currently, ${mappedUnmappedStats.mapped} out of ${mappedUnmappedStats.total} trainees are mapped to projects.`;
+  if (lower.includes("open pool")) return `There are ${openPoolTrainees.length} trainees in the open pool.`;
+  if (lower.includes("jobs")) return `There are ${jobs.length} active jobs.`;
+  return "I'm currently running in basic mode because the AI service is unavailable. Please try specific queries like 'skill gaps', 'mapped trainees', or 'open pool'.";
+};
+
+  const handleChatSend = async () => {
+  if (!chatInput.trim() || !activeSessionId) return;
+  const userMsg = chatInput.trim();
+  setChatInput("");
+  setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+  setChatLoading(true);
+
+  // If Ollama is not available, use local fallback
+  if (!ollamaAvailable) {
+    const fallbackReply = generateBasicResponse(userMsg);
+    setChatMessages(prev => [...prev, { role: 'assistant', content: fallbackReply }]);
+    setChatLoading(false);
+    return;
+  }
+
+  try {
+    const res = await api.post(`/manager/chat-sessions/${activeSessionId}/send_message/`, {
+      message: userMsg,
+      batch: selectedBatch,
+    });
+    setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.bot_reply.content }]);
+  } catch (err) {
+    toast.error("Chatbot error");
+    setChatMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error." }]);
+  } finally {
+    setChatLoading(false);
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }
+};
   const checkOllamaAvailability = async () => {
     try {
       const res = await fetch("http://localhost:11434/api/tags", { method: "GET", signal: AbortSignal.timeout(2000) });
-      if (res.ok) setOllamaAvailable(true);
-      else setOllamaAvailable(false);
+      setOllamaAvailable(res.ok);
     } catch {
       setOllamaAvailable(false);
     }
   };
 
-  const buildContextForLLM = () => {
-    const currentJobs = jobs;
-    const currentTrainees = normalizedTrainees;
-    const currentLocks = interviewLocks;
-    const currentOpenPool = openPoolTrainees;
-
-    const allTraineeSkills = new Set();
-    currentTrainees.forEach(t => (t.skills || []).forEach(s => allTraineeSkills.add(s.toLowerCase())));
-
-    const jobDetailsWithGaps = currentJobs.map(job => {
-      const requiredSkills = [...(job.techSkills || []), ...(job.softSkills || [])];
-      const missingSkills = requiredSkills.filter(skill => !allTraineeSkills.has(skill.toLowerCase()));
-      return `- ${job.title} (${job.department}): ${job.openings} openings, ${job.filled} filled. Requires: ${requiredSkills.join(", ")}. ${missingSkills.length > 0 ? `Missing skills: ${missingSkills.join(", ")}` : "All skills available."}`;
-    }).join("\n");
-
-    const mappedTraineesList = currentTrainees.filter(t => t.isMapped).slice(0, 20);
-    const mappedStr = mappedTraineesList.map(t => `  • ${t.name} → ${t.projectName || "Unknown project"}`).join("\n");
-    const mappedCount = currentTrainees.filter(t => t.isMapped).length;
-    const mappedSummary = mappedCount > 0 ? `Mapped trainees (${mappedCount}):\n${mappedStr}${mappedCount > 20 ? `\n  ... and ${mappedCount - 20} more` : ""}` : "No mapped trainees.";
-
-    const unmappedTraineesList = currentTrainees.filter(t => !t.isMapped).slice(0, 20);
-    const unmappedStr = unmappedTraineesList.map(t => `  • ${t.name} (Score: ${t.averageScore}%)`).join("\n");
-    const unmappedCount = currentTrainees.filter(t => !t.isMapped).length;
-    const unmappedSummary = unmappedCount > 0 ? `Unmapped trainees (${unmappedCount}):\n${unmappedStr}${unmappedCount > 20 ? `\n  ... and ${unmappedCount - 20} more` : ""}` : "No unmapped trainees.";
-
-    const openPoolList = currentOpenPool.slice(0, 20);
-    const openPoolStr = openPoolList.map(t => `  • ${t.name}`).join("\n");
-    const openPoolCount = currentOpenPool.length;
-    const openPoolSummary = openPoolCount > 0 ? `Open pool (no job matches) (${openPoolCount}):\n${openPoolStr}${openPoolCount > 20 ? `\n  ... and ${openPoolCount - 20} more` : ""}` : "No open pool trainees.";
-
-    const locked = currentLocks.filter(l => l.status === "locked").length;
-    const selected = currentLocks.filter(l => l.status === "selected").length;
-    const rejected = currentLocks.filter(l => l.status === "rejected").length;
-    const lockSummary = `Interview locks: Locked: ${locked}, Selected: ${selected}, Rejected: ${rejected}.`;
-
-    const demandMap = new Map();
-    currentJobs.forEach(job => {
-      [...(job.techSkills || []), ...(job.softSkills || [])].forEach(skill => {
-        demandMap.set(skill, (demandMap.get(skill) || 0) + 1);
-      });
-    });
-    const supplyMap = new Map();
-    currentTrainees.forEach(t => {
-      (t.skills || []).forEach(skill => {
-        supplyMap.set(skill, (supplyMap.get(skill) || 0) + 1);
-      });
-    });
-    const skillGaps = [];
-    demandMap.forEach((demand, skill) => {
-      const supply = supplyMap.get(skill) || 0;
-      if (demand > supply) {
-        skillGaps.push({ skill, demand, supply, gap: demand - supply });
-      }
-    });
-    skillGaps.sort((a,b) => b.gap - a.gap);
-    const topGaps = skillGaps.slice(0, 10).map(g => `  • ${g.skill}: demand ${g.demand}, supply ${g.supply}, gap ${g.gap}`).join("\n");
-    const gapSummary = skillGaps.length > 0 ? `Top skill gaps (demand - supply):\n${topGaps}` : "No significant skill gaps.";
-
-    return `
-You are an AI assistant for an HR manager. You have access to the following live data from the talent management system:
-
-**JOBS (${currentJobs.length}):**
-${jobDetailsWithGaps}
-
-**TRAINEES (${currentTrainees.length}):**
-all trainess: ${currentTrainees}
-${mappedSummary}
-${unmappedSummary}
-${openPoolSummary}
-
-**INTERVIEW LOCKS:**
-${lockSummary}
-
-**SKILL GAP ANALYSIS:**
-${gapSummary}
-
-When answering:
-- Be concise and helpful.
-- Use the data above exactly as given.
-- If asked for a list (e.g., "show mapped trainees"), output the list from the data.
-- If asked for skill gaps for a specific job, refer to the job details above.
-- Do not invent data not present.
-- If the answer is not in the data, say "I don't have that information in the current data."
-    `;
-  };
-
-  const handleChatSend = async () => {
-    if (!chatInput.trim()) return;
-    const userMsg = chatInput.trim();
-    setChatMessages(prev => [...prev, { role: "user", content: userMsg }]);
-    setChatInput("");
-    setChatLoading(true);
-
-    if (!aiModeEnabled || !ollamaAvailable) {
-      const fallbackReply = processQueryBasic(userMsg);
-      setChatMessages(prev => [...prev, { role: "bot", content: fallbackReply }]);
-      setChatLoading(false);
+  // ==================== Batch Comparison Tab ====================
+  const fetchComparisonData = async () => {
+    if (comparisonBatches.length === 0) {
+      toast.error("Select at least one batch to compare");
       return;
     }
-
+    setComparisonLoading(true);
     try {
-      const context = buildContextForLLM();
-      const conversationHistory = chatMessages.slice(-5).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
-      const prompt = `${context}\n\nConversation history:\n${conversationHistory}\n\nUser: ${userMsg}\nAssistant:`;
-
-      const response = await fetch("http://localhost:11434/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "llama3:latest",
-          prompt: prompt,
-          stream: false,
-          options: { temperature: 0.7, max_tokens: 500 }
-        })
+      const promises = comparisonBatches.map(async (batch) => {
+        const [jobsRes, traineesRes, locksRes] = await Promise.all([
+          api.get(`/jobs/?batch=${batch}`),
+          api.get(`/api/profiles/?batch=${batch}`),
+          api.get(`/interview-locks/?batch=${batch}`),
+        ]);
+        return {
+          batch,
+          jobs: jobsRes.data,
+          trainees: traineesRes.data,
+          locks: locksRes.data,
+        };
       });
-
-      if (!response.ok) throw new Error(`Ollama error: ${response.status}`);
-      const data = await response.json();
-      const botReply = data.response || "Sorry, I couldn't generate a response.";
-      setChatMessages(prev => [...prev, { role: "bot", content: botReply }]);
-    } catch (error) {
-      console.error("Ollama error:", error);
-      toast.error("AI unavailable. Using basic mode.");
-      setOllamaAvailable(false);
-      const fallbackReply = processQueryBasic(userMsg);
-      setChatMessages(prev => [...prev, { role: "bot", content: fallbackReply }]);
+      const results = await Promise.all(promises);
+      const data = results.map(({ batch, jobs, trainees, locks }) => {
+        const mapped = trainees.filter(t => t.userInfo?.isMapped).length;
+        const totalTrainees = trainees.length;
+        const avgScore = trainees.reduce((sum, t) => sum + (t.userInfo?.averageScore || 0), 0) / (totalTrainees || 1);
+        const activeJobs = jobs.filter(j => j.status === 'active').length;
+        const selected = locks.filter(l => l.status === 'selected').length;
+        const locked = locks.filter(l => l.status === 'locked').length;
+        return {
+          batch,
+          totalTrainees,
+          mapped,
+          mappingRate: totalTrainees ? (mapped / totalTrainees) * 100 : 0,
+          avgScore: avgScore.toFixed(1),
+          activeJobs,
+          selected,
+          locked,
+          selectionRate: locked ? (selected / locked) * 100 : 0,
+        };
+      });
+      setComparisonData(data);
+    } catch (err) {
+      toast.error("Failed to fetch comparison data");
     } finally {
-      setChatLoading(false);
+      setComparisonLoading(false);
     }
-  };
-
-  const processQueryBasic = (query) => {
-    const lowerQuery = query.toLowerCase();
-    const currentJobs = jobs;
-    const currentTrainees = normalizedTrainees;
-    const currentLocks = interviewLocks;
-
-    if (lowerQuery.includes("list jobs") || lowerQuery.includes("show jobs")) {
-      if (currentJobs.length === 0) return "No jobs found.";
-      const jobList = currentJobs.map(j => `• ${j.title} (${j.department})`).join("\n");
-      return `Here are all current job openings:\n${jobList}`;
-    }
-
-    const skillGapMatch = lowerQuery.match(/skill gaps? for (?:the )?["']?(.+?)["']?(?: job)?/i);
-    if (skillGapMatch || (lowerQuery.includes("skill gap") && lowerQuery.includes("job"))) {
-      let jobTitle = skillGapMatch ? skillGapMatch[1] : null;
-      if (!jobTitle) {
-        const forMatch = lowerQuery.match(/for (.*)/);
-        if (forMatch) jobTitle = forMatch[1];
-      }
-      if (jobTitle) {
-        const job = currentJobs.find(j => j.title.toLowerCase().includes(jobTitle.toLowerCase()));
-        if (!job) return `I couldn't find a job titled "${jobTitle}".`;
-        const requiredSkills = [...(job.techSkills || []), ...(job.softSkills || [])];
-        const allTraineeSkills = new Set();
-        currentTrainees.forEach(t => (t.skills || []).forEach(s => allTraineeSkills.add(s.toLowerCase())));
-        const missing = requiredSkills.filter(skill => !allTraineeSkills.has(skill.toLowerCase()));
-        if (missing.length === 0) return `All required skills for "${job.title}" are available.`;
-        return `Skill gaps for "${job.title}":\nMissing: ${missing.join(", ")}.`;
-      }
-      return "Please specify a job title, e.g., 'skill gaps for Frontend Developer'.";
-    }
-
-    if (lowerQuery.includes("how many trainees") || lowerQuery.includes("total trainees")) {
-      return `Total trainees: ${currentTrainees.length}. Mapped: ${currentTrainees.filter(t => t.isMapped).length}, Unmapped: ${currentTrainees.filter(t => !t.isMapped).length}.`;
-    }
-    if (lowerQuery.includes("open pool")) {
-      return `Open pool (trainees with no job matches): ${openPoolTrainees.length}.`;
-    }
-    if (lowerQuery.includes("locked") && lowerQuery.includes("interview")) {
-      return `Locked: ${currentLocks.filter(l => l.status === "locked").length}, Selected: ${currentLocks.filter(l => l.status === "selected").length}, Rejected: ${currentLocks.filter(l => l.status === "rejected").length}.`;
-    }
-    if (lowerQuery.includes("help")) {
-      return `I can answer:\n- "List all jobs"\n- "Skill gaps for Data Scientist"\n- "How many trainees are mapped?"\n- "What is the open pool size?"\n- "Show mapped trainees"`;
-    }
-    return "I'm not sure. Try 'help' for examples.";
   };
 
   // ==================== Render Functions ====================
+  const renderBatchSelector = () => (
+    <div className="batch-selector">
+      <Layers size={18} />
+      <select value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)} className="batch-dropdown">
+        <option value="">All Batches</option>
+        {availableBatches.map(batch => <option key={batch} value={batch}>{batch}</option>)}
+      </select>
+    </div>
+  );
+
+  const renderMultiBatchSelector = () => (
+    <div className="multi-batch-selector">
+      <label>Select Batches to Compare:</label>
+      <div className="batch-checkboxes">
+        {availableBatches.map(batch => (
+          <label key={batch} className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={comparisonBatches.includes(batch)}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setComparisonBatches(prev => [...prev, batch]);
+                } else {
+                  setComparisonBatches(prev => prev.filter(b => b !== batch));
+                }
+              }}
+            />
+            {batch}
+          </label>
+        ))}
+      </div>
+      <button className="btn-primary" onClick={fetchComparisonData} disabled={comparisonLoading}>
+        {comparisonLoading ? "Loading..." : "Compare"}
+      </button>
+    </div>
+  );
+
   const renderOverview = () => {
     const skillDemand = jobs.reduce((acc, job) => {
       (job.techSkills || []).forEach(s => (acc[s] = (acc[s] || 0) + 1));
@@ -1087,7 +1084,7 @@ When answering:
       </div>
       <table className="data-table">
         <thead>
-          <tr><th>Name</th><th>Employee ID</th><th>Location</th><th>Mapping Status</th><th>Actions</th></tr>
+          <tr><th>Name</th><th>Employee ID</th><th>Location</th><th>Batch</th><th>Mapping Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {filteredTrainees.map(t => (
@@ -1095,6 +1092,7 @@ When answering:
               <td><div className="trainee-info"><div className="avatar">{t.name.charAt(0)}</div>{t.name}</div></td>
               <td>{t.employeeId}</td>
               <td>{cap(t.location)}</td>
+              <td>{t.batch_name || '—'}</td>
               <td>{t.isMapped ? <span className="badge mapped"><CheckCircle size={12} /> Mapped</span> : <span className="badge unmapped"><AlertCircle size={12} /> Unmapped</span>}</td>
               <td><Eye size={16} /></td>
             </tr>
@@ -1112,13 +1110,14 @@ When answering:
         {openPoolLoading ? <div className="loading-spinner" /> : filtered.length === 0 ? <div className="empty-state"><Database size={40} /><h3>No open pool trainees</h3></div> : (
           <table className="data-table">
             <thead>
-              <tr><th>Name</th><th>Location</th><th>Score</th></tr>
+              <tr><th>Name</th><th>Location</th><th>Batch</th><th>Score</th></tr>
             </thead>
             <tbody>
               {filtered.map(t => (
                 <tr key={t.id} onClick={() => setSelectedTraineeForView(t)} className="clickable-row">
                   <td>{t.name}</td>
                   <td>{cap(t.location)}</td>
+                  <td>{t.batch_name || '—'}</td>
                   <td>{t.averageScore}</td>
                 </tr>
               ))}
@@ -1262,59 +1261,146 @@ When answering:
     );
   };
 
-  const renderChatbot = () => {
+  const renderSkillGapAnalyzer = () => {
+    const filteredGaps = skillGapFilter === "all" ? skillGapData : skillGapData.filter(g => g.gap >= parseInt(skillGapFilter));
     return (
-      <div className="chatbot-tab">
-        <div className="chat-header">
-          <div className="mode-toggle">
-            <button 
-              className={`mode-btn ${aiModeEnabled && ollamaAvailable ? 'active' : ''}`}
-              onClick={() => { if(ollamaAvailable) setAiModeEnabled(true); else toast.error("Ollama not available"); }}
-              disabled={!ollamaAvailable}
-            >
-              <Zap size={14} /> AI Mode
-            </button>
-            <button 
-              className={`mode-btn ${!aiModeEnabled ? 'active' : ''}`}
-              onClick={() => setAiModeEnabled(false)}
-            >
-              Basic Mode
-            </button>
+      <div className="skill-gap-analyzer">
+        <div className="section-header">
+          <h2><Target size={24} /> Skill Gap Analyzer</h2>
+          <div className="filter-group">
+            <select value={skillGapFilter} onChange={e => setSkillGapFilter(e.target.value)}>
+              <option value="all">All Gaps</option>
+              <option value="1">Gap ≥ 1</option>
+              <option value="2">Gap ≥ 2</option>
+              <option value="3">Gap ≥ 3</option>
+            </select>
+            <button onClick={runAnalytics}><RefreshCw size={16} /> Refresh</button>
           </div>
-          {!ollamaAvailable && <div className="ollama-warning">⚠️ Ollama not reachable. Using Basic Mode.</div>}
         </div>
-        <div className="chat-container">
-          <div className="chat-messages">
-            {chatMessages.map((msg, idx) => (
-              <div key={idx} className={`chat-message ${msg.role}`}>
-                <div className="chat-bubble">{msg.content}</div>
-              </div>
+        <div className="analytics-card">
+          <ResponsiveContainer width="100%" height={400}>
+            <ReBarChart data={filteredGaps}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="skill" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="demand" fill="#3b82f6" name="Demand" />
+              <Bar dataKey="supply" fill="#10b981" name="Supply" />
+              <Bar dataKey="gap" fill="#ef4444" name="Gap" />
+            </ReBarChart>
+          </ResponsiveContainer>
+        </div>
+        <table className="data-table">
+          <thead>
+            <tr><th>Skill</th><th>Demand</th><th>Supply</th><th>Gap</th><th>Recommended Action</th></tr>
+          </thead>
+          <tbody>
+            {filteredGaps.map(gap => (
+              <tr key={gap.skill}>
+                <td>{gap.skill}</td>
+                <td>{gap.demand}</td>
+                <td>{gap.supply}</td>
+                <td>{gap.gap}</td>
+                <td>Upskill {gap.gap} trainees in {gap.skill}</td>
+              </tr>
             ))}
-            {chatLoading && (
-              <div className="chat-message bot">
-                <div className="chat-bubble typing-indicator">...</div>
-              </div>
-            )}
-          </div>
-          <div className="chat-input-area">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && handleChatSend()}
-              placeholder="Ask me anything about jobs, skills, matches..."
-              disabled={chatLoading}
-            />
-            <button onClick={handleChatSend} disabled={chatLoading}>Send</button>
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
     );
   };
 
+  const renderBatchComparisonTab = () => (
+    <div className="batch-comparison-tab">
+      <div className="section-header">
+        <h2><Layers size={24} /> Batch Comparison</h2>
+      </div>
+      {renderMultiBatchSelector()}
+      {comparisonData && (
+        <div className="comparison-table-container">
+          <table className="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {comparisonData.map(d => <th key={d.batch}>{d.batch}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Total Trainees</td>{comparisonData.map(d => <td key={d.batch}>{d.totalTrainees}</td>)}</tr>
+              <tr><td>Mapped Trainees</td>{comparisonData.map(d => <td key={d.batch}>{d.mapped}</td>)}</tr>
+              <tr><td>Mapping Rate</td>{comparisonData.map(d => <td key={d.batch}>{d.mappingRate.toFixed(1)}%</td>)}</tr>
+              <tr><td>Avg Score</td>{comparisonData.map(d => <td key={d.batch}>{d.avgScore}%</td>)}</tr>
+              <tr><td>Active Jobs</td>{comparisonData.map(d => <td key={d.batch}>{d.activeJobs}</td>)}</tr>
+              <tr><td>Locked Candidates</td>{comparisonData.map(d => <td key={d.batch}>{d.locked}</td>)}</tr>
+              <tr><td>Selected Candidates</td>{comparisonData.map(d => <td key={d.batch}>{d.selected}</td>)}</tr>
+              <tr><td>Selection Rate</td>{comparisonData.map(d => <td key={d.batch}>{d.selectionRate.toFixed(1)}%</td>)}</tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderChatbot = () => (
+    <div className="chatbot-tab">
+      <div className="chat-header">
+        <div className="chat-session-controls">
+          <select
+            value={activeSessionId || ''}
+            onChange={(e) => {
+              const id = parseInt(e.target.value);
+              setActiveSessionId(id);
+              const session = chatSessions.find(s => s.id === id);
+              if (session) setChatMessages(session.messages || []);
+            }}
+          >
+            {chatSessions.map(s => (
+              <option key={s.id} value={s.id}>
+                {new Date(s.created_at).toLocaleString()}
+              </option>
+            ))}
+          </select>
+          <button onClick={createNewChatSession}><PlusCircle size={16} /> New Chat</button>
+        </div>
+        {!ollamaAvailable && <div className="ollama-warning">⚠️ Ollama not reachable.</div>}
+      </div>
+      <div className="chat-container" ref={chatContainerRef}>
+        <div className="chat-messages">
+          {chatMessages.map((msg, idx) => (
+            <div key={idx} className={`chat-message ${msg.role}`}>
+              <div className="chat-bubble">{msg.content}</div>
+            </div>
+          ))}
+          {chatLoading && <div className="chat-message assistant"><div className="chat-bubble typing">...</div></div>}
+        </div>
+      </div>
+      <div className="chat-input-area">
+        <input
+          type="text"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleChatSend()}
+          placeholder="Ask me anything..."
+          disabled={chatLoading}
+          ref={chatInputRef}
+        />
+        <button onClick={handleChatSend} disabled={chatLoading}><Send size={18} /></button>
+      </div>
+      <div className="suggested-questions">
+        <span>Try:</span>
+        {["Show top skill gaps", "List unmapped trainees", "Compare batches", "What's the mapping rate?"].map(q => (
+          <button key={q} onClick={() => setChatInput(q)} className="suggested-chip">{q}</button>
+        ))}
+      </div>
+    </div>
+  );
+
   const sidebarItems = [
     { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
     { id: "analytics", label: "Analytics", icon: <Activity size={20} /> },
+    { id: "batch-comparison", label: "Batch Comparison", icon: <Layers size={20} /> },
+    { id: "skill-gaps", label: "Skill Gaps", icon: <Target size={20} /> },
     { id: "chatbot", label: "Chatbot", icon: <MessageCircle size={20} /> },
     { id: "job-profiles", label: "Job Profiles", icon: <Briefcase size={20} /> },
     { id: "trainees", label: "Trainees", icon: <Users size={20} /> },
@@ -1329,6 +1415,8 @@ When answering:
     switch (activeTab) {
       case "overview": return renderOverview();
       case "analytics": return renderAnalytics();
+      case "batch-comparison": return renderBatchComparisonTab();
+      case "skill-gaps": return renderSkillGapAnalyzer();
       case "chatbot": return renderChatbot();
       case "job-profiles": return renderJobProfiles();
       case "trainees": return renderTrainees();
@@ -1346,8 +1434,13 @@ When answering:
       <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
       <div className="main-content">
         <div className="dashboard-header">
-          <h1><LayoutDashboard size={28} /> Manager Dashboard</h1>
-          <div className="header-subtitle">Welcome, {userData?.name || "Manager"}</div>
+          <div className="header-title">
+            <h1><LayoutDashboard size={28} /> Manager Dashboard</h1>
+            <div className="header-subtitle">Welcome, {userData?.name || "Manager"}</div>
+          </div>
+          <div className="header-actions">
+            {renderBatchSelector()}
+          </div>
         </div>
         {renderContent()}
       </div>

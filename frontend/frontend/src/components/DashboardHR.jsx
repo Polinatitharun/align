@@ -1,4 +1,5 @@
-// DashboardHR.js – Password‑protected Excel downloads (single file, password on open)
+// DashboardHR.js – Complete updated version with batch filtering, table view, pagination
+
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import XlsxPopulate from 'xlsx-populate';
@@ -61,6 +62,7 @@ import {
   List,
   RefreshCw,
   Shield,
+  Layers,
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import api from '../api/axios';
@@ -78,6 +80,11 @@ function DashboardHR({ userData, onLogout }) {
   const [softSkills, setSoftSkills] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Batch selection
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [unfilteredTrainees, setUnfilteredTrainees] = useState([]); // full list for batch dropdown
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,7 +118,7 @@ function DashboardHR({ userData, onLogout }) {
   const [lockStats, setLockStats] = useState(null);
   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
 
-  // Selected & Rejected lists (combined)
+  // Selected & Rejected lists
   const [selectedCandidates, setSelectedCandidates] = useState([]);
   const [rejectedLocks, setRejectedLocks] = useState([]);
   const [viewingFeedback, setViewingFeedback] = useState(null);
@@ -136,9 +143,10 @@ function DashboardHR({ userData, onLogout }) {
     salary: '',
     expiryDate: '',
     is_public: true,
+    batch_name: '',
   });
 
-  // ========== Talent Search Tab State ==========
+  // Talent Search State
   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
   const [searchJobMatches, setSearchJobMatches] = useState(null);
   const [searchFilters, setSearchFilters] = useState({
@@ -150,10 +158,11 @@ function DashboardHR({ userData, onLogout }) {
   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
-  // ========== Per‑Job Matching ==========
-  const [selectedJobForMatching, setSelectedJobForMatching] = useState('');
+  // Pagination for trainees table
+  const [traineePage, setTraineePage] = useState(1);
+  const traineesPerPage = 10;
 
-  // ========== Analytics State ==========
+  // Analytics
   const [totalMatchesCount, setTotalMatchesCount] = useState(0);
   const [avgMatchPercent, setAvgMatchPercent] = useState(0);
   const [bucketDistribution, setBucketDistribution] = useState({
@@ -165,35 +174,39 @@ function DashboardHR({ userData, onLogout }) {
   });
   const [recentActivity, setRecentActivity] = useState([]);
 
-  // ========== Privacy & Download ==========
+  // Privacy & Download
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [privacyAgreed, setPrivacyAgreed] = useState(false);
   const [downloadPassword, setDownloadPassword] = useState('');
-  const [pendingDownload, setPendingDownload] = useState(null); // { type, params }
+  const [pendingDownload, setPendingDownload] = useState(null);
 
-  // ========== Interviewer Creation ==========
+  // Interviewer Creation
   const [showCreateInterviewerModal, setShowCreateInterviewerModal] = useState(false);
   const [newInterviewer, setNewInterviewer] = useState({ username: '', password: '', email: '' });
 
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
 
+  const getBatchParam = () => (selectedBatch ? `?batch=${selectedBatch}` : '');
+
   // ==================== API Calls ====================
   const jobAPI = {
-    getAllJobs: async () => (await api.get('/jobs/')).data,
+    getAllJobs: async () => (await api.get(`/jobs/${getBatchParam()}`)).data,
     getJobById: async (id) => (await api.get(`/jobs/${id}/`)).data,
-    createJob: async (jobData) => (await api.post('/jobs/', jobData)).data,
+    createJob: async (jobData) => (await api.post('/jobs/', { ...jobData, batch_name: selectedBatch })).data,
     updateJob: async (id, jobData) => (await api.put(`/jobs/${id}/`, jobData)).data,
     deleteJob: async (id) => (await api.delete(`/jobs/${id}/`)).data,
     toggleJobStatus: async (id) => (await api.patch(`/jobs/${id}/toggle-status/`)).data,
     uploadExcel: async (file) => {
       const formData = new FormData();
       formData.append('excel_file', file);
+      formData.append('batch_name', selectedBatch);
       return (await api.post('/jobs/upload-excel/', formData)).data;
     },
     uploadWord: async (file) => {
       const formData = new FormData();
       formData.append('wordFile', file);
+      formData.append('batch_name', selectedBatch);
       return (await api.post('/jobs/upload-word/', formData)).data;
     },
     downloadExcelTemplate: async () => (await api.get('/jobs/download-excel-template/', { responseType: 'blob' })).data,
@@ -206,10 +219,59 @@ function DashboardHR({ userData, onLogout }) {
     getMapping: async (userId) => (await api.get(`/api/userinfo/${userId}/`)).data,
   };
 
-  // Fetch trainees
+  // Fetch trainees (with optional batch filter)
   const fetchTrainees = async () => {
     setLoading(true);
     setError(null);
+    try {
+      const url = `/api/profiles/${getBatchParam()}`;
+      const response = await api.get(url);
+      const transformed = response.data.map((trainee) => {
+        const userInfo = trainee.userInfo || {};
+        const skills = [
+          ...(trainee.strengths?.map((s) => s.courseName) || []),
+          ...(trainee.weaknesses?.map((w) => w.courseName) || []),
+        ];
+        const avgScore = userInfo.averageScore || 0;
+        return {
+          id: trainee.id,
+          userId: userInfo.userId || trainee.id,
+          name: userInfo.name || 'Unknown',
+          email: `${userInfo.employeeId || 'EMP' + trainee.id}@example.com`,
+          skills,
+          score: Math.round(avgScore),
+          location: (userInfo.location || 'unknown').toLowerCase(),
+          matchedJobs: [],
+          certifications: trainee.certificates ? [trainee.certificates] : [],
+          preferredLocation: userInfo.location || 'Unknown',
+          isMapped: userInfo.isMapped || false,
+          projectId: userInfo.projectId || '',
+          projectName: userInfo.projectName || '',
+          batch_name: trainee.batch_name,
+          traineeData: trainee,
+        };
+      });
+      setTrainees(transformed);
+      setAllTrainees(transformed);
+
+      // If no batch selected, also store unfiltered list for batch dropdown
+      if (!selectedBatch) {
+        setUnfilteredTrainees(transformed);
+        const batches = [...new Set(transformed.map(t => t.batch_name).filter(Boolean))];
+        setAvailableBatches(batches);
+      }
+    } catch (err) {
+      setError('Failed to fetch trainees.');
+      setTrainees([]);
+      setAllTrainees([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch for full trainee list (to populate batch dropdown) if not already done
+  const fetchFullTraineeListForBatches = async () => {
+    if (unfilteredTrainees.length > 0) return;
     try {
       const response = await api.get('/api/profiles/');
       const transformed = response.data.map((trainee) => {
@@ -233,18 +295,15 @@ function DashboardHR({ userData, onLogout }) {
           isMapped: userInfo.isMapped || false,
           projectId: userInfo.projectId || '',
           projectName: userInfo.projectName || '',
+          batch_name: trainee.batch_name,
           traineeData: trainee,
         };
       });
-      setTrainees(transformed);
-      setAllTrainees(transformed);
-      setTraineesWithNoMatches([]);
+      setUnfilteredTrainees(transformed);
+      const batches = [...new Set(transformed.map(t => t.batch_name).filter(Boolean))];
+      setAvailableBatches(batches);
     } catch (err) {
-      setError('Failed to fetch trainees.');
-      setTrainees([]);
-      setAllTrainees([]);
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch full trainee list for batches', err);
     }
   };
 
@@ -272,7 +331,7 @@ function DashboardHR({ userData, onLogout }) {
       const unmapped = allTrainees.filter((t) => !t.isMapped);
       for (const trainee of unmapped) {
         try {
-          const response = await api.get(`/trainee-matches/${trainee.id}/`);
+          const response = await api.get(`/trainee-matches/${trainee.id}/${getBatchParam()}`);
           const data = response.data;
           const hasNoMatch =
             (data.total_matches >= 0 &&
@@ -349,7 +408,6 @@ function DashboardHR({ userData, onLogout }) {
           traineeName = found.name;
         } else {
           toast.error('Trainee not found in local data');
-          console.error('Trainee not found for userId:', match.trainee_id);
           return;
         }
       }
@@ -374,14 +432,11 @@ function DashboardHR({ userData, onLogout }) {
 
       if (selectedJobForSearch && selectedJobForSearch.id === job.id) {
         setSelectedJobForSearch(updatedJob);
-        // Refresh talent search data
         handleJobSelectForSearch(job.id);
       }
 
-      // Remove from open pool
       setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
 
-      // Update local trainee lists
       setAllTrainees((prev) =>
         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
       );
@@ -389,7 +444,6 @@ function DashboardHR({ userData, onLogout }) {
         prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
       );
 
-      // Update jobMatches if open
       if (jobMatches) {
         const bucket = Object.keys(jobMatches).find((key) =>
           Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
@@ -403,7 +457,6 @@ function DashboardHR({ userData, onLogout }) {
         }
       }
 
-      // Update searchJobMatches if open
       if (searchJobMatches) {
         const bucket = Object.keys(searchJobMatches).find((key) =>
           Array.isArray(searchJobMatches[key]) && searchJobMatches[key].some((m) => m.trainee_id === userId)
@@ -483,7 +536,7 @@ function DashboardHR({ userData, onLogout }) {
   const fetchJobMatches = async (jobId) => {
     setJobMatchesLoading(true);
     try {
-      const response = await api.get(`/matches/${jobId}/`);
+      const response = await api.get(`/matches/${jobId}/${getBatchParam()}`);
       setJobMatches(response.data);
     } catch (err) {
       toast.error('Failed to fetch job matches');
@@ -496,7 +549,7 @@ function DashboardHR({ userData, onLogout }) {
   const fetchTraineeMatches = async (traineeId) => {
     setTraineeMatchesLoading(true);
     try {
-      const response = await api.get(`/trainee-matches/${traineeId}/`);
+      const response = await api.get(`/trainee-matches/${traineeId}/${getBatchParam()}`);
       setTraineeMatches(response.data);
     } catch (err) {
       toast.error('Failed to fetch trainee matches');
@@ -518,7 +571,7 @@ function DashboardHR({ userData, onLogout }) {
   // Fetch rejected trainees for a job
   const fetchRejectedForJob = async (jobId) => {
     try {
-      const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected`);
+      const res = await api.get(`/interview-locks/?job=${jobId}&status=rejected${selectedBatch ? `&batch=${selectedBatch}` : ''}`);
       setRejectedTrainees(res.data);
     } catch (err) {
       toast.error('Failed to fetch rejected trainees');
@@ -600,6 +653,7 @@ function DashboardHR({ userData, onLogout }) {
         matches: 0,
         postedDate: new Date().toISOString().split('T')[0],
         is_public: newJob.is_public,
+        batch_name: selectedBatch,
       };
       await jobAPI.createJob(jobData);
       await fetchJobs();
@@ -726,6 +780,7 @@ function DashboardHR({ userData, onLogout }) {
       setLoading(true);
       let url = '/interview-locks/';
       const params = new URLSearchParams();
+      if (selectedBatch) params.append('batch', selectedBatch);
       if (lockFilter.status) params.append('status', lockFilter.status);
       if (lockFilter.job) params.append('job', lockFilter.job);
       if (params.toString()) url += '?' + params.toString();
@@ -740,7 +795,7 @@ function DashboardHR({ userData, onLogout }) {
 
   const fetchLockStats = async () => {
     try {
-      const response = await api.get('/interview-locks/dashboard/');
+      const response = await api.get(`/interview-locks/dashboard/${getBatchParam()}`);
       setLockStats(response.data);
     } catch (err) {
       console.error('Failed to fetch lock stats', err);
@@ -748,47 +803,27 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   // ==================== Download Helpers (Excel with password) ====================
-  /**
-   * Convert a 2D array to a password-protected Excel file.
-   * @param {Array} data - Array of arrays (rows)
-   * @param {string} sheetName - Name of the worksheet
-   * @param {string} password - Password to open the Excel file
-   * @returns {Promise<Blob>}
-   */
   const createPasswordProtectedExcel = async (data, sheetName, password) => {
-    // Create a new workbook
     const workbook = await XlsxPopulate.fromBlankAsync();
-
-    // Add the sheet
     const sheet = workbook.sheet(0);
     sheet.name(sheetName);
-
-    // Write data
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       for (let j = 0; j < row.length; j++) {
-        const cell = sheet.cell(i + 1, j + 1);
-        cell.value(row[j]);
+        sheet.cell(i + 1, j + 1).value(row[j]);
       }
     }
-
-    // Auto-size columns (optional)
     data[0]?.forEach((_, colIndex) => {
       sheet.column(colIndex + 1).width(20);
     });
-
-    // Output as a password-protected Excel file
-    const blob = await workbook.outputAsync({ password: password, type: 'blob' });
-    return blob;
+    return await workbook.outputAsync({ password: password, type: 'blob' });
   };
 
-  // Parse CSV text to 2D array
   const parseCSVToArray = (csvText) => {
     const lines = csvText.trim().split(/\r?\n/);
     return lines.map(line => line.split(',').map(cell => cell.replace(/^"|"$/g, '').trim()));
   };
 
-  // Get data for filtered search
   const getFilteredSearchData = async () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
@@ -811,7 +846,6 @@ function DashboardHR({ userData, onLogout }) {
     return rows;
   };
 
-  // Get data for filtered interview locks
   const getFilteredInterviewLocksData = async () => {
     const filtered = interviewLocks;
     if (filtered.length === 0) throw new Error('No data');
@@ -831,7 +865,6 @@ function DashboardHR({ userData, onLogout }) {
     return rows;
   };
 
-  // Request download with privacy modal
   const requestDownload = (type, params = {}) => {
     setPendingDownload({ type, params });
     setShowPrivacyModal(true);
@@ -839,7 +872,6 @@ function DashboardHR({ userData, onLogout }) {
     setDownloadPassword('');
   };
 
-  // Execute download after privacy agreement and password
   const executeDownload = async () => {
     if (!privacyAgreed) {
       toast.error('You must agree to the privacy policy');
@@ -863,14 +895,14 @@ function DashboardHR({ userData, onLogout }) {
         filename = `job_matches_${selectedJobForSearch?.title || 'search'}.xlsx`;
         sheetName = 'Matches';
       } else if (type === 'lock-report') {
-        const url = `/interview-locks/report/${params.status ? `?status=${params.status}` : ''}`;
+        const url = `/interview-locks/report/${params.status ? `?status=${params.status}${selectedBatch ? `&batch=${selectedBatch}` : ''}` : `${selectedBatch ? `?batch=${selectedBatch}` : ''}`}`;
         const response = await api.get(url, { responseType: 'blob' });
         const csvText = await response.data.text();
         data = parseCSVToArray(csvText);
         filename = `interview_locks${params.status ? '_' + params.status : ''}.xlsx`;
         sheetName = `Locks${params.status ? `_${params.status}` : ''}`;
       } else if (type === 'report') {
-        const url = `/reports/${params.reportType}/`;
+        const url = `/reports/${params.reportType}/${getBatchParam()}`;
         const response = await api.get(url, { responseType: 'blob' });
         const csvText = await response.data.text();
         data = parseCSVToArray(csvText);
@@ -881,7 +913,6 @@ function DashboardHR({ userData, onLogout }) {
         filename = 'interview_locks_filtered.xlsx';
         sheetName = 'Filtered Locks';
       } else if (type === 'selected') {
-        // Custom data for selected candidates (from local state)
         const rows = [['Trainee Name', 'Project', 'Source', 'Interviewer', 'Interview Date', 'Feedback']];
         selectedCandidates.forEach(c => {
           rows.push([
@@ -946,11 +977,10 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // ========== Selected Candidates (Interview + Direct) ==========
   const fetchSelectedCandidates = async () => {
     try {
       const [locksRes, traineesRes] = await Promise.all([
-        api.get('/interview-locks/?status=selected'),
+        api.get(`/interview-locks/?status=selected${selectedBatch ? `&batch=${selectedBatch}` : ''}`),
         Promise.resolve(allTrainees)
       ]);
       const interviewSelected = locksRes.data;
@@ -983,7 +1013,7 @@ function DashboardHR({ userData, onLogout }) {
 
   const fetchRejectedLocks = async () => {
     try {
-      const res = await api.get('/interview-locks/?status=rejected');
+      const res = await api.get(`/interview-locks/?status=rejected${selectedBatch ? `&batch=${selectedBatch}` : ''}`);
       setRejectedLocks(res.data);
     } catch (err) {
       toast.error('Failed to fetch rejected candidates');
@@ -1043,7 +1073,6 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // Cancel selected candidate (move to cancelled)
   const handleCancelSelected = async (lockId) => {
     try {
       await api.patch(`/interview-locks/${lockId}/`, { status: 'cancelled' });
@@ -1056,11 +1085,9 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // ==================== Talent Search Functions ====================
   const handleJobSelectForSearch = (jobId) => {
     const job = jobs.find(j => j.id === parseInt(jobId));
     if (!job) return;
-    // Only show jobs with openings > filled and active
     if (job.openings <= job.filled || job.status !== 'active') {
       toast.error('This job has no openings or is inactive');
       return;
@@ -1068,7 +1095,7 @@ function DashboardHR({ userData, onLogout }) {
     setSelectedJobForSearch(job);
     if (job) {
       setJobMatchesLoading(true);
-      api.get(`/matches/${job.id}/?_=${Date.now()}`)
+      api.get(`/matches/${job.id}/${getBatchParam()}`)
         .then(res => {
           setSearchJobMatches(res.data);
           setSelectedSearchTraineeIds([]);
@@ -1162,7 +1189,6 @@ function DashboardHR({ userData, onLogout }) {
       setLockInterviewDatetime('');
       setLockComments('');
       setAssignedToId('');
-      // Refresh talent search data
       handleJobSelectForSearch(selectedJobForSearch.id);
     } catch (err) {
       toast.error('Failed to lock trainees');
@@ -1171,7 +1197,6 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // ==================== Create Interviewer ====================
   const handleCreateInterviewer = async () => {
     if (!newInterviewer.username || !newInterviewer.password) {
       toast.error('Username and password required');
@@ -1186,13 +1211,12 @@ function DashboardHR({ userData, onLogout }) {
       toast.success('Interviewer created');
       setShowCreateInterviewerModal(false);
       setNewInterviewer({ username: '', password: '', email: '' });
-      fetchInterviewers(); // refresh list
+      fetchInterviewers();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create interviewer');
     }
   };
 
-  // ==================== Per‑Job Matching ====================
   const runMatchingEngine = async (jobId = '') => {
     try {
       setLoading(true);
@@ -1215,7 +1239,6 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // ==================== Analytics Functions ====================
   const fetchAnalytics = async () => {
     try {
       let totalMatches = 0;
@@ -1224,7 +1247,7 @@ function DashboardHR({ userData, onLogout }) {
 
       for (const job of jobs) {
         try {
-          const res = await api.get(`/matches/${job.id}/`);
+          const res = await api.get(`/matches/${job.id}/${getBatchParam()}`);
           const data = res.data;
           totalMatches += data.total_matches || 0;
           if (data.perfect_match) totalPercentSum += data.perfect_match.reduce((acc, m) => acc + m.total_percentage, 0);
@@ -1253,7 +1276,7 @@ function DashboardHR({ userData, onLogout }) {
   const fetchRecentActivity = async () => {
     try {
       const [locksRes] = await Promise.all([
-        api.get('/interview-locks/'),
+        api.get(`/interview-locks/${getBatchParam()}`),
       ]);
       const locks = locksRes.data.slice(0,5).map(lock => ({
         type: lock.status === 'selected' ? 'Selected' : lock.status === 'rejected' ? 'Rejected' : 'Locked',
@@ -1271,19 +1294,24 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   // ==================== Effects ====================
+  // On mount, fetch full trainee list to populate batch dropdown
+  useEffect(() => {
+    fetchFullTraineeListForBatches();
+  }, []);
+
   useEffect(() => {
     if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
       fetchTrainees();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedBatch]);
 
   useEffect(() => {
     if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
-  }, [activeTab]);
+  }, [activeTab, selectedBatch]);
 
   useEffect(() => {
     if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool();
-  }, [allTrainees, activeTab]);
+  }, [allTrainees, activeTab, selectedBatch]);
 
   useEffect(() => {
     setSkillTrends(computeSkillTrends(jobs));
@@ -1295,9 +1323,8 @@ function DashboardHR({ userData, onLogout }) {
       fetchAnalytics();
       fetchRecentActivity();
     }
-  }, [activeTab, jobs]);
+  }, [activeTab, jobs, selectedBatch]);
 
-  // Filter trainees
   useEffect(() => {
     let filtered = [...allTrainees];
     if (searchQuery) {
@@ -1325,14 +1352,13 @@ function DashboardHR({ userData, onLogout }) {
       fetchInterviewLocks();
       fetchLockStats();
     }
-  }, [activeTab, lockFilter]);
+  }, [activeTab, lockFilter, selectedBatch]);
 
   useEffect(() => {
     if (activeTab === 'selected') fetchSelectedCandidates();
     if (activeTab === 'rejected') fetchRejectedLocks();
-  }, [activeTab, allTrainees]);
+  }, [activeTab, allTrainees, selectedBatch]);
 
-  // Compute skill trends
   const computeSkillTrends = (jobs) => {
     const techMap = new Map();
     const softMap = new Map();
@@ -1625,7 +1651,7 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Dashboard render (enhanced analytics) – same as before
+  // Dashboard render
   const renderDashboard = () => (
     <div className="dashboard-content">
       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
@@ -1736,6 +1762,7 @@ function DashboardHR({ userData, onLogout }) {
                 <th>Job Title</th>
                 <th>Department</th>
                 <th>Location(s)</th>
+                <th>Batch</th>
                 <th>Openings</th>
                 <th>Filled</th>
                 <th>Remaining</th>
@@ -1760,6 +1787,7 @@ function DashboardHR({ userData, onLogout }) {
                     <td>
                       <div className="location-cell"><MapPin size={14} />{Array.isArray(job.location) ? job.location.join(', ') : job.location}</div>
                     </td>
+                    <td>{job.batch_name || '-'}</td>
                     <td className="openings-cell">{job.openings}</td>
                     <td className={`filled-cell ${job.filled === job.openings ? 'filled-complete' : ''}`}>{job.filled}</td>
                     <td className="remaining-cell">{remaining}</td>
@@ -1911,14 +1939,23 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Trainees List
+  // Trainees List (Table with Pagination)
   const renderTraineesList = () => {
     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
     const openPoolCount = traineesWithNoMatches.length;
+
+    const indexOfLast = traineePage * traineesPerPage;
+    const indexOfFirst = indexOfLast - traineesPerPage;
+    const currentTrainees = trainees.slice(indexOfFirst, indexOfLast);
+    const totalPages = Math.ceil(trainees.length / traineesPerPage);
+
     return (
       <div className="trainees-list">
         <div className="section-header">
-          <div className="header-title"><h2><Users size={24} /> Trainees</h2><p className="subtitle">Manage all trainees</p></div>
+          <div className="header-title">
+            <h2><Users size={24} /> Trainees</h2>
+            <p className="subtitle">Manage all trainees</p>
+          </div>
           <div className="view-options">
             <button className={`btn-view-option ${activeTab === 'trainees' ? 'active' : ''}`} onClick={() => setActiveTab('trainees')}>All</button>
             <button className={`btn-view-option ${activeTab === 'mapped' ? 'active' : ''}`} onClick={() => setActiveTab('mapped')}><CheckCircle size={16} /> Mapped ({stats.mappedTrainees})</button>
@@ -1930,8 +1967,11 @@ function DashboardHR({ userData, onLogout }) {
             <button className="btn-secondary" onClick={() => downloadReport('unmapped')}><Download size={16} /> Unmapped</button>
           </div>
         </div>
+
         <div className="search-filter">
-          <div className="search-box"><input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
+          <div className="search-box">
+            <input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
           <div className="filter-group">
             <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
               <option value="">All Locations</option>
@@ -1940,39 +1980,78 @@ function DashboardHR({ userData, onLogout }) {
             <button className="btn-icon" onClick={() => { setSearchQuery(''); setLocationFilter(''); }}><X size={18} /></button>
           </div>
         </div>
+
         {checkingMatches && activeTab === 'openPool' && <div className="loading-overlay"><div className="loading-spinner"></div><p>Checking Open Pool...</p></div>}
         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
         {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-        {trainees.length === 0 && !loading && !checkingMatches && (
-          <div className="no-data"><Users size={48} /><h3>No Trainees Found</h3><p>No trainees match your criteria.</p>
-            {activeTab === 'openPool' && <button className="btn-primary" onClick={checkTraineesForOpenPool} disabled={checkingMatches}><Search size={18} /> Re-check Open Pool</button>}
-          </div>
-        )}
-        <div className="trainees-grid">
-          {trainees.map((trainee) => (
-            <div key={trainee.id} className="trainee-card">
-              <div className="trainee-header">
-                <div className="trainee-info-main">
-                  <div className="trainee-avatar">{trainee.name.charAt(0)}</div>
-                  <div className="trainee-info"><h4>{trainee.name}</h4><div className="trainee-meta"><span className="trainee-email"><Mail size={14} /> {trainee.email}</span><span className="trainee-location"><MapPin size={14} /> {trainee.location}</span></div></div>
-                </div>
-                <div className={`mapping-indicator ${trainee.isMapped ? 'mapped' : 'unmapped'}`}>
-                  {trainee.isMapped ? <><CheckCircle size={14} /> Mapped {trainee.projectName && <span className="project-name-small">: {trainee.projectName}</span>}</> : <><AlertCircle size={14} /> Unmapped {activeTab === 'openPool' && <span className="open-pool-badge">No Matches</span>}</>}
-                </div>
-              </div>
-              <div className="trainee-skills">
-                {trainee.skills.slice(0, 4).map((skill) => <span key={skill} className="skill-tag">{skill}</span>)}
-                {trainee.skills.length > 4 && <span className="skill-tag-more">+{trainee.skills.length - 4}</span>}
-              </div>
-              <div className="trainee-stats">
-                <div className="trainee-stat"><span className="stat-label">Avg Score</span><div className="score-progress"><div className="progress-bar"><div className="progress-fill" style={{ width: `${trainee.score}%` }}></div></div><span className="score-value">{trainee.score}%</span></div></div>
-              </div>
-              <div className="trainee-actions">
-                <button className="btn-action btn-profile" onClick={() => handleViewTraineeProfile(trainee)}><User size={16} /> View Profile</button>
-              </div>
+
+        {trainees.length === 0 && !loading && !checkingMatches ? (
+          <div className="no-data"><Users size={48} /><h3>No Trainees Found</h3></div>
+        ) : (
+          <>
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Location</th>
+                    <th>Batch</th>
+                    <th>Skills</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentTrainees.map((trainee) => (
+                    <tr key={trainee.id}>
+                      <td>
+                        <div className="trainee-name-cell">
+                          <div className="trainee-avatar-small">{trainee.name.charAt(0)}</div>
+                          <span>{trainee.name}</span>
+                        </div>
+                      </td>
+                      <td>{trainee.email}</td>
+                      <td>{trainee.location}</td>
+                      <td>{trainee.batch_name || '-'}</td>
+                      <td>
+                        <div className="skills-cell">
+                          {trainee.skills.slice(0, 3).map(skill => <span key={skill} className="skill-tag-small">{skill}</span>)}
+                          {trainee.skills.length > 3 && <span className="more-skills">+{trainee.skills.length - 3}</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="score-cell">
+                          <div className="mini-progress"><div className="mini-fill" style={{ width: `${trainee.score}%` }} /></div>
+                          <span>{trainee.score}%</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${trainee.isMapped ? 'status-mapped' : 'status-unmapped'}`}>
+                          {trainee.isMapped ? 'Mapped' : 'Unmapped'}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="btn-icon btn-icon-view" onClick={() => handleViewTraineeProfile(trainee)} title="View Profile">
+                          <Eye size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button disabled={traineePage === 1} onClick={() => setTraineePage(p => p - 1)}>&lt;</button>
+                <span>Page {traineePage} of {totalPages}</span>
+                <button disabled={traineePage === totalPages} onClick={() => setTraineePage(p => p + 1)}>&gt;</button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   };
@@ -1998,6 +2077,7 @@ function DashboardHR({ userData, onLogout }) {
               <div className="job-details">
                 <p><strong>Department:</strong> {jobDetailsJob.department}</p>
                 <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
+                <p><strong>Batch:</strong> {jobDetailsJob.batch_name || 'N/A'}</p>
                 <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
                 <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
                 <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
@@ -2131,6 +2211,7 @@ function DashboardHR({ userData, onLogout }) {
                     <div className="detail-item"><span className="detail-label">User ID</span><span className="detail-value">{userInfo.userId || 'N/A'}</span></div>
                     <div className="detail-item"><span className="detail-label">Employee ID</span><span className="detail-value">{userInfo.employeeId || 'N/A'}</span></div>
                     <div className="detail-item"><span className="detail-label">ISU</span><span className="detail-value">{userInfo.isu || 'N/A'}</span></div>
+                    <div className="detail-item"><span className="detail-label">Batch</span><span className="detail-value">{traineeData.batch_name || 'N/A'}</span></div>
                     <div className="detail-item"><span className="detail-label">Batch Rank</span><span className="detail-value">{traineeData.batchRank || 'N/A'}</span></div>
                     <div className="detail-item"><span className="detail-label">Group Rank</span><span className="detail-value">{traineeData.groupRank || 'N/A'}</span></div>
                     <div className="detail-item"><span className="detail-label">Avg Score</span><span className="detail-value">{userInfo.averageScore || 0}%</span></div>
@@ -2749,6 +2830,26 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
+  // Batch selector
+  const renderBatchSelector = () => (
+    <div className="batch-selector">
+      <Layers size={18} />
+      <select
+        value={selectedBatch}
+        onChange={(e) => {
+          setSelectedBatch(e.target.value);
+          setTraineePage(1); // reset pagination
+        }}
+        className="batch-dropdown"
+      >
+        <option value="">All Batches</option>
+        {availableBatches.map(batch => (
+          <option key={batch} value={batch}>{batch}</option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <div className="dashboard">
       <Toaster richColors position="top-right" />
@@ -2760,6 +2861,7 @@ function DashboardHR({ userData, onLogout }) {
             <div className="header-subtitle">Welcome back, {userData?.name || 'HR Manager'} | Talent Management</div>
           </div>
           <div className="header-actions">
+            {renderBatchSelector()}
             {loading && <div className="loading-indicator"><div className="loading-spinner small"></div><span>Processing...</span></div>}
           </div>
         </div>
@@ -2779,6 +2881,3 @@ function DashboardHR({ userData, onLogout }) {
 }
 
 export default DashboardHR;
-
-
-//npm install react-app-rewired customize-cra buffer crypto-browserify stream-browserify

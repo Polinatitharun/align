@@ -1,4 +1,3 @@
-
 import pandas as pd
 import threading
 import json
@@ -32,7 +31,8 @@ from .serializers import (
     UserSerializer, AddUserSerializer, EditUserSerializer, ResetPasswordSerializer,
     JobSerializer, ProfileRecordSerializer, UserInfoSerializer, UserInfoMappingSerializer,
     RecommendationSerializer, MatchListSerializer, InterviewLockSerializer,
-    InterviewLockCreateSerializer, InterviewFeedbackSerializer
+    InterviewLockCreateSerializer, InterviewFeedbackSerializer,
+    ManagerChatSessionSerializer, ManagerChatMessageSerializer   # ensure these exist
 )
 from .tokens import CustomTokenObtainPairSerializer
 from .matching_engine import run_matching_logic, llm, clean
@@ -41,15 +41,9 @@ logger = logging.getLogger(__name__)
 
 # ---------- Helper to get trainee profile from request user ----------
 def get_trainee_profile(user):
-    """
-    Return the ProfileRecord associated with the given user.
-    First tries to match by user.email, then by user.username (which is employeeId).
-    """
     try:
-        # Try to find UserInfo by email
         user_info = UserInfo.objects.get(email=user.email)
     except UserInfo.DoesNotExist:
-        # Fallback: try by employeeId (which is stored in user.username)
         try:
             user_info = UserInfo.objects.get(employeeId=user.username)
         except UserInfo.DoesNotExist:
@@ -203,14 +197,17 @@ class UploadBulkDeactivateUsersView(APIView):
 class JobListView(APIView):
     def get(self, request):
         jobs = Job.objects.all()
+        batch = request.query_params.get('batch')
+        if batch:
+            jobs = jobs.filter(batch_name=batch)
         serializer = JobSerializer(jobs, many=True)
         return Response(serializer.data)
 
     def post(self, request):
         serializer = JobSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            threading.Thread(target=run_matching_logic, daemon=True).start()
+            job = serializer.save()
+            threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
 
@@ -256,10 +253,11 @@ class ToggleJobStatusView(APIView):
 class UploadExcelView(APIView):
     def post(self, request):
         file = request.FILES.get('excel_file')
+        batch_name = request.data.get('batch_name')
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
         if not file.name.endswith(('.xlsx', '.xls', '.csv')):
-            return Response({"error": "Invalid file type. Please upload Excel files (.xlsx, .xls, .csv)"}, status=400)
+            return Response({"error": "Invalid file type"}, status=400)
 
         try:
             df = pd.read_excel(file)
@@ -299,19 +297,19 @@ class UploadExcelView(APIView):
                         'status': 'active',
                         'filled': 0,
                         'matches': 0,
-                        'postedDate': datetime.now().strftime('%Y-%m-%d')
+                        'postedDate': datetime.now().strftime('%Y-%m-%d'),
+                        'batch_name': batch_name,
                     }
                     serializer = JobSerializer(data=job_data)
                     if serializer.is_valid():
                         job = serializer.save()
                         created_jobs.append(job.title)
+                        threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
                     else:
                         errors.append(f"Row {index+2}: {serializer.errors}")
                 except Exception as e:
                     errors.append(f"Row {index+2}: {str(e)}")
 
-            if created_jobs:
-                threading.Thread(target=run_matching_logic).start()
             response = {"message": f"Processed {len(created_jobs)} jobs", "created_jobs": created_jobs}
             if errors:
                 response["errors"] = errors[:10]
@@ -324,6 +322,7 @@ class UploadWordView(APIView):
 
     def post(self, request):
         file = request.FILES.get('wordFile')
+        batch_name = request.data.get('batch_name')
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
         try:
@@ -331,10 +330,11 @@ class UploadWordView(APIView):
             content = '\n'.join([para.text for para in doc.paragraphs])
             job_data = self.parse_word_content(content)
             if job_data:
+                job_data['batch_name'] = batch_name
                 serializer = JobSerializer(data=job_data)
                 if serializer.is_valid():
                     job = serializer.save()
-                    threading.Thread(target=run_matching_logic).start()
+                    threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
                     return Response({"message": "Job created", "job": job.title}, status=201)
                 return Response(serializer.errors, status=400)
             return Response({"error": "Could not parse Word document"}, status=400)
@@ -417,6 +417,9 @@ class DownloadWordTemplateView(APIView):
 class ProfileListCreateAPIView(APIView):
     def get(self, request):
         qs = ProfileRecord.objects.select_related('userInfo').prefetch_related('strengths','weaknesses').all()
+        batch = request.query_params.get('batch')
+        if batch:
+            qs = qs.filter(batch_name=batch)
         serializer = ProfileRecordSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -424,7 +427,6 @@ class ProfileListCreateAPIView(APIView):
         serializer = ProfileRecordSerializer(data=request.data)
         if serializer.is_valid():
             instance = serializer.save()
-            # Create Django user if employeeId exists
             user_info = instance.userInfo
             if user_info.employeeId:
                 emp_id = str(user_info.employeeId)
@@ -490,7 +492,6 @@ class BulkUploadProfilesAPIView(APIView):
             serializer = ProfileRecordSerializer(data=payload)
             if serializer.is_valid():
                 instance = serializer.save()
-                # Create Django user if employeeId exists
                 user_info = instance.userInfo
                 if user_info.employeeId:
                     emp_id = str(user_info.employeeId)
@@ -544,7 +545,6 @@ def recommendation_list_create(request):
             qs = qs.filter(job_id=job_id)
         serializer = RecommendationSerializer(qs, many=True)
         return Response(serializer.data)
-    # POST
     serializer = RecommendationSerializer(data=request.data)
     if serializer.is_valid():
         obj = serializer.save()
@@ -574,13 +574,6 @@ def recommendation_detail(request, pk):
         return Response(status=204)
 
 # ---------- Matching Engine Trigger ----------
-# class RunMatchingEngineView(APIView):
-#     def post(self, request):
-#         result = run_matching_logic()
-#         if result:
-#             return Response({"message": "Matching run successfully."}, status=201)
-#         else:
-#             return Response({"message": "Already updated"}, status=200)
 class RunMatchingEngineView(APIView):
     def post(self, request):
         job_id = request.data.get('job_id')
@@ -599,6 +592,19 @@ class RunMatchingEngineView(APIView):
 class JobMatchListView(APIView):
     def get(self, request, job_id):
         job = get_object_or_404(Job, id=job_id)
+        batch = request.query_params.get('batch')
+        if batch and job.batch_name != batch:
+            return Response({
+                "job_title": job.title,
+                "job_id": job.id,
+                "total_matches": 0,
+                "perfect_match": [],
+                "skills_only": [],
+                "location_only": [],
+                "nearby": [],
+                "no_match": []
+            })
+
         global_excluded = InterviewLock.objects.filter(status__in=['locked','selected']).values_list('trainee_id', flat=True).distinct()
         rejected_for_job = InterviewLock.objects.filter(job_id=job_id, status='rejected').values_list('trainee_id', flat=True).distinct()
         all_excluded = list(global_excluded) + list(rejected_for_job)
@@ -632,7 +638,11 @@ class JobMatchListView(APIView):
 class TraineeMatchListView(APIView):
     def get(self, request, trainee_id):
         trainee = get_object_or_404(ProfileRecord, id=trainee_id)
+        batch = request.query_params.get('batch')
         matches = Match.objects.filter(trainee_ref=trainee)
+        if batch:
+            matches = matches.filter(job_ref__batch_name=batch)
+
         response = {
             "trainee_name": trainee.userInfo.name if trainee.userInfo else "Unknown",
             "trainee_id": trainee.id,
@@ -678,6 +688,9 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        batch = self.request.query_params.get('batch')
+        if batch:
+            qs = qs.filter(job__batch_name=batch) | qs.filter(trainee__batch_name=batch)
         job_id = self.request.query_params.get('job')
         trainee_id = self.request.query_params.get('trainee')
         status_filter = self.request.query_params.get('status')
@@ -689,51 +702,12 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status=status_filter)
         return qs
 
-    # @action(detail=False, methods=['post'])
-    # def bulk_create(self, request):
-    #     serializer = InterviewLockCreateSerializer(data=request.data)
-    #     serializer.is_valid(raise_exception=True)
-    #     data = serializer.validated_data
-    #     trainee_ids = data['trainee_ids']
-    #     job_id = data['job_id']
-    #     interview_datetime = data['interview_datetime']
-    #     comments = data.get('comments', '')
-    #     assigned_to_id = data.get('assigned_to')
-
-    #     assigned_to = None
-    #     if assigned_to_id:
-    #         try:
-    #             assigned_to = User.objects.get(id=assigned_to_id)
-    #         except User.DoesNotExist:
-    #             return Response({'error': 'Assigned user not found'}, status=400)
-
-    #     try:
-    #         job = Job.objects.get(id=job_id)
-    #     except Job.DoesNotExist:
-    #         return Response({'error': 'Job not found'}, status=404)
-
-    #     locks = []
-    #     for tid in trainee_ids:
-    #         lock, created = InterviewLock.objects.get_or_create(
-    #             trainee_id=tid,
-    #             job_id=job_id,
-    #             defaults={
-    #                 'locked_by': request.user,
-    #                 'interview_datetime': interview_datetime,
-    #                 'comments': comments,
-    #                 'assigned_to': assigned_to,
-    #             }
-    #         )
-    #         if created:
-    #             locks.append(lock)
-    #     output_serializer = self.get_serializer(locks, many=True)
-    #     return Response(output_serializer.data, status=201)
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
         serializer = InterviewLockCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        trainee_user_ids = data['trainee_ids']          # these are strings (userId)
+        trainee_user_ids = data['trainee_ids']
         job_id = data['job_id']
         interview_datetime = data['interview_datetime']
         comments = data.get('comments', '')
@@ -751,7 +725,6 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         except Job.DoesNotExist:
             return Response({'error': 'Job not found'}, status=404)
 
-        # Map userId strings to ProfileRecord primary keys
         profiles = ProfileRecord.objects.filter(
             userInfo__userId__in=trainee_user_ids
         ).select_related('userInfo')
@@ -761,10 +734,9 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         for user_id in trainee_user_ids:
             prof_id = userid_to_profid.get(user_id)
             if not prof_id:
-                # Optionally log or skip; you may want to return an error
                 continue
             lock, created = InterviewLock.objects.get_or_create(
-                trainee_id=prof_id,          # use the integer primary key
+                trainee_id=prof_id,
                 job_id=job_id,
                 defaults={
                     'locked_by': request.user,
@@ -781,10 +753,14 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
-        total_locked = InterviewLock.objects.filter(status='locked').count()
-        total_selected = InterviewLock.objects.filter(status='selected').count()
-        total_rejected = InterviewLock.objects.filter(status='rejected').count()
-        by_job = InterviewLock.objects.values('job__title').annotate(
+        batch = request.query_params.get('batch')
+        qs = InterviewLock.objects.all()
+        if batch:
+            qs = qs.filter(job__batch_name=batch) | qs.filter(trainee__batch_name=batch)
+        total_locked = qs.filter(status='locked').count()
+        total_selected = qs.filter(status='selected').count()
+        total_rejected = qs.filter(status='rejected').count()
+        by_job = qs.values('job__title').annotate(
             locked=django_models.Count('id', filter=django_models.Q(status='locked')),
             selected=django_models.Count('id', filter=django_models.Q(status='selected')),
             rejected=django_models.Count('id', filter=django_models.Q(status='rejected')),
@@ -838,7 +814,7 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_assigned(self, request):
         if request.user.role != 'interviewer':
-            return Response({'error': 'Access denied. Your role is "{}". Expected "interviewer".'.format(request.user.role)}, status=403)
+            return Response({'error': 'Access denied.'}, status=403)
         qs = self.get_queryset().filter(assigned_to=request.user, status='locked')
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
@@ -848,11 +824,14 @@ class MappedTraineesReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        batch = request.query_params.get('batch')
+        mapped = UserInfo.objects.filter(isMapped=True).select_related('profile')
+        if batch:
+            mapped = mapped.filter(profile__batch_name=batch)
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="mapped_trainees.csv"'
         writer = csv.writer(response)
         writer.writerow(['Name','Email','Location','Project ID','Project Name','Score'])
-        mapped = UserInfo.objects.filter(isMapped=True).select_related('profile')
         for info in mapped:
             writer.writerow([
                 info.name,
@@ -868,11 +847,14 @@ class UnmappedTraineesReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        batch = request.query_params.get('batch')
+        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
+        if batch:
+            unmapped = unmapped.filter(profile__batch_name=batch)
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="unmapped_trainees.csv"'
         writer = csv.writer(response)
         writer.writerow(['Name','Email','Location','Average Score'])
-        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
         for info in unmapped:
             writer.writerow([
                 info.name,
@@ -887,7 +869,10 @@ class OpenPoolReportView(APIView):
 
     def get(self, request):
         from django.db.models import Exists, OuterRef
+        batch = request.query_params.get('batch')
         unmapped = UserInfo.objects.filter(isMapped=False)
+        if batch:
+            unmapped = unmapped.filter(profile__batch_name=batch)
         has_match = Match.objects.filter(trainee_ref__userInfo=OuterRef('pk'))
         open_pool = unmapped.annotate(has_match=Exists(has_match)).filter(has_match=False)
 
@@ -916,7 +901,7 @@ class DecoLoginView(APIView):
         if not username or not password:
             return Response({"error": "Username and password required"}, status=400)
 
-        deco_login_url = "https://deco.example.com/api/auth/login"  # adjust URL
+        deco_login_url = "https://deco.example.com/api/auth/login"
         try:
             resp = requests.post(deco_login_url, json={"username": username, "password": password})
             if resp.status_code == 200:
@@ -936,7 +921,7 @@ class DecoStatusView(APIView):
         token = _deco_tokens.get(request.user.id)
         if not token:
             return Response({"error": "Not logged in to Deco"}, status=401)
-        deco_status_url = "https://deco.example.com/api/health"  # adjust
+        deco_status_url = "https://deco.example.com/api/health"
         try:
             resp = requests.get(deco_status_url, headers={"Authorization": f"Bearer {token}"}, timeout=5)
             if resp.status_code == 200:
@@ -956,7 +941,7 @@ class DecoFetchTraineesView(APIView):
         if not token:
             return Response({"error": "Not logged in to Deco"}, status=401)
 
-        deco_trainees_url = f"https://deco.example.com/api/alltraineesprofilesfromdeco/batch={batch}"  # adjust
+        deco_trainees_url = f"https://deco.example.com/api/alltraineesprofilesfromdeco/batch={batch}"
         try:
             resp = requests.get(deco_trainees_url, headers={"Authorization": f"Bearer {token}"})
             if resp.status_code != 200:
@@ -988,18 +973,13 @@ class DecoFetchTraineesView(APIView):
                     employee_id = user_info_data.get('employeeId')
                     isu = user_info_data.get('isu')
 
-                    # Required fields check
                     if not employee_id or not user_id:
-                        errors.append({
-                            "item": user_id or employee_id or "unknown",
-                            "error": f"Missing employeeId or userId: emp={employee_id}, user={user_id}"
-                        })
+                        errors.append({"item": user_id or employee_id or "unknown", "error": "Missing employeeId or userId"})
                         continue
 
                     employee_id = str(employee_id)
                     user_id = str(user_id)
 
-                    # Create/Update Django User (trainee)
                     user, created = User.objects.update_or_create(
                         username=employee_id,
                         defaults={
@@ -1014,7 +994,6 @@ class DecoFetchTraineesView(APIView):
                         user.set_password('Tcs#12345')
                         user.save()
 
-                    # Create/Update UserInfo
                     user_info, _ = UserInfo.objects.update_or_create(
                         userId=user_id,
                         defaults={
@@ -1026,7 +1005,6 @@ class DecoFetchTraineesView(APIView):
                         }
                     )
 
-                    # Create/Update ProfileRecord
                     profile, _ = ProfileRecord.objects.update_or_create(
                         external_id=external_id,
                         defaults={
@@ -1040,34 +1018,21 @@ class DecoFetchTraineesView(APIView):
                         }
                     )
 
-                    # Strengths
                     if strengths_data:
                         profile.strengths.all().delete()
                         for s in strengths_data:
-                            Strength.objects.create(
-                                profile=profile,
-                                courseName=s.get('courseName'),
-                                avgScore=s.get('avgScore')
-                            )
+                            Strength.objects.create(profile=profile, courseName=s.get('courseName'), avgScore=s.get('avgScore'))
 
-                    # Weaknesses
                     if weaknesses_data:
                         profile.weaknesses.all().delete()
                         for w in weaknesses_data:
-                            Weakness.objects.create(
-                                profile=profile,
-                                courseName=w.get('courseName'),
-                                avgScore=w.get('avgScore')
-                            )
+                            Weakness.objects.create(profile=profile, courseName=w.get('courseName'), avgScore=w.get('avgScore'))
 
                     stored_count += 1
                 except Exception as e:
                     errors.append({"item": item.get('id'), "error": str(e)})
 
-            return Response({
-                "message": f"Stored {stored_count} trainees",
-                "errors": errors
-            }, status=201)
+            return Response({"message": f"Stored {stored_count} trainees", "errors": errors}, status=201)
 
         except Exception as e:
             logger.error(f"Deco fetch trainees error: {e}")
@@ -1081,7 +1046,6 @@ class AssociateProfileView(APIView):
         if request.user.role != 'trainee':
             return Response({"error": "Access denied"}, status=403)
         profile = get_trainee_profile(request.user)
-        print(request.user)
         if not profile:
             return Response({"error": "Profile not found"}, status=404)
         serializer = ProfileRecordSerializer(profile)
@@ -1133,7 +1097,7 @@ class AISuggestionView(APIView):
         try:
             suggestion = clean(llm.invoke(prompt).content)
         except Exception as e:
-            suggestion = "Unable to generate suggestion at this time. Please try again later."
+            suggestion = "Unable to generate suggestion at this time."
         return Response({"suggestion": suggestion})
 
 class InterviewQuestionsView(APIView):
@@ -1141,7 +1105,6 @@ class InterviewQuestionsView(APIView):
 
     def post(self, request):
         job_id = request.data.get('job_id')
-        levels = request.data.get('levels', ['low','medium','high'])
         if not job_id:
             return Response({"error": "job_id required"}, status=400)
 
@@ -1252,7 +1215,6 @@ class AssociateDashboardView(APIView):
 
         profile_data = ProfileRecordSerializer(profile).data
 
-        # Skill gap analysis for top 5 matches
         matches = Match.objects.filter(trainee_ref=profile).select_related('job_ref')[:5]
         skill_gaps = []
         for match in matches:
@@ -1316,12 +1278,7 @@ class PeerComparisonView(APIView):
             'top_percentile': round((rank / total) * 100, 1) if total else 0
         })
 
-
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import status
-
+# ---------- JobViewSet (for visibility) ----------
 class JobViewSet(viewsets.ModelViewSet):
     queryset = Job.objects.all()
     serializer_class = JobSerializer
@@ -1336,21 +1293,19 @@ class JobViewSet(viewsets.ModelViewSet):
             return Response({'status': 'visibility updated'})
         return Response({'error': 'is_public field required'}, status=status.HTTP_400_BAD_REQUEST)
 
-
+# ---------- Create Interviewer ----------
 class CreateInterviewerView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Only HR or admin can create interviewers
         if request.user.role not in ['hr', 'admin']:
             return Response({"error": "Permission denied"}, status=403)
-        
+
         username = request.data.get('username')
         password = request.data.get('password')
         if not username or not password:
             return Response({"error": "Username and password required"}, status=400)
 
-        # Ensure email ends with @tcs.com
         email = request.data.get('email', f"{username}@tcs.com")
         if not email.endswith('@tcs.com'):
             return Response({"error": "Email must be @tcs.com"}, status=400)
@@ -1366,3 +1321,135 @@ class CreateInterviewerView(APIView):
             is_active=True
         )
         return Response({"message": "Interviewer created", "user_id": user.id}, status=201)
+
+# ==================== Manager Chatbot ====================
+from .models import ManagerChatSession, ManagerChatMessage
+from .serializers import ManagerChatSessionSerializer, ManagerChatMessageSerializer
+import requests
+import json
+
+def build_manager_chat_context(batch=None):
+    jobs = Job.objects.filter(status='active')
+    trainees = ProfileRecord.objects.select_related('userInfo')
+    if batch:
+        jobs = jobs.filter(batch_name=batch)
+        trainees = trainees.filter(batch_name=batch)
+
+    total_trainees = trainees.count()
+    mapped = trainees.filter(userInfo__isMapped=True).count()
+    active_jobs_count = jobs.count()
+    
+    top_jobs = jobs[:5]
+    job_summaries = []
+    for job in top_jobs:
+        skills = (job.techSkills or [])[:2]
+        job_summaries.append(f"- {job.title} ({job.openings} openings, skills: {', '.join(skills)})")
+    
+    demand_map = {}
+    for job in jobs:
+        for skill in (job.techSkills or []) + (job.softSkills or []):
+            demand_map[skill] = demand_map.get(skill, 0) + 1
+    supply_map = {}
+    for trainee in trainees.prefetch_related('strengths'):
+        for strength in trainee.strengths.all():
+            skill = strength.courseName
+            supply_map[skill] = supply_map.get(skill, 0) + 1
+    
+    gaps = []
+    for skill, demand in demand_map.items():
+        supply = supply_map.get(skill, 0)
+        if demand > supply:
+            gaps.append((skill, demand - supply))
+    gaps.sort(key=lambda x: x[1], reverse=True)
+    top_gaps = gaps[:3]
+    gap_str = ", ".join([f"{s} (gap {g})" for s, g in top_gaps]) if top_gaps else "none"
+    
+    context = f"""Batch: {batch if batch else 'All'}. Trainees: {total_trainees} (mapped: {mapped}). Active jobs: {active_jobs_count}.
+Sample jobs: {'; '.join(job_summaries) if job_summaries else 'none'}.
+Top skill gaps: {gap_str}."""
+    
+    return context
+
+def call_ollama_with_context(context, conversation_history, user_query):
+    # Very compact prompt
+    prompt = f"Data: {context[:800]}\nUser: {user_query}\nAnswer briefly:"
+    
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "phi3",               # use a fast, small model
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "max_tokens": 100,
+                }
+            },
+            timeout=20
+        )
+        if response.status_code == 200:
+            return response.json().get("response", "")
+    except Exception as e:
+        logger.error(f"Ollama call failed: {e}")
+    
+    # Fallback: simple rule-based answers
+    q = user_query.lower()
+    if "skill gap" in q:
+        return "Skill gaps are shown in the Skill Gaps tab. Top gaps: " + context.split("Top skill gaps:")[-1].split(".")[0]
+    if "mapped" in q:
+        return f"Currently, {context.split('mapped:')[1].split('.')[0] if 'mapped:' in context else 'some'} trainees are mapped."
+    if "job" in q:
+        return f"Active jobs: {context.split('Active jobs:')[1].split('.')[0] if 'Active jobs:' in context else 'several'}."
+    return "I'm currently processing your request. For detailed analytics, please check the respective dashboard tabs."
+
+class ManagerChatContextView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        batch = request.query_params.get('batch', '')
+        context = build_manager_chat_context(batch)
+        return Response({"context": context})
+
+class ManagerChatSessionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ManagerChatSessionSerializer
+
+    def get_queryset(self):
+        return ManagerChatSession.objects.filter(user=self.request.user).order_by('-updated_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def send_message(self, request, pk=None):
+        session = self.get_object()
+        user_msg = request.data.get('message')
+        if not user_msg:
+            return Response({'error': 'Message required'}, status=400)
+
+        # Save user message
+        user_msg_obj = ManagerChatMessage.objects.create(
+            session=session, role='user', content=user_msg
+        )
+
+        # Build context with batch filter
+        batch = request.data.get('batch', '')
+        context = build_manager_chat_context(batch)
+
+        # Get conversation history
+        history = list(session.messages.values('role', 'content'))
+
+        # Get bot reply
+        bot_reply = call_ollama_with_context(context, history, user_msg)
+
+        # Save bot message
+        bot_msg_obj = ManagerChatMessage.objects.create(
+            session=session, role='assistant', content=bot_reply
+        )
+
+        session.save()
+        return Response({
+            'user_message': ManagerChatMessageSerializer(user_msg_obj).data,
+            'bot_reply': ManagerChatMessageSerializer(bot_msg_obj).data
+        })
