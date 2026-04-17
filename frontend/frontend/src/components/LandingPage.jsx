@@ -1,230 +1,169 @@
+// LandingPage.js
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-function LandingPage({ onNavigate }) {
+import './styles/LandingPage.css';
+import { 
+  Sparkles, 
+  Target, 
+  Users, 
+  Brain, 
+  BarChart3, 
+  Shield,
+  ArrowRight,
+  CheckCircle
+} from 'lucide-react';
+
+function LandingPage() {
   const navigate = useNavigate();
+
+  const features = [
+    {
+      icon: <Brain size={28} />,
+      title: 'AI-Powered Matching',
+      description: 'Advanced algorithms match trainees to projects based on skills, location, and performance metrics.'
+    },
+    {
+      icon: <Target size={28} />,
+      title: 'Skill Gap Analysis',
+      description: 'Identify skill shortages across your talent pool and get actionable upskilling recommendations.'
+    },
+    {
+      icon: <Users size={28} />,
+      title: 'Batch Management',
+      description: 'Organize trainees by batches and compare performance across different cohorts.'
+    },
+    {
+      icon: <BarChart3 size={28} />,
+      title: 'Real-Time Analytics',
+      description: 'Comprehensive dashboards with hiring funnels, time-to-fill metrics, and interviewer performance.'
+    },
+    {
+      icon: <Shield size={28} />,
+      title: 'Interview Locking',
+      description: 'Secure interview scheduling with automated assignment and feedback collection.'
+    },
+    {
+      icon: <Sparkles size={28} />,
+      title: 'AI Assistant',
+      description: 'Built-in chatbot provides instant answers about jobs, skills, and trainee data.'
+    }
+  ];
+
   return (
     <div className="landing-page">
-      <style>{`
-        .landing-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          text-align: center;
-          position: relative;
-          overflow: hidden;
-        }
-        
-        /* Animated Background */
-        .animated-bg {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: 
-            radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-          z-index: 0;
-        }
-        
-        /* Floating Elements */
-        .floating-element {
-          position: absolute;
-          border-radius: 50%;
-          background: rgba(255, 255, 255, 0.1);
-          animation: float 20s infinite linear;
-        }
-        
-        .floating-element:nth-child(1) {
-          width: 300px;
-          height: 300px;
-          top: 10%;
-          left: 10%;
-          animation-delay: 0s;
-        }
-        
-        .floating-element:nth-child(2) {
-          width: 200px;
-          height: 200px;
-          bottom: 20%;
-          right: 15%;
-          animation-delay: -10s;
-        }
-        
-        @keyframes float {
-          0%, 100% {
-            transform: translate(0, 0) rotate(0deg);
-          }
-          33% {
-            transform: translate(30px, 30px) rotate(120deg);
-          }
-          66% {
-            transform: translate(-30px, 15px) rotate(240deg);
-          }
-        }
-        
-        /* Content */
-        .content {
-          position: relative;
-          z-index: 1;
-          max-width: 600px;
-        }
-        
-        .logo {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          margin-bottom: 30px;
-        }
-        
-        .logo-icon {
-          font-size: 48px;
-        }
-        
-        .logo-text {
-          font-size: 42px;
-          font-weight: 700;
-          background: linear-gradient(to right, #ffffff, #e0e7ff);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        
-        .title {
-          font-size: 3.5rem;
-          font-weight: 700;
-          color: white;
-          margin-bottom: 20px;
-          line-height: 1.2;
-        }
-        
-        .subtitle {
-          font-size: 1.2rem;
-          color: rgba(255, 255, 255, 0.9);
-          margin-bottom: 40px;
-          line-height: 1.6;
-          max-width: 500px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-        
-        /* CTA Button */
-        .cta-button {
-          background: white;
-          color: #667eea;
-          padding: 16px 40px;
-          font-size: 1.1rem;
-          font-weight: 600;
-          border: none;
-          border-radius: 50px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-        }
-        
-        .cta-button:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
-        }
-        
-        .cta-button:active {
-          transform: translateY(0);
-        }
-        
-        /* Footer Note */
-        .footer-note {
-          position: absolute;
-          bottom: 30px;
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 14px;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-          .title {
-            font-size: 2.5rem;
-          }
-          
-          .logo-text {
-            font-size: 32px;
-          }
-          
-          .logo-icon {
-            font-size: 36px;
-          }
-          
-          .subtitle {
-            font-size: 1rem;
-            padding: 0 20px;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .title {
-            font-size: 2rem;
-          }
-          
-          .logo {
-            flex-direction: column;
-            gap: 8px;
-          }
-          
-          .logo-text {
-            font-size: 28px;
-          }
-          
-          .cta-button {
-            padding: 14px 30px;
-            font-size: 1rem;
-          }
-        }
-      `}</style>
-
       {/* Animated Background */}
-      <div className="animated-bg">
-        <div className="floating-element"></div>
-        <div className="floating-element"></div>
+      <div className="landing-bg">
+        <div className="bg-blob bg-blob-1"></div>
+        <div className="bg-blob bg-blob-2"></div>
+        <div className="bg-blob bg-blob-3"></div>
       </div>
 
-      {/* Main Content */}
-      <div className="content">
-        <div className="logo">
-          {/* <span className="logo-icon">🚀</span> */}
-          <span className="logo-text">Talent Align</span>
+      {/* Navigation */}
+      <nav className="landing-nav">
+        <div className="nav-container">
+          <div className="nav-logo">
+            <Sparkles size={28} className="logo-icon" />
+            <span className="logo-text">Talent Align</span>
+          </div>
+          <button 
+            className="nav-cta"
+            onClick={() => navigate('/login')}
+          >
+            Sign In
+          </button>
         </div>
-        
-        <h1 className="title">
-          AI-Powered Training
-          <br />
-          & Job Matching Platform
-        </h1>
-        
-        <p className="subtitle">
-          Transform your workforce with intelligent skill development, 
-          performance evaluation, and precision job matching powered by 
-          advanced AI and machine learning.
-        </p>
-        
-        <button 
-          className="cta-button"
-           onClick={() => navigate('/login')}
-        >
-          <span>Get Started</span>
-          <span>→</span>
-        </button>
-      </div>
-      
-      {/* <div className="footer-note">
-        Click "Get Started" to access the platform
-      </div> */}
+      </nav>
+
+      {/* Hero Section */}
+      <section className="hero-section">
+        <div className="hero-container">
+          <div className="hero-badge">
+            <Sparkles size={16} />
+            <span>AI-Powered Talent Management</span>
+          </div>
+          <h1 className="hero-title">
+            Transform Your Workforce with
+            <span className="gradient-text"> Intelligent Matching</span>
+          </h1>
+          <p className="hero-subtitle">
+            Streamline recruitment, identify skill gaps, and match the right talent 
+            to the right projects with our AI-driven platform.
+          </p>
+          <div className="hero-actions">
+            <button 
+              className="btn-primary btn-large"
+              onClick={() => navigate('/login')}
+            >
+              Get Started <ArrowRight size={20} />
+            </button>
+            <button className="btn-outline btn-large">
+              Watch Demo
+            </button>
+          </div>
+          <div className="hero-stats">
+            <div className="stat-item">
+              <span className="stat-value">98%</span>
+              <span className="stat-label">Match Accuracy</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">5x</span>
+              <span className="stat-label">Faster Hiring</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">10k+</span>
+              <span className="stat-label">Trainees Managed</span>
+            </div>
+          </div>
+        </div>
+        <div className="hero-visual">
+          <div className="dashboard-preview">
+            <div className="preview-card"></div>
+            <div className="preview-card"></div>
+            <div className="preview-card"></div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="features-section">
+        <div className="features-container">
+          <div className="section-header">
+            <span className="section-badge">Why Choose Talent Align</span>
+            <h2 className="section-title">
+              Everything you need to <span className="gradient-text">optimize talent</span>
+            </h2>
+            <p className="section-subtitle">
+              From skill assessment to project mapping, our platform provides end-to-end talent management.
+            </p>
+          </div>
+          <div className="features-grid">
+            {features.map((feature, index) => (
+              <div key={index} className="feature-card">
+                <div className="feature-icon">{feature.icon}</div>
+                <h3 className="feature-title">{feature.title}</h3>
+                <p className="feature-description">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="cta-section">
+        <div className="cta-container">
+          <h2 className="cta-title">Ready to transform your talent strategy?</h2>
+          <p className="cta-subtitle">Join leading organizations using Talent Align to build high-performing teams.</p>
+          <button 
+            className="btn-primary btn-large"
+            onClick={() => navigate('/login')}
+          >
+            Start Free Trial <ArrowRight size={20} />
+          </button>
+          <div className="cta-trust">
+            <CheckCircle size={16} /> No credit card required • 14-day free trial
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

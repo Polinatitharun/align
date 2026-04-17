@@ -1,5 +1,4 @@
-// DashboardHR.js – Complete updated version with batch filtering, table view, pagination
-
+// DashboardHR.js – Refactored to match Manager Dashboard style
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import XlsxPopulate from 'xlsx-populate';
@@ -9,57 +8,35 @@ import {
   Users,
   BarChart2,
   FileText,
-  ExternalLink,
-  Lightbulb,
-  BarChart3,
   LogOut,
-  TrendingUp,
   CheckCircle,
-  Clock,
   MapPin,
-  DollarSign,
   Calendar,
   Edit,
   Trash2,
   Eye,
   Search,
-  Filter,
   X,
-  ChevronRight,
   User,
   Mail,
   Star,
-  Award,
   Target,
-  PieChart,
   Download,
-  Bell,
-  Settings,
   Plus,
   ArrowLeft,
   Check,
   AlertCircle,
   Link,
-  GraduationCap,
   BriefcaseBusiness,
   Building,
-  DollarSign as Dollar,
-  CalendarDays,
   BookOpen,
-  Brain,
   Sparkles,
-  Zap,
-  ThumbsUp,
-  TrendingDown,
   FileSpreadsheet,
   File,
   Upload,
   Users2,
   Lock,
   XCircle,
-  Sliders,
-  Grid,
-  List,
   RefreshCw,
   Shield,
   Layers,
@@ -84,7 +61,7 @@ function DashboardHR({ userData, onLogout }) {
   // Batch selection
   const [selectedBatch, setSelectedBatch] = useState('');
   const [availableBatches, setAvailableBatches] = useState([]);
-  const [unfilteredTrainees, setUnfilteredTrainees] = useState([]); // full list for batch dropdown
+  const [unfilteredTrainees, setUnfilteredTrainees] = useState([]);
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -158,7 +135,7 @@ function DashboardHR({ userData, onLogout }) {
   const [selectedSearchTraineeIds, setSelectedSearchTraineeIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
-  // Pagination for trainees table
+  // Pagination
   const [traineePage, setTraineePage] = useState(1);
   const traineesPerPage = 10;
 
@@ -186,7 +163,6 @@ function DashboardHR({ userData, onLogout }) {
 
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
-
   const getBatchParam = () => (selectedBatch ? `?batch=${selectedBatch}` : '');
 
   // ==================== API Calls ====================
@@ -219,7 +195,7 @@ function DashboardHR({ userData, onLogout }) {
     getMapping: async (userId) => (await api.get(`/api/userinfo/${userId}/`)).data,
   };
 
-  // Fetch trainees (with optional batch filter)
+  // Fetch trainees
   const fetchTrainees = async () => {
     setLoading(true);
     setError(null);
@@ -241,9 +217,6 @@ function DashboardHR({ userData, onLogout }) {
           skills,
           score: Math.round(avgScore),
           location: (userInfo.location || 'unknown').toLowerCase(),
-          matchedJobs: [],
-          certifications: trainee.certificates ? [trainee.certificates] : [],
-          preferredLocation: userInfo.location || 'Unknown',
           isMapped: userInfo.isMapped || false,
           projectId: userInfo.projectId || '',
           projectName: userInfo.projectName || '',
@@ -253,8 +226,6 @@ function DashboardHR({ userData, onLogout }) {
       });
       setTrainees(transformed);
       setAllTrainees(transformed);
-
-      // If no batch selected, also store unfiltered list for batch dropdown
       if (!selectedBatch) {
         setUnfilteredTrainees(transformed);
         const batches = [...new Set(transformed.map(t => t.batch_name).filter(Boolean))];
@@ -269,7 +240,6 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // Initial fetch for full trainee list (to populate batch dropdown) if not already done
   const fetchFullTraineeListForBatches = async () => {
     if (unfilteredTrainees.length > 0) return;
     try {
@@ -289,9 +259,6 @@ function DashboardHR({ userData, onLogout }) {
           skills,
           score: Math.round(avgScore),
           location: (userInfo.location || 'unknown').toLowerCase(),
-          matchedJobs: [],
-          certifications: trainee.certificates ? [trainee.certificates] : [],
-          preferredLocation: userInfo.location || 'Unknown',
           isMapped: userInfo.isMapped || false,
           projectId: userInfo.projectId || '',
           projectName: userInfo.projectName || '',
@@ -422,11 +389,7 @@ function DashboardHR({ userData, onLogout }) {
         return;
       }
 
-      const mappingData = {
-        isMapped: true,
-        projectId: job.id.toString(),
-        projectName: job.title,
-      };
+      const mappingData = { isMapped: true, projectId: job.id.toString(), projectName: job.title };
       await mappingAPI.updateMapping(userId, mappingData);
       const updatedJob = await updateJobVacancies(job);
 
@@ -597,11 +560,6 @@ function DashboardHR({ userData, onLogout }) {
     setShowJobDetailsModal(true);
   };
 
-  const handleViewJobMatches = (job) => {
-    setSelectedJob(job);
-    fetchJobMatches(job.id);
-  };
-
   const handleViewTraineeProfile = (trainee) => {
     setSelectedTrainee(trainee);
     fetchTraineeMatches(trainee.id);
@@ -707,11 +665,8 @@ function DashboardHR({ userData, onLogout }) {
       if (skill && !techSkills.includes(skill)) {
         const updated = [...techSkills, skill];
         setTechSkills(updated);
-        if (selectedJob && isEditMode) {
-          setSelectedJob({ ...selectedJob, techSkills: updated });
-        } else {
-          setNewJob({ ...newJob, techSkills: updated });
-        }
+        if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, techSkills: updated });
+        else setNewJob({ ...newJob, techSkills: updated });
         e.target.value = '';
       }
     }
@@ -723,11 +678,8 @@ function DashboardHR({ userData, onLogout }) {
       if (skill && !softSkills.includes(skill)) {
         const updated = [...softSkills, skill];
         setSoftSkills(updated);
-        if (selectedJob && isEditMode) {
-          setSelectedJob({ ...selectedJob, softSkills: updated });
-        } else {
-          setNewJob({ ...newJob, softSkills: updated });
-        }
+        if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, softSkills: updated });
+        else setNewJob({ ...newJob, softSkills: updated });
         e.target.value = '';
       }
     }
@@ -735,20 +687,14 @@ function DashboardHR({ userData, onLogout }) {
   const removeTechSkill = (index) => {
     const updated = techSkills.filter((_, i) => i !== index);
     setTechSkills(updated);
-    if (selectedJob && isEditMode) {
-      setSelectedJob({ ...selectedJob, techSkills: updated });
-    } else {
-      setNewJob({ ...newJob, techSkills: updated });
-    }
+    if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, techSkills: updated });
+    else setNewJob({ ...newJob, techSkills: updated });
   };
   const removeSoftSkill = (index) => {
     const updated = softSkills.filter((_, i) => i !== index);
     setSoftSkills(updated);
-    if (selectedJob && isEditMode) {
-      setSelectedJob({ ...selectedJob, softSkills: updated });
-    } else {
-      setNewJob({ ...newJob, softSkills: updated });
-    }
+    if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, softSkills: updated });
+    else setNewJob({ ...newJob, softSkills: updated });
   };
 
   // Location fields
@@ -802,7 +748,7 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // ==================== Download Helpers (Excel with password) ====================
+  // ==================== Download Helpers ====================
   const createPasswordProtectedExcel = async (data, sheetName, password) => {
     const workbook = await XlsxPopulate.fromBlankAsync();
     const sheet = workbook.sheet(0);
@@ -813,9 +759,7 @@ function DashboardHR({ userData, onLogout }) {
         sheet.cell(i + 1, j + 1).value(row[j]);
       }
     }
-    data[0]?.forEach((_, colIndex) => {
-      sheet.column(colIndex + 1).width(20);
-    });
+    data[0]?.forEach((_, colIndex) => { sheet.column(colIndex + 1).width(20); });
     return await workbook.outputAsync({ password: password, type: 'blob' });
   };
 
@@ -873,23 +817,13 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const executeDownload = async () => {
-    if (!privacyAgreed) {
-      toast.error('You must agree to the privacy policy');
-      return;
-    }
-    if (downloadPassword !== 'Tcs#12345') {
-      toast.error('Incorrect password');
-      setDownloadPassword('');
-      return;
-    }
+    if (!privacyAgreed) { toast.error('You must agree to the privacy policy'); return; }
+    if (downloadPassword !== 'Tcs#12345') { toast.error('Incorrect password'); setDownloadPassword(''); return; }
     setShowPrivacyModal(false);
 
     const { type, params } = pendingDownload;
     try {
-      let data = null;
-      let filename = '';
-      let sheetName = '';
-
+      let data = null, filename = '', sheetName = '';
       if (type === 'search') {
         data = await getFilteredSearchData();
         filename = `job_matches_${selectedJobForSearch?.title || 'search'}.xlsx`;
@@ -924,9 +858,7 @@ function DashboardHR({ userData, onLogout }) {
             c.feedback ? 'Yes' : '-',
           ]);
         });
-        data = rows;
-        filename = 'selected_candidates.xlsx';
-        sheetName = 'Selected';
+        data = rows; filename = 'selected_candidates.xlsx'; sheetName = 'Selected';
       } else if (type === 'rejected') {
         const rows = [['Trainee Name', 'Job', 'Interviewer', 'Interview Date', 'Feedback']];
         rejectedLocks.forEach(lock => {
@@ -938,16 +870,10 @@ function DashboardHR({ userData, onLogout }) {
             lock.feedback ? 'Yes' : '-',
           ]);
         });
-        data = rows;
-        filename = 'rejected_candidates.xlsx';
-        sheetName = 'Rejected';
+        data = rows; filename = 'rejected_candidates.xlsx'; sheetName = 'Rejected';
       }
 
-      if (!data || data.length === 0) {
-        toast.error('No data to download');
-        return;
-      }
-
+      if (!data || data.length === 0) { toast.error('No data to download'); return; }
       const excelBlob = await createPasswordProtectedExcel(data, sheetName, downloadPassword);
       const downloadUrl = window.URL.createObjectURL(excelBlob);
       const a = document.createElement('a');
@@ -964,17 +890,13 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  const downloadReport = async (reportType) => {
-    requestDownload('report', { reportType });
-  };
+  const downloadReport = async (reportType) => { requestDownload('report', { reportType }); };
 
   const fetchInterviewers = async () => {
     try {
       const res = await api.get('/users/?role=interviewer');
       setInterviewers(res.data);
-    } catch (err) {
-      toast.error('Failed to load interviewers');
-    }
+    } catch (err) { toast.error('Failed to load interviewers'); }
   };
 
   const fetchSelectedCandidates = async () => {
@@ -985,65 +907,28 @@ function DashboardHR({ userData, onLogout }) {
       ]);
       const interviewSelected = locksRes.data;
       const directMapped = traineesRes.filter(t => t.isMapped);
-
       const combined = [
-        ...interviewSelected.map(lock => ({
-          ...lock,
-          source: 'Interview',
-          trainee_id: lock.trainee_id,
-          name: lock.trainee_name,
-          projectName: lock.job_title,
-          lock_id: lock.id,
-        })),
-        ...directMapped.map(t => ({
-          trainee_id: t.userId,
-          trainee_name: t.name,
-          job_title: t.projectName,
-          assigned_to_name: 'HR Direct',
-          interview_datetime: null,
-          feedback: null,
-          source: 'Direct',
-        }))
+        ...interviewSelected.map(lock => ({ ...lock, source: 'Interview', trainee_id: lock.trainee_id, name: lock.trainee_name, projectName: lock.job_title, lock_id: lock.id })),
+        ...directMapped.map(t => ({ trainee_id: t.userId, trainee_name: t.name, job_title: t.projectName, assigned_to_name: 'HR Direct', interview_datetime: null, feedback: null, source: 'Direct' }))
       ];
       setSelectedCandidates(combined);
-    } catch (err) {
-      toast.error('Failed to fetch selected candidates');
-    }
+    } catch (err) { toast.error('Failed to fetch selected candidates'); }
   };
 
   const fetchRejectedLocks = async () => {
     try {
       const res = await api.get(`/interview-locks/?status=rejected${selectedBatch ? `&batch=${selectedBatch}` : ''}`);
       setRejectedLocks(res.data);
-    } catch (err) {
-      toast.error('Failed to fetch rejected candidates');
-    }
+    } catch (err) { toast.error('Failed to fetch rejected candidates'); }
   };
 
   const handleLockForInterview = async () => {
-    if (selectedTraineeIds.length === 0) {
-      toast.error('Select at least one trainee');
-      return;
-    }
-    if (!lockInterviewDatetime) {
-      toast.error('Select interview date and time');
-      return;
-    }
+    if (selectedTraineeIds.length === 0) { toast.error('Select at least one trainee'); return; }
+    if (!lockInterviewDatetime) { toast.error('Select interview date and time'); return; }
     const selectedDate = new Date(lockInterviewDatetime);
-    const now = new Date();
-    if (selectedDate <= now) {
-      toast.error('Interview date must be in the future');
-      return;
-    }
-    const day = selectedDate.getDay();
-    if (day === 0 || day === 6) {
-      toast.error('Weekends are not allowed for interviews');
-      return;
-    }
-    if (!assignedToId) {
-      toast.error('Select an interviewer');
-      return;
-    }
+    if (selectedDate <= new Date()) { toast.error('Interview date must be in the future'); return; }
+    if (selectedDate.getDay() === 0 || selectedDate.getDay() === 6) { toast.error('Weekends are not allowed'); return; }
+    if (!assignedToId) { toast.error('Select an interviewer'); return; }
     try {
       setLoading(true);
       await api.post('/interview-locks/bulk_create/', {
@@ -1054,23 +939,15 @@ function DashboardHR({ userData, onLogout }) {
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
-
-      setRecentActivity(prev => [
-        { type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.title, time: new Date().toLocaleString() },
-        ...prev.slice(0, 4)
-      ]);
-
+      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.title, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
       setShowLockModal(false);
       setSelectedTraineeIds([]);
       setLockInterviewDatetime('');
       setLockComments('');
       setAssignedToId('');
       if (selectedJob) fetchJobMatches(selectedJob.id);
-    } catch (err) {
-      toast.error('Failed to lock trainees');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { toast.error('Failed to lock trainees'); }
+    finally { setLoading(false); }
   };
 
   const handleCancelSelected = async (lockId) => {
@@ -1080,9 +957,7 @@ function DashboardHR({ userData, onLogout }) {
       fetchSelectedCandidates();
       fetchInterviewLocks();
       fetchLockStats();
-    } catch (err) {
-      toast.error('Failed to cancel selection');
-    }
+    } catch (err) { toast.error('Failed to cancel selection'); }
   };
 
   const handleJobSelectForSearch = (jobId) => {
@@ -1096,16 +971,10 @@ function DashboardHR({ userData, onLogout }) {
     if (job) {
       setJobMatchesLoading(true);
       api.get(`/matches/${job.id}/${getBatchParam()}`)
-        .then(res => {
-          setSearchJobMatches(res.data);
-          setSelectedSearchTraineeIds([]);
-          setSelectAll(false);
-        })
+        .then(res => { setSearchJobMatches(res.data); setSelectedSearchTraineeIds([]); setSelectAll(false); })
         .catch(() => toast.error('Failed to fetch matches'))
         .finally(() => setJobMatchesLoading(false));
-    } else {
-      setSearchJobMatches(null);
-    }
+    } else { setSearchJobMatches(null); }
   };
 
   const filteredSearchMatches = () => {
@@ -1135,38 +1004,18 @@ function DashboardHR({ userData, onLogout }) {
       const trainee = allTrainees.find(t => t.userId === m.trainee_id);
       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
     });
-    if (selectAll) {
-      setSelectedSearchTraineeIds([]);
-    } else {
-      setSelectedSearchTraineeIds(filtered.map(m => String(m.trainee_id)));
-    }
+    if (selectAll) setSelectedSearchTraineeIds([]);
+    else setSelectedSearchTraineeIds(filtered.map(m => String(m.trainee_id)));
     setSelectAll(!selectAll);
   };
 
   const handleLockFromSearch = async () => {
-    if (selectedSearchTraineeIds.length === 0) {
-      toast.error('Select at least one trainee');
-      return;
-    }
-    if (!lockInterviewDatetime) {
-      toast.error('Select interview date and time');
-      return;
-    }
+    if (selectedSearchTraineeIds.length === 0) { toast.error('Select at least one trainee'); return; }
+    if (!lockInterviewDatetime) { toast.error('Select interview date and time'); return; }
     const selectedDate = new Date(lockInterviewDatetime);
-    const now = new Date();
-    if (selectedDate <= now) {
-      toast.error('Interview date must be in the future');
-      return;
-    }
-    const day = selectedDate.getDay();
-    if (day === 0 || day === 6) {
-      toast.error('Weekends are not allowed for interviews');
-      return;
-    }
-    if (!assignedToId) {
-      toast.error('Select an interviewer');
-      return;
-    }
+    if (selectedDate <= new Date()) { toast.error('Interview date must be in the future'); return; }
+    if (selectedDate.getDay() === 0 || selectedDate.getDay() === 6) { toast.error('Weekends are not allowed'); return; }
+    if (!assignedToId) { toast.error('Select an interviewer'); return; }
     try {
       setLoading(true);
       await api.post('/interview-locks/bulk_create/', {
@@ -1177,12 +1026,7 @@ function DashboardHR({ userData, onLogout }) {
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
-
-      setRecentActivity(prev => [
-        { type: 'Locked', trainee: `${selectedSearchTraineeIds.length} trainees`, job: selectedJobForSearch.title, time: new Date().toLocaleString() },
-        ...prev.slice(0, 4)
-      ]);
-
+      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedSearchTraineeIds.length} trainees`, job: selectedJobForSearch.title, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
       setShowLockModal(false);
       setSelectedSearchTraineeIds([]);
       setSelectAll(false);
@@ -1190,31 +1034,20 @@ function DashboardHR({ userData, onLogout }) {
       setLockComments('');
       setAssignedToId('');
       handleJobSelectForSearch(selectedJobForSearch.id);
-    } catch (err) {
-      toast.error('Failed to lock trainees');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { toast.error('Failed to lock trainees'); }
+    finally { setLoading(false); }
   };
 
   const handleCreateInterviewer = async () => {
-    if (!newInterviewer.username || !newInterviewer.password) {
-      toast.error('Username and password required');
-      return;
-    }
-    if (!newInterviewer.email.endsWith('@tcs.com')) {
-      toast.error('Email must end with @tcs.com');
-      return;
-    }
+    if (!newInterviewer.username || !newInterviewer.password) { toast.error('Username and password required'); return; }
+    if (!newInterviewer.email.endsWith('@tcs.com')) { toast.error('Email must end with @tcs.com'); return; }
     try {
       await api.post('/users/create-interviewer/', newInterviewer);
       toast.success('Interviewer created');
       setShowCreateInterviewerModal(false);
       setNewInterviewer({ username: '', password: '', email: '' });
       fetchInterviewers();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to create interviewer');
-    }
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to create interviewer'); }
   };
 
   const runMatchingEngine = async (jobId = '') => {
@@ -1223,28 +1056,17 @@ function DashboardHR({ userData, onLogout }) {
       await api.post('/run-matching/', { job_id: jobId });
       toast.success('Matching engine triggered successfully');
       if (jobId) {
-        if (selectedJob && selectedJob.id === parseInt(jobId)) {
-          fetchJobMatches(jobId);
-        }
-        if (selectedJobForSearch && selectedJobForSearch.id === parseInt(jobId)) {
-          handleJobSelectForSearch(jobId);
-        }
-      } else {
-        fetchJobs();
-      }
-    } catch (err) {
-      toast.error('Failed to trigger matching engine');
-    } finally {
-      setLoading(false);
-    }
+        if (selectedJob && selectedJob.id === parseInt(jobId)) fetchJobMatches(jobId);
+        if (selectedJobForSearch && selectedJobForSearch.id === parseInt(jobId)) handleJobSelectForSearch(jobId);
+      } else fetchJobs();
+    } catch (err) { toast.error('Failed to trigger matching engine'); }
+    finally { setLoading(false); }
   };
 
   const fetchAnalytics = async () => {
     try {
-      let totalMatches = 0;
-      let totalPercentSum = 0;
+      let totalMatches = 0, totalPercentSum = 0;
       const buckets = { PERFECT_MATCH: 0, SKILLS_ONLY: 0, LOCATION_ONLY: 0, NEARBY: 0, NO_MATCH: 0 };
-
       for (const job of jobs) {
         try {
           const res = await api.get(`/matches/${job.id}/${getBatchParam()}`);
@@ -1255,179 +1077,100 @@ function DashboardHR({ userData, onLogout }) {
           if (data.location_only) totalPercentSum += data.location_only.reduce((acc, m) => acc + m.total_percentage, 0);
           if (data.nearby) totalPercentSum += data.nearby.reduce((acc, m) => acc + m.total_percentage, 0);
           if (data.no_match) totalPercentSum += data.no_match.reduce((acc, m) => acc + m.total_percentage, 0);
-
           buckets.PERFECT_MATCH += data.perfect_match?.length || 0;
           buckets.SKILLS_ONLY += data.skills_only?.length || 0;
           buckets.LOCATION_ONLY += data.location_only?.length || 0;
           buckets.NEARBY += data.nearby?.length || 0;
           buckets.NO_MATCH += data.no_match?.length || 0;
-        } catch (err) {
-          console.error(`Failed to fetch matches for job ${job.id}`, err);
-        }
+        } catch (err) { console.error(`Failed to fetch matches for job ${job.id}`, err); }
       }
       setTotalMatchesCount(totalMatches);
       setAvgMatchPercent(totalMatches > 0 ? Math.round(totalPercentSum / totalMatches) : 0);
       setBucketDistribution(buckets);
-    } catch (err) {
-      console.error('Analytics fetch error:', err);
-    }
+    } catch (err) { console.error('Analytics fetch error:', err); }
   };
 
   const fetchRecentActivity = async () => {
     try {
-      const [locksRes] = await Promise.all([
-        api.get(`/interview-locks/${getBatchParam()}`),
-      ]);
+      const locksRes = await api.get(`/interview-locks/${getBatchParam()}`);
       const locks = locksRes.data.slice(0,5).map(lock => ({
         type: lock.status === 'selected' ? 'Selected' : lock.status === 'rejected' ? 'Rejected' : 'Locked',
         trainee: lock.trainee_name,
         job: lock.job_title,
         time: new Date(lock.created_at).toLocaleString(),
       }));
-      setRecentActivity(prev => {
-        const combined = [...locks, ...prev].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,5);
-        return combined;
-      });
-    } catch (err) {
-      console.error('Failed to fetch recent activity', err);
-    }
+      setRecentActivity(prev => { return [...locks, ...prev].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,5); });
+    } catch (err) { console.error('Failed to fetch recent activity', err); }
   };
 
   // ==================== Effects ====================
-  // On mount, fetch full trainee list to populate batch dropdown
+  useEffect(() => { fetchFullTraineeListForBatches(); }, []);
   useEffect(() => {
-    fetchFullTraineeListForBatches();
-  }, []);
-
-  useEffect(() => {
-    if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) {
-      fetchTrainees();
-    }
+    if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) fetchTrainees();
   }, [activeTab, selectedBatch]);
-
   useEffect(() => {
     if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs();
   }, [activeTab, selectedBatch]);
-
   useEffect(() => {
     if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool();
   }, [allTrainees, activeTab, selectedBatch]);
-
+  useEffect(() => { setSkillTrends(computeSkillTrends(jobs)); }, [jobs]);
   useEffect(() => {
-    setSkillTrends(computeSkillTrends(jobs));
-  }, [jobs]);
-
-  useEffect(() => {
-    if (activeTab === 'dashboard') {
-      fetchLockStats();
-      fetchAnalytics();
-      fetchRecentActivity();
-    }
+    if (activeTab === 'dashboard') { fetchLockStats(); fetchAnalytics(); fetchRecentActivity(); }
   }, [activeTab, jobs, selectedBatch]);
-
   useEffect(() => {
     let filtered = [...allTrainees];
     if (searchQuery) {
-      filtered = filtered.filter(
-        (t) =>
-          t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
+      filtered = filtered.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.email.toLowerCase().includes(searchQuery.toLowerCase()) || t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())));
     }
-    if (locationFilter) {
-      filtered = filtered.filter((t) => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
-    }
-    if (activeTab === 'mapped') filtered = filtered.filter((t) => t.isMapped);
-    else if (activeTab === 'unmapped') filtered = filtered.filter((t) => !t.isMapped);
+    if (locationFilter) filtered = filtered.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
+    if (activeTab === 'mapped') filtered = filtered.filter(t => t.isMapped);
+    else if (activeTab === 'unmapped') filtered = filtered.filter(t => !t.isMapped);
     else if (activeTab === 'openPool') {
-      const noMatchIds = traineesWithNoMatches.map((t) => t.id || t.trainee_id);
-      filtered = filtered.filter((t) => !t.isMapped && noMatchIds.includes(t.id));
+      const noMatchIds = traineesWithNoMatches.map(t => t.id || t.trainee_id);
+      filtered = filtered.filter(t => !t.isMapped && noMatchIds.includes(t.id));
     }
     setTrainees(filtered);
   }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
-
   useEffect(() => {
-    if (activeTab === 'interviewLocks') {
-      fetchInterviewLocks();
-      fetchLockStats();
-    }
+    if (activeTab === 'interviewLocks') { fetchInterviewLocks(); fetchLockStats(); }
   }, [activeTab, lockFilter, selectedBatch]);
-
   useEffect(() => {
     if (activeTab === 'selected') fetchSelectedCandidates();
     if (activeTab === 'rejected') fetchRejectedLocks();
   }, [activeTab, allTrainees, selectedBatch]);
 
   const computeSkillTrends = (jobs) => {
-    const techMap = new Map();
-    const softMap = new Map();
-    const WEIGHTS = {
-      basePerJob: 1,
-      openingsWeight: 0.5,
-      matchesWeight: 0.25,
-      inactivePenalty: 0.4,
-      unfilledBonus: 0.3,
-    };
+    const techMap = new Map(); const softMap = new Map();
+    const WEIGHTS = { basePerJob: 1, openingsWeight: 0.5, matchesWeight: 0.25, inactivePenalty: 0.4, unfilledBonus: 0.3 };
     for (const job of jobs || []) {
       const isActive = job?.status === 'active';
       const openings = Number(job?.openings ?? 0);
       const filled = Number(job?.filled ?? 0);
       const matches = Number(job?.matches ?? 0);
       const unfilled = Math.max(0, openings - filled);
-      const jobWeight =
-        WEIGHTS.basePerJob +
-        openings * WEIGHTS.openingsWeight +
-        matches * WEIGHTS.matchesWeight +
-        unfilled * WEIGHTS.unfilledBonus;
+      const jobWeight = WEIGHTS.basePerJob + openings * WEIGHTS.openingsWeight + matches * WEIGHTS.matchesWeight + unfilled * WEIGHTS.unfilledBonus;
       const effectiveWeight = isActive ? jobWeight : jobWeight * WEIGHTS.inactivePenalty;
-
-      (job?.techSkills || []).forEach((raw) => {
-        const skill = normalizeSkill(raw);
-        if (!skill) return;
+      (job?.techSkills || []).forEach(raw => {
+        const skill = normalizeSkill(raw); if (!skill) return;
         const cur = techMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-        techMap.set(skill, {
-          jobs: cur.jobs + 1,
-          openings: cur.openings + openings,
-          matches: cur.matches + matches,
-          demand: cur.demand + effectiveWeight,
-        });
+        techMap.set(skill, { jobs: cur.jobs + 1, openings: cur.openings + openings, matches: cur.matches + matches, demand: cur.demand + effectiveWeight });
       });
-
-      (job?.softSkills || []).forEach((raw) => {
-        const skill = normalizeSkill(raw);
-        if (!skill) return;
+      (job?.softSkills || []).forEach(raw => {
+        const skill = normalizeSkill(raw); if (!skill) return;
         const cur = softMap.get(skill) || { jobs: 0, openings: 0, matches: 0, demand: 0 };
-        softMap.set(skill, {
-          jobs: cur.jobs + 1,
-          openings: cur.openings + openings,
-          matches: cur.matches + matches,
-          demand: cur.demand + effectiveWeight,
-        });
+        softMap.set(skill, { jobs: cur.jobs + 1, openings: cur.openings + openings, matches: cur.matches + matches, demand: cur.demand + effectiveWeight });
       });
     }
-
     const toSortedArray = (map) => {
-      const arr = Array.from(map.entries()).map(([name, stats]) => ({
-        name,
-        jobs: stats.jobs,
-        openings: stats.openings,
-        matches: stats.matches,
-        demandRaw: stats.demand,
-      }));
-      const maxDemand = Math.max(...arr.map((a) => a.demandRaw), 1);
-      return arr
-        .map((a) => ({
-          ...a,
-          demand: Math.round((a.demandRaw / maxDemand) * 100),
-        }))
-        .sort((a, b) => b.demand - a.demand || b.jobs - a.jobs)
-        .slice(0, 5);
+      const arr = Array.from(map.entries()).map(([name, stats]) => ({ name, jobs: stats.jobs, openings: stats.openings, matches: stats.matches, demandRaw: stats.demand }));
+      const maxDemand = Math.max(...arr.map(a => a.demandRaw), 1);
+      return arr.map(a => ({ ...a, demand: Math.round((a.demandRaw / maxDemand) * 100) })).sort((a, b) => b.demand - a.demand || b.jobs - a.jobs).slice(0, 5);
     };
     return { tech: toSortedArray(techMap), soft: toSortedArray(softMap) };
   };
 
-  // ==================== Render Helpers ====================
+  // ==================== Render Functions ====================
   const renderHiddenFileInputs = () => (
     <>
       <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
@@ -1436,75 +1179,25 @@ function DashboardHR({ userData, onLogout }) {
   );
 
   const handleExcelUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      setLoading(true);
-      await jobAPI.uploadExcel(file);
-      await fetchJobs();
-      toast.success('Excel uploaded');
-    } catch (err) {
-      toast.error('Upload failed');
-    } finally {
-      setLoading(false);
-      event.target.value = '';
-    }
+    const file = event.target.files[0]; if (!file) return;
+    try { setLoading(true); await jobAPI.uploadExcel(file); await fetchJobs(); toast.success('Excel uploaded'); }
+    catch { toast.error('Upload failed'); } finally { setLoading(false); event.target.value = ''; }
   };
 
   const handleWordUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      setLoading(true);
-      await jobAPI.uploadWord(file);
-      await fetchJobs();
-      toast.success('Word uploaded');
-    } catch (err) {
-      toast.error('Upload failed');
-    } finally {
-      setLoading(false);
-      event.target.value = '';
-    }
+    const file = event.target.files[0]; if (!file) return;
+    try { setLoading(true); await jobAPI.uploadWord(file); await fetchJobs(); toast.success('Word uploaded'); }
+    catch { toast.error('Upload failed'); } finally { setLoading(false); event.target.value = ''; }
   };
 
   const handleDownloadExcelTemplate = async () => {
-    try {
-      setLoading(true);
-      const blob = await jobAPI.downloadExcelTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'job_template.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Template downloaded');
-    } catch (err) {
-      toast.error('Download failed');
-    } finally {
-      setLoading(false);
-    }
+    try { setLoading(true); const blob = await jobAPI.downloadExcelTemplate(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'job_template.xlsx'; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); toast.success('Template downloaded'); }
+    catch { toast.error('Download failed'); } finally { setLoading(false); }
   };
 
   const handleDownloadWordTemplate = async () => {
-    try {
-      setLoading(true);
-      const blob = await jobAPI.downloadWordTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'job_template.docx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Template downloaded');
-    } catch (err) {
-      toast.error('Download failed');
-    } finally {
-      setLoading(false);
-    }
+    try { setLoading(true); const blob = await jobAPI.downloadWordTemplate(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'job_template.docx'; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); toast.success('Template downloaded'); }
+    catch { toast.error('Download failed'); } finally { setLoading(false); }
   };
 
   // Modals
@@ -1519,29 +1212,16 @@ function DashboardHR({ userData, onLogout }) {
           </div>
           <div className="modal-body">
             <div className="privacy-notice">
-              <p>By downloading this file, you agree to comply with the company's data privacy policy.
-                The information contained is confidential and intended solely for authorised personnel.
-                Unauthorised distribution or misuse may result in disciplinary action.</p>
+              <p>By downloading this file, you agree to comply with the company's data privacy policy. The information contained is confidential and intended solely for authorised personnel. Unauthorised distribution or misuse may result in disciplinary action.</p>
               <p className="mt-2"><strong>Note:</strong> The file will be downloaded as a password‑protected Excel file. You will need the password to open it.</p>
             </div>
             <div className="checkbox-group">
-              <input
-                type="checkbox"
-                id="privacyAgree"
-                checked={privacyAgreed}
-                onChange={(e) => setPrivacyAgreed(e.target.checked)}
-              />
+              <input type="checkbox" id="privacyAgree" checked={privacyAgreed} onChange={(e) => setPrivacyAgreed(e.target.checked)} />
               <label htmlFor="privacyAgree">I have read and agree to the data privacy policy</label>
             </div>
             <div className="form-group">
               <label>Download Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={downloadPassword}
-                onChange={(e) => setDownloadPassword(e.target.value)}
-                placeholder="Enter password (Tcs#12345)"
-              />
+              <input type="password" className="form-control" value={downloadPassword} onChange={(e) => setDownloadPassword(e.target.value)} placeholder="Enter password (Tcs#12345)" />
             </div>
           </div>
           <div className="modal-actions">
@@ -1563,34 +1243,9 @@ function DashboardHR({ userData, onLogout }) {
             <button className="modal-close" onClick={() => setShowCreateInterviewerModal(false)}><X /></button>
           </div>
           <div className="modal-body">
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                className="form-control"
-                value={newInterviewer.username}
-                onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>Email</label>
-              <input
-                type="email"
-                className="form-control"
-                value={newInterviewer.email}
-                onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })}
-                placeholder="must end with @tcs.com"
-              />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={newInterviewer.password}
-                onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })}
-              />
-            </div>
+            <div className="form-group"><label>Username</label><input type="text" className="form-control" value={newInterviewer.username} onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })} /></div>
+            <div className="form-group"><label>Email</label><input type="email" className="form-control" value={newInterviewer.email} onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })} placeholder="must end with @tcs.com" /></div>
+            <div className="form-group"><label>Password</label><input type="password" className="form-control" value={newInterviewer.password} onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })} /></div>
           </div>
           <div className="modal-actions">
             <button className="btn-secondary" onClick={() => setShowCreateInterviewerModal(false)}>Cancel</button>
@@ -1606,20 +1261,11 @@ function DashboardHR({ userData, onLogout }) {
     return (
       <div className="modal-overlay" onClick={() => setShowExcelTemplate(false)}>
         <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <div className="modal-title"><FileSpreadsheet size={24} /><h2>Excel Upload Template</h2></div>
-            <button className="modal-close" onClick={() => setShowExcelTemplate(false)}><X size={24} /></button>
-          </div>
-          <div className="modal-body">
-            <h3>Download the template, fill it, and upload.</h3>
-          </div>
+          <div className="modal-header"><div className="modal-title"><FileSpreadsheet size={24} /><h2>Excel Upload Template</h2></div><button className="modal-close" onClick={() => setShowExcelTemplate(false)}><X size={24} /></button></div>
+          <div className="modal-body"><h3>Download the template, fill it, and upload.</h3></div>
           <div className="modal-actions">
-            <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}>
-              <Download size={18} /> Download Template
-            </button>
-            <button className="btn-primary" onClick={() => { document.getElementById('excelUpload').click(); setShowExcelTemplate(false); }} disabled={loading}>
-              <Upload size={18} /> Upload Excel
-            </button>
+            <button className="btn-secondary" onClick={handleDownloadExcelTemplate} disabled={loading}><Download size={18} /> Download Template</button>
+            <button className="btn-primary" onClick={() => { document.getElementById('excelUpload').click(); setShowExcelTemplate(false); }} disabled={loading}><Upload size={18} /> Upload Excel</button>
           </div>
         </div>
       </div>
@@ -1631,27 +1277,17 @@ function DashboardHR({ userData, onLogout }) {
     return (
       <div className="modal-overlay" onClick={() => setShowWordTemplate(false)}>
         <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <div className="modal-title"><File size={24} /><h2>Word Template</h2></div>
-            <button className="modal-close" onClick={() => setShowWordTemplate(false)}><X size={24} /></button>
-          </div>
-          <div className="modal-body">
-            <h3>Download the Word template, fill it, and upload.</h3>
-          </div>
+          <div className="modal-header"><div className="modal-title"><File size={24} /><h2>Word Template</h2></div><button className="modal-close" onClick={() => setShowWordTemplate(false)}><X size={24} /></button></div>
+          <div className="modal-body"><h3>Download the Word template, fill it, and upload.</h3></div>
           <div className="modal-actions">
-            <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}>
-              <Download size={18} /> Download Template
-            </button>
-            <button className="btn-primary" onClick={() => { document.getElementById('wordUpload').click(); setShowWordTemplate(false); }} disabled={loading}>
-              <Upload size={18} /> Upload Word
-            </button>
+            <button className="btn-secondary" onClick={handleDownloadWordTemplate} disabled={loading}><Download size={18} /> Download Template</button>
+            <button className="btn-primary" onClick={() => { document.getElementById('wordUpload').click(); setShowWordTemplate(false); }} disabled={loading}><Upload size={18} /> Upload Word</button>
           </div>
         </div>
       </div>
     );
   };
 
-  // Dashboard render
   const renderDashboard = () => (
     <div className="dashboard-content">
       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
@@ -1733,7 +1369,6 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Job Management
   const renderJobManagement = () => (
     <div className="job-management">
       <div className="section-header">
@@ -1818,7 +1453,6 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Create/Edit Job Form
   const renderCreateJob = () => {
     const jobToEdit = selectedJob || newJob;
     const isEditing = !!selectedJob && isEditMode;
@@ -1939,7 +1573,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Trainees List (Table with Pagination)
   const renderTraineesList = () => {
     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
     const openPoolCount = traineesWithNoMatches.length;
@@ -2056,10 +1689,8 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Job Details Modal
   const renderJobDetailsModal = () => {
     if (!showJobDetailsModal || !jobDetailsJob) return null;
-
     return (
       <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
         <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
@@ -2156,7 +1787,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Trainee Profile Modal
   const renderTraineeModal = () => {
     if (!selectedTrainee) return null;
     const traineeData = selectedTrainee.traineeData || selectedTrainee;
@@ -2287,7 +1917,6 @@ function DashboardHR({ userData, onLogout }) {
                                 </div>
                               </div>
                             )}
-                            {/* Additional buckets can be added similarly */}
                           </>
                         )}
                       </>
@@ -2313,7 +1942,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Interview Locks Tab
   const renderInterviewLocks = () => {
     return (
       <div className="interview-locks">
@@ -2397,7 +2025,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Selected Tab
   const renderSelected = () => (
     <div className="selected-tab">
       <div className="section-header">
@@ -2458,7 +2085,6 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Rejected Tab
   const renderRejected = () => (
     <div className="rejected-tab">
       <div className="section-header">
@@ -2512,7 +2138,6 @@ function DashboardHR({ userData, onLogout }) {
     </div>
   );
 
-  // Feedback Modal
   const renderFeedbackModal = () => {
     if (!viewingFeedback) return null;
     const fb = viewingFeedback;
@@ -2544,7 +2169,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Lock Interview Modal
   const renderLockInterviewModal = () => {
     if (!showLockModal) return null;
     return (
@@ -2590,7 +2214,6 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
-  // Talent Search Tab
   const renderTalentSearch = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
@@ -2817,11 +2440,7 @@ function DashboardHR({ userData, onLogout }) {
       case 'dashboard': return renderDashboard();
       case 'jobs': return renderJobManagement();
       case 'createJob': return renderCreateJob();
-      case 'trainees':
-      case 'mapped':
-      case 'unmapped':
-      case 'openPool':
-        return renderTraineesList();
+      case 'trainees': case 'mapped': case 'unmapped': case 'openPool': return renderTraineesList();
       case 'talentSearch': return renderTalentSearch();
       case 'interviewLocks': return renderInterviewLocks();
       case 'selected': return renderSelected();
@@ -2830,22 +2449,12 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
-  // Batch selector
   const renderBatchSelector = () => (
     <div className="batch-selector">
       <Layers size={18} />
-      <select
-        value={selectedBatch}
-        onChange={(e) => {
-          setSelectedBatch(e.target.value);
-          setTraineePage(1); // reset pagination
-        }}
-        className="batch-dropdown"
-      >
+      <select value={selectedBatch} onChange={(e) => { setSelectedBatch(e.target.value); setTraineePage(1); }} className="batch-dropdown">
         <option value="">All Batches</option>
-        {availableBatches.map(batch => (
-          <option key={batch} value={batch}>{batch}</option>
-        ))}
+        {availableBatches.map(batch => <option key={batch} value={batch}>{batch}</option>)}
       </select>
     </div>
   );
