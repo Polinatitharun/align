@@ -2340,6 +2340,7 @@ function DashboardHR({ userData, onLogout }) {
                       <th>Trainee Name</th>
                       <th>Location</th>
                       <th>Bucket</th>
+                      <th>Matched Location</th> 
                       <th>Skills %</th>
                       <th>Location %</th>
                       <th>Total %</th>
@@ -2375,6 +2376,7 @@ function DashboardHR({ userData, onLogout }) {
                               {match.bucket === 'NEARBY' ? 'Proximity' : match.bucket?.replace('_', ' ')}
                             </span>
                           </td>
+                          <td>{match.matched_location || '—'}</td>   
                           <td>{match.skills_percentage.toFixed(1)}%</td>
                           <td>{match.location_percentage.toFixed(1)}%</td>
                           <td><strong>{match.total_percentage.toFixed(1)}%</strong></td>

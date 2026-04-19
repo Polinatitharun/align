@@ -143,6 +143,7 @@ class Match(models.Model):
     distance = models.FloatField(default=9999.0)
     matched_skills = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
+    matched_location = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         unique_together = ('job_ref', 'trainee_ref')

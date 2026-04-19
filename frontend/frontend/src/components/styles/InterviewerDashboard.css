@@ -87,7 +87,7 @@
 }
 
 .card-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg,skyblue 0%, skyblue 100%);
   color: white;
   padding: 1rem 1.5rem;
   display: flex;
@@ -195,7 +195,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg,skyblue 0%, skyblue 100%);
   color: white;
   border-radius: 16px 16px 0 0;
 }

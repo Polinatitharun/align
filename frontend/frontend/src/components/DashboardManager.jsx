@@ -1,4 +1,4 @@
-// DashboardManager.js – Final polished version
+// DashboardManager.js – Complete with matched location, weekly trend, demand-supply analysis, and refresh buttons
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import Sidebar from "./Sidebar";
@@ -50,6 +50,7 @@ function DashboardManager({ userData, onLogout }) {
     hiringFunnel: { matches: 0, locked: 0, selected: 0, mapped: 0 },
     interviewerPerformance: [],
     locationDemand: [],
+    weeklyTrend: [],
     aiSummary: "",
     isLoading: false,
     lastAnalyzed: null,
@@ -246,6 +247,8 @@ function DashboardManager({ userData, onLogout }) {
         const supply = supplyMap.get(skill) || 0;
         if (demand > supply) {
           skillGaps.push({ skill, demand, supply, gap: demand - supply });
+        } else if (supply > demand) {
+          skillGaps.push({ skill, demand, supply, gap: demand - supply }); // negative gap means surplus
         }
       });
       skillGaps.sort((a, b) => b.gap - a.gap);
@@ -301,10 +304,35 @@ function DashboardManager({ userData, onLogout }) {
         traineeCount: locationTraineeMap.get(loc) || 0,
       }));
 
+      // Weekly Trend (last 4 weeks)
+      const weeklyMap = new Map();
+      const today = new Date();
+      for (let i = 3; i >= 0; i--) {
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - i * 7);
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        weeklyMap.set(weekKey, { week: weekKey, selections: 0 });
+      }
+      currentLocks.forEach(lock => {
+        if (lock.status === 'selected' && lock.created_at) {
+          const lockDate = new Date(lock.created_at);
+          for (let [key, value] of weeklyMap.entries()) {
+            const weekStart = new Date(key);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 7);
+            if (lockDate >= weekStart && lockDate < weekEnd) {
+              value.selections += 1;
+              break;
+            }
+          }
+        }
+      });
+      const weeklyTrend = Array.from(weeklyMap.values());
+
       // AI Summary
       const selectionRate = lockedCount ? (selectedCount / lockedCount) * 100 : 0;
       const mappingRate = currentTrainees.length ? (mappedCount / currentTrainees.length) * 100 : 0;
-      const topGaps = skillGaps.slice(0, 3).map(g => g.skill).join(", ");
+      const topGaps = skillGaps.filter(g => g.gap > 0).slice(0, 3).map(g => g.skill).join(", ");
       const aiSummary = `📊 ${currentTrainees.length} trainees, mapping rate ${mappingRate.toFixed(1)}%. Top skill gaps: ${topGaps || "none"}. Selection rate: ${selectionRate.toFixed(1)}%.`;
 
       setAnalyticsData({
@@ -313,6 +341,7 @@ function DashboardManager({ userData, onLogout }) {
         hiringFunnel,
         interviewerPerformance,
         locationDemand,
+        weeklyTrend,
         aiSummary,
         isLoading: false,
         lastAnalyzed: new Date().toLocaleString(),
@@ -500,12 +529,13 @@ function DashboardManager({ userData, onLogout }) {
     const filtered = filteredSearchMatches();
     if (!filtered.length) return toast.error("No data");
     const csvRows = [];
-    csvRows.push(["Trainee Name", "Location", "Bucket", "Skills %", "Location %", "Total %", "Matched Skills"].join(","));
+    csvRows.push(["Trainee Name", "Location", "Bucket", "Matched Location", "Skills %", "Location %", "Total %", "Matched Skills"].join(","));
     filtered.forEach(m => {
       csvRows.push([
         `"${m.trainee_name}"`,
         `"${m.trainee_location || ""}"`,
         m.bucket,
+        `"${m.matched_location || ""}"`,
         m.skills_percentage,
         m.location_percentage,
         m.total_percentage,
@@ -705,6 +735,9 @@ function DashboardManager({ userData, onLogout }) {
         ))}
       </div>
       {comparisonLoading && <Loader className="spinner" size={16} />}
+      <button className="btn-secondary" onClick={fetchComparisonData} disabled={comparisonLoading}>
+        <RefreshCw size={16} /> Refresh
+      </button>
     </div>
   );
 
@@ -729,6 +762,11 @@ function DashboardManager({ userData, onLogout }) {
         <div className="charts-grid">
           <div className="chart-card"><h3>Top Skills in Demand</h3><div className="skills-chart">{topSkills.map(([skill, count]) => (<div key={skill} className="skill-row"><span>{skill}</span><div className="bar" style={{ width: `${(count / topSkills[0][1]) * 100}%` }}>{count}</div></div>))}</div></div>
           <div className="chart-card"><h3>Trainee Distribution</h3><div className="mapping-chart"><div className="bar-row"><span>Mapped</span><div className="bar" style={{ width: `${(mappedUnmappedStats.mapped / mappedUnmappedStats.total) * 100}%` }}>{mappedUnmappedStats.mapped}</div></div><div className="bar-row"><span>Unmapped (matched)</span><div className="bar" style={{ width: `${((mappedUnmappedStats.unmapped - openPoolTrainees.length) / mappedUnmappedStats.total) * 100}%` }}>{mappedUnmappedStats.unmapped - openPoolTrainees.length}</div></div><div className="bar-row"><span>Open Pool</span><div className="bar" style={{ width: `${(openPoolTrainees.length / mappedUnmappedStats.total) * 100}%` }}>{openPoolTrainees.length}</div></div></div></div>
+        </div>
+        <div className="flex-end">
+          <button className="btn-secondary" onClick={() => { fetchJobs(); fetchTrainees(); fetchLocks(); }}>
+            <RefreshCw size={16} /> Refresh Data
+          </button>
         </div>
       </div>
     );
@@ -805,6 +843,19 @@ function DashboardManager({ userData, onLogout }) {
               </table>
             </div>
 
+            <div className="analytics-card">
+              <h3><LineChart size={18} /> Selections Trend (Last 4 Weeks)</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <ReBarChart data={data.weeklyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" tickFormatter={(d) => d.slice(5)} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="selections" fill="#3b82f6" />
+                </ReBarChart>
+              </ResponsiveContainer>
+            </div>
+
             <div className="analytics-card full-width">
               <h3><Sparkles size={18} /> AI Summary</h3>
               <div className="ai-summary">{data.aiSummary}</div>
@@ -822,6 +873,9 @@ function DashboardManager({ userData, onLogout }) {
         <div className="section-header">
           <h2><Briefcase size={24} /> Job Profiles ({jobs.length})</h2>
           <div className="search-box"><input value={jobSearchTerm} onChange={e => setJobSearchTerm(e.target.value)} placeholder="Search jobs..." /></div>
+          <button className="btn-secondary" onClick={fetchJobs} disabled={jobsLoading}>
+            <RefreshCw size={16} /> Refresh
+          </button>
         </div>
         <div className="job-profiles-grid">
           {filtered.map(job => (
@@ -842,7 +896,12 @@ function DashboardManager({ userData, onLogout }) {
     const job = selectedJobForView;
     return (
       <div className="job-details-page">
-        <div className="details-nav"><button onClick={() => { setSelectedJobForView(null); setActiveTab("job-profiles"); }} className="back-btn"><ArrowLeft size={18} /> Back</button></div>
+        <div className="details-nav">
+          <button onClick={() => { setSelectedJobForView(null); setActiveTab("job-profiles"); }} className="back-btn"><ArrowLeft size={18} /> Back</button>
+          <button className="btn-secondary" onClick={() => fetchJobMatches(job.id)} disabled={matchesLoading} style={{ marginLeft: '1rem' }}>
+            <RefreshCw size={16} /> Refresh Matches
+          </button>
+        </div>
         <div className="job-details-header-card">
           <div className="header-main">
             <div className="job-icon-large"><BriefcaseBusiness size={32} /></div>
@@ -882,6 +941,9 @@ function DashboardManager({ userData, onLogout }) {
                         <span className={`match-percentage ${cat.replace('_', '')}`}>{m.total_percentage}%</span>
                       </div>
                       <div className="match-row"><MapPin size={12} /> {m.trainee_location}</div>
+                      {m.matched_location && (
+                        <div className="match-row"><Target size={12} /> Matched to: {m.matched_location}</div>
+                      )}
                       <div className="match-stats">
                         <div className="match-stat"><span className="stat-label">Skills</span><span className="stat-value">{m.skills_percentage}%</span></div>
                         <div className="match-stat"><span className="stat-label">Location</span><span className="stat-value">{m.location_percentage}%</span></div>
@@ -916,6 +978,7 @@ function DashboardManager({ userData, onLogout }) {
           </div>
           <button onClick={() => downloadReport("mapped")} className="btn-secondary"><Download size={16} /> Mapped</button>
           <button onClick={() => downloadReport("unmapped")} className="btn-secondary"><Download size={16} /> Unmapped</button>
+          <button onClick={fetchTrainees} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
         </div>
       </div>
       <div className="table-container">
@@ -980,7 +1043,12 @@ function DashboardManager({ userData, onLogout }) {
     });
     return (
       <div className="talent-search">
-        <div className="section-header"><h2><Search size={24} /> Talent Search</h2></div>
+        <div className="section-header">
+          <h2><Search size={24} /> Talent Search</h2>
+          <button className="btn-secondary" onClick={() => selectedJobForSearch && handleJobSelectForSearch(selectedJobForSearch.id)} disabled={!selectedJobForSearch || searchLoading}>
+            <RefreshCw size={16} /> Refresh Matches
+          </button>
+        </div>
         <select className="job-select filter-select" value={selectedJobForSearch?.id || ""} onChange={e => handleJobSelectForSearch(e.target.value)}>
           <option value="">Select a job</option>
           {jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
@@ -1006,7 +1074,9 @@ function DashboardManager({ userData, onLogout }) {
               <div className="table-container">
                 <table className="data-table">
                   <thead>
-                    <tr><th>Select</th><th>Trainee</th><th>Location</th><th>Bucket</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th></tr>
+                    <tr>
+                      <th>Select</th><th>Trainee</th><th>Location</th><th>Bucket</th><th>Matched Location</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {filtered.map(m => (
@@ -1019,6 +1089,7 @@ function DashboardManager({ userData, onLogout }) {
                         <td>{m.trainee_name}</td>
                         <td>{m.trainee_location}</td>
                         <td><span className={`bucket-tag ${m.bucket?.toLowerCase()}`}>{m.bucket?.replace("_", " ")}</span></td>
+                        <td>{m.matched_location || '—'}</td>
                         <td>{m.skills_percentage.toFixed(1)}%</td>
                         <td>{m.location_percentage.toFixed(1)}%</td>
                         <td><strong>{m.total_percentage.toFixed(1)}%</strong></td>
@@ -1065,6 +1136,7 @@ function DashboardManager({ userData, onLogout }) {
         <div className="section-header">
           <h2><CheckCircle size={24} /> Selected Candidates ({selected.length})</h2>
           <button onClick={() => downloadLockReport("selected")} className="btn-secondary"><Download size={16} /> Download</button>
+          <button onClick={fetchLocks} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
         </div>
         <div className="table-container">
           <table className="data-table">
@@ -1094,6 +1166,7 @@ function DashboardManager({ userData, onLogout }) {
         <div className="section-header">
           <h2><XCircle size={24} /> Rejected Candidates ({rejected.length})</h2>
           <button onClick={() => downloadLockReport("rejected")} className="btn-secondary"><Download size={16} /> Download</button>
+          <button onClick={fetchLocks} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
         </div>
         <div className="table-container">
           <table className="data-table">
@@ -1116,22 +1189,59 @@ function DashboardManager({ userData, onLogout }) {
     );
   };
 
-  const renderSkillGapAnalyzer = () => {
-    const filteredGaps = skillGapFilter === "all" ? skillGapData : skillGapData.filter(g => g.gap >= parseInt(skillGapFilter));
+  const renderDemandSupplyAnalysis = () => {
+    const filteredGaps = skillGapFilter === "all" ? skillGapData : skillGapData.filter(g => Math.abs(g.gap) >= parseInt(skillGapFilter));
+    const topDemandSkills = [...skillGapData].sort((a,b) => b.demand - a.demand).slice(0,5);
+    const surplusSkills = skillGapData.filter(g => g.gap < 0).sort((a,b) => a.gap - b.gap).slice(0,5);
+    const totalDemand = skillGapData.reduce((sum,g) => sum + g.demand, 0);
+    const totalSupply = skillGapData.reduce((sum,g) => sum + g.supply, 0);
+
     return (
       <div className="skill-gap-analyzer">
         <div className="section-header">
-          <h2><Target size={24} /> Skill Gap Analyzer</h2>
+          <h2><Target size={24} /> Demand & Supply Analysis</h2>
           <div className="filter-group">
             <select value={skillGapFilter} onChange={e => setSkillGapFilter(e.target.value)} className="filter-select">
               <option value="all">All Gaps</option>
-              <option value="1">Gap ≥ 1</option>
-              <option value="2">Gap ≥ 2</option>
-              <option value="3">Gap ≥ 3</option>
+              <option value="1">|Gap| ≥ 1</option>
+              <option value="2">|Gap| ≥ 2</option>
+              <option value="3">|Gap| ≥ 3</option>
             </select>
-            <button onClick={runAnalytics} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
+            <button onClick={runAnalytics} className="btn-secondary"><RefreshCw size={16} /> Refresh Analysis</button>
           </div>
         </div>
+
+        <div className="stats-grid small">
+          <div className="stat-card">
+            <div className="stat-icon"><TrendingUpIcon /></div>
+            <div className="stat-content">
+              <h3>Total Demand</h3>
+              <div className="stat-value">{totalDemand}</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon"><Users /></div>
+            <div className="stat-content">
+              <h3>Total Supply</h3>
+              <div className="stat-value">{totalSupply}</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon"><AlertCircle /></div>
+            <div className="stat-content">
+              <h3>Skills with Gap</h3>
+              <div className="stat-value">{skillGapData.filter(g => g.gap > 0).length}</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon"><CheckCircle /></div>
+            <div className="stat-content">
+              <h3>Skills with Surplus</h3>
+              <div className="stat-value">{skillGapData.filter(g => g.gap < 0).length}</div>
+            </div>
+          </div>
+        </div>
+
         <div className="analytics-card">
           <ResponsiveContainer width="100%" height={400}>
             <ReBarChart data={filteredGaps}>
@@ -1142,10 +1252,36 @@ function DashboardManager({ userData, onLogout }) {
               <Legend />
               <Bar dataKey="demand" fill="#3b82f6" name="Demand" />
               <Bar dataKey="supply" fill="#10b981" name="Supply" />
-              <Bar dataKey="gap" fill="#ef4444" name="Gap" />
             </ReBarChart>
           </ResponsiveContainer>
         </div>
+
+        <div className="dual-chart">
+          <div className="analytics-card">
+            <h3>🔥 Top Skills in Demand</h3>
+            <table className="mini-table">
+              <thead><tr><th>Skill</th><th>Demand</th></tr></thead>
+              <tbody>
+                {topDemandSkills.map(s => (
+                  <tr key={s.skill}><td>{s.skill}</td><td>{s.demand}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="analytics-card">
+            <h3>✅ Skills with Surplus Supply</h3>
+            <table className="mini-table">
+              <thead><tr><th>Skill</th><th>Surplus</th></tr></thead>
+              <tbody>
+                {surplusSkills.map(s => (
+                  <tr key={s.skill}><td>{s.skill}</td><td>{-s.gap}</td></tr>
+                ))}
+                {surplusSkills.length === 0 && <tr><td colSpan="2">No surplus skills</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div className="table-container">
           <table className="data-table">
             <thead>
@@ -1157,8 +1293,8 @@ function DashboardManager({ userData, onLogout }) {
                   <td>{gap.skill}</td>
                   <td>{gap.demand}</td>
                   <td>{gap.supply}</td>
-                  <td>{gap.gap}</td>
-                  <td>Upskill {gap.gap} trainees in {gap.skill}</td>
+                  <td style={{ color: gap.gap > 0 ? '#ef4444' : '#10b981' }}>{gap.gap > 0 ? gap.gap : `+${-gap.gap}`}</td>
+                  <td>{gap.gap > 0 ? `Upskill ${gap.gap} trainees in ${gap.skill}` : 'Sufficient supply'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1258,7 +1394,7 @@ function DashboardManager({ userData, onLogout }) {
     { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
     { id: "analytics", label: "Analytics", icon: <Activity size={20} /> },
     { id: "batch-comparison", label: "Batch Comparison", icon: <Layers size={20} /> },
-    { id: "skill-gaps", label: "Skill Gaps", icon: <Target size={20} /> },
+    { id: "skill-gaps", label: "Demand & Supply", icon: <Target size={20} /> },
     { id: "chatbot", label: "Chatbot", icon: <MessageCircle size={20} /> },
     { id: "job-profiles", label: "Job Profiles", icon: <Briefcase size={20} /> },
     { id: "trainees", label: "Trainees", icon: <Users size={20} /> },
@@ -1274,7 +1410,7 @@ function DashboardManager({ userData, onLogout }) {
       case "overview": return renderOverview();
       case "analytics": return renderAnalytics();
       case "batch-comparison": return renderBatchComparisonTab();
-      case "skill-gaps": return renderSkillGapAnalyzer();
+      case "skill-gaps": return renderDemandSupplyAnalysis();
       case "chatbot": return renderChatbot();
       case "job-profiles": return renderJobProfiles();
       case "trainees": return renderTrainees();

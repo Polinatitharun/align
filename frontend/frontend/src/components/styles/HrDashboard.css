@@ -724,7 +724,7 @@ body {
 .card-header {
   padding: var(--spacing-5) var(--spacing-6);
   border-bottom: 1px solid var(--gray-100);
-  background: var(--gray-50);
+  background: skyblue;
 }
 
 .card-header h3 {

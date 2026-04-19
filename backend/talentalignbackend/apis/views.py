@@ -1,3 +1,5 @@
+# views.py – Complete with updated matching engine integration
+
 import pandas as pd
 import threading
 import json
@@ -32,7 +34,7 @@ from .serializers import (
     JobSerializer, ProfileRecordSerializer, UserInfoSerializer, UserInfoMappingSerializer,
     RecommendationSerializer, MatchListSerializer, InterviewLockSerializer,
     InterviewLockCreateSerializer, InterviewFeedbackSerializer,
-    ManagerChatSessionSerializer, ManagerChatMessageSerializer   # ensure these exist
+    ManagerChatSessionSerializer, ManagerChatMessageSerializer
 )
 from .tokens import CustomTokenObtainPairSerializer
 from .matching_engine import run_matching_logic, llm, clean
