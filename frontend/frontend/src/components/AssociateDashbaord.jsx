@@ -1,4 +1,4 @@
-// AssociateDashboard.js – Enhanced with market insights and career path
+// AssociateDashboard.js – Self‑assessment form, prior batch jobs, polished UI
 import React, { useState, useEffect, useMemo } from "react";
 import api from "../api/axios";
 import "./styles/AssociateDashboard.css";
@@ -15,20 +15,18 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  ChevronRight,
   Sparkles,
-  Loader,
   TrendingUp,
   Users,
   PieChart,
-  BarChart,
   Calendar,
-  Link as LinkIcon,
   AlertCircle,
-  Building,
-  DollarSign,
-  Star,
-  Zap,
+  Layers,
+  Plus,
+  Trash2,
+  Save,
+  FileText,
+  Percent,
 } from "lucide-react";
 
 function AssociateDashboard({ userData, onLogout }) {
@@ -37,7 +35,7 @@ function AssociateDashboard({ userData, onLogout }) {
   // Profile data
   const [profile, setProfile] = useState(null);
 
-  // Jobs data
+  // Jobs data (public + prior batches)
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
 
@@ -46,16 +44,25 @@ function AssociateDashboard({ userData, onLogout }) {
   const [interviewQA, setInterviewQA] = useState(null);
   const [careerPath, setCareerPath] = useState(null);
 
-  // Dashboard insights from backend
+  // Dashboard insights
   const [skillGaps, setSkillGaps] = useState([]);
   const [similarProjects, setSimilarProjects] = useState([]);
   const [dashboardAdvice, setDashboardAdvice] = useState("");
 
-  // Additional insights data
+  // Trainee matches
   const [traineeMatches, setTraineeMatches] = useState(null);
-  const [recentSelections, setRecentSelections] = useState([]);
-  const [skillDemand, setSkillDemand] = useState([]);
-  const [marketTrends, setMarketTrends] = useState({});
+
+  // Interview locks for the associate
+  const [myInterviews, setMyInterviews] = useState([]);
+  const [selectedInterviewForForm, setSelectedInterviewForForm] = useState(null);
+
+  // Self-assessment form state
+  const [selfAssessment, setSelfAssessment] = useState({
+    questions_asked: 0,
+    technical_percentage: 50,
+    theoretical_percentage: 50,
+    question_list: [""],
+  });
 
   // Loading states
   const [loading, setLoading] = useState({
@@ -66,18 +73,22 @@ function AssociateDashboard({ userData, onLogout }) {
     career: false,
     dashboard: true,
     matches: true,
-    selections: true,
-    demand: true,
+    interviews: true,
+    assessment: false,
   });
 
   useEffect(() => {
     fetchProfile();
-    fetchPublicJobs();
+    fetchRelevantJobs();
     fetchDashboardData();
-    fetchTraineeMatches();
-    fetchRecentSelections();
-    fetchSkillDemand();
+    fetchMyInterviews();
   }, []);
+
+  useEffect(() => {
+    if (profile?.id) {
+      fetchTraineeMatches();
+    }
+  }, [profile]);
 
   const fetchProfile = async () => {
     setLoading((prev) => ({ ...prev, profile: true }));
@@ -91,11 +102,22 @@ function AssociateDashboard({ userData, onLogout }) {
     }
   };
 
-  const fetchPublicJobs = async () => {
+  const fetchRelevantJobs = async () => {
     setLoading((prev) => ({ ...prev, jobs: true }));
     try {
-      const response = await api.get("/associate/jobs/public/");
-      setJobs(response.data);
+      // Get all active jobs
+      const response = await api.get("/jobs/");
+      const allJobs = response.data.filter(job => job.status === 'active');
+      
+      // If profile loaded, filter: public OR batch different from trainee's batch
+      if (profile?.batch_name) {
+        const relevant = allJobs.filter(job => 
+          job.is_public || job.batch_name !== profile.batch_name
+        );
+        setJobs(relevant);
+      } else {
+        setJobs(allJobs.filter(job => job.is_public));
+      }
     } catch (err) {
       toast.error("Failed to load jobs");
     } finally {
@@ -118,11 +140,9 @@ function AssociateDashboard({ userData, onLogout }) {
   };
 
   const fetchTraineeMatches = async () => {
+    if (!profile?.id) return;
     setLoading((prev) => ({ ...prev, matches: true }));
     try {
-      // need trainee id – fetch from profile first, but profile may not be ready.
-      // we can call after profile is loaded, or use a separate effect.
-      if (!profile?.id) return;
       const response = await api.get(`/trainee-matches/${profile.id}/`);
       setTraineeMatches(response.data);
     } catch (err) {
@@ -132,51 +152,22 @@ function AssociateDashboard({ userData, onLogout }) {
     }
   };
 
-  const fetchRecentSelections = async () => {
-    setLoading((prev) => ({ ...prev, selections: true }));
+  const fetchMyInterviews = async () => {
+    setLoading((prev) => ({ ...prev, interviews: true }));
     try {
-      const response = await api.get("/interview-locks/?status=selected");
-      // take latest 5
-      setRecentSelections(response.data.slice(0, 5));
+      if (!profile?.id) return;
+      const response = await api.get(`/interview-locks/?trainee=${profile.id}`);
+      setMyInterviews(response.data);
     } catch (err) {
-      console.log("Recent selections not available");
+      console.log("Could not fetch interviews");
     } finally {
-      setLoading((prev) => ({ ...prev, selections: false }));
+      setLoading((prev) => ({ ...prev, interviews: false }));
     }
   };
 
-  const fetchSkillDemand = async () => {
-    setLoading((prev) => ({ ...prev, demand: true }));
-    try {
-      // Get all jobs (public) and compute skill frequency
-      const response = await api.get("/associate/jobs/public/");
-      const allJobs = response.data;
-      const skillCount = {};
-      allJobs.forEach((job) => {
-        (job.techSkills || []).forEach((skill) => {
-          skillCount[skill] = (skillCount[skill] || 0) + 1;
-        });
-        (job.softSkills || []).forEach((skill) => {
-          skillCount[skill] = (skillCount[skill] || 0) + 1;
-        });
-      });
-      const sorted = Object.entries(skillCount)
-        .map(([skill, count]) => ({ skill, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8);
-      setSkillDemand(sorted);
-    } catch (err) {
-      console.log("Skill demand not available");
-    } finally {
-      setLoading((prev) => ({ ...prev, demand: false }));
-    }
-  };
-
-  // Re-fetch matches when profile is ready
   useEffect(() => {
-    if (profile?.id) {
-      fetchTraineeMatches();
-    }
+    if (profile?.id) fetchMyInterviews();
+    if (profile) fetchRelevantJobs();
   }, [profile]);
 
   const handleGetSuggestion = async (job) => {
@@ -223,17 +214,77 @@ function AssociateDashboard({ userData, onLogout }) {
     }
   };
 
-  // Helper to render strength/weakness chips
+  const openSelfAssessment = (interview) => {
+    setSelectedInterviewForForm(interview);
+    // Initialize form
+    setSelfAssessment({
+      questions_asked: 0,
+      technical_percentage: 50,
+      theoretical_percentage: 50,
+      question_list: [""],
+    });
+  };
+
+  const handleQuestionChange = (index, value) => {
+    const updated = [...selfAssessment.question_list];
+    updated[index] = value;
+    setSelfAssessment(prev => ({ ...prev, question_list: updated }));
+  };
+
+  const addQuestionField = () => {
+    setSelfAssessment(prev => ({
+      ...prev,
+      question_list: [...prev.question_list, ""]
+    }));
+  };
+
+  const removeQuestionField = (index) => {
+    setSelfAssessment(prev => ({
+      ...prev,
+      question_list: prev.question_list.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handlePercentageChange = (field, value) => {
+    const num = Math.min(100, Math.max(0, Number(value) || 0));
+    const otherField = field === 'technical_percentage' ? 'theoretical_percentage' : 'technical_percentage';
+    setSelfAssessment(prev => ({
+      ...prev,
+      [field]: num,
+      [otherField]: 100 - num,
+    }));
+  };
+
+  const submitSelfAssessment = async () => {
+    if (!selectedInterviewForForm) return;
+    setLoading(prev => ({ ...prev, assessment: true }));
+    try {
+      await api.post("/associate/self-assessment/", {
+        interview_lock_id: selectedInterviewForForm.id,
+        ...selfAssessment,
+        question_list: selfAssessment.question_list.filter(q => q.trim() !== ""),
+      });
+      toast.success("Self-assessment submitted");
+      setSelectedInterviewForForm(null);
+      fetchMyInterviews(); // refresh
+    } catch (err) {
+      toast.error("Failed to submit assessment");
+    } finally {
+      setLoading(prev => ({ ...prev, assessment: false }));
+    }
+  };
+
+  // Helper to render skill chips
   const renderSkillChips = (items, type) => {
-    const color = type === "strength" ? "green" : "red";
+    const colorClass = type === "strength" ? "strength" : "weakness";
     return items.map((item, idx) => (
-      <span key={idx} className={`skill-chip ${color}`}>
+      <span key={idx} className={`skill-chip ${colorClass}`}>
         {item.courseName} {item.avgScore ? `(${item.avgScore}%)` : ""}
       </span>
     ));
   };
 
-  // Profile card
+  // Profile Card
   const renderProfileCard = () => {
     if (loading.profile) return <div className="loading-spinner">Loading profile...</div>;
     if (!profile) return <div>No profile data</div>;
@@ -245,192 +296,49 @@ function AssociateDashboard({ userData, onLogout }) {
           <div className="profile-avatar">{userInfo.name?.charAt(0) || "U"}</div>
           <div className="profile-title">
             <h2>{userInfo.name || "Unknown"}</h2>
-            <p>
-              <User size={14} /> {userInfo.userId} • {userInfo.location || "Location not set"}
-            </p>
+            <p><User size={14} /> {userInfo.userId} • {userInfo.location || "Location not set"}</p>
+            <p className="batch-info"><Layers size={14} /> Batch: {profile.batch_name || "N/A"}</p>
           </div>
         </div>
         <div className="profile-details">
-          <div className="detail-item">
-            <GraduationCap size={18} />
-            <span>Average Score: {userInfo.averageScore || "N/A"}%</span>
-          </div>
-          <div className="detail-item">
-            <Award size={18} />
-            <span>Rank: {profile.batchRank || "N/A"}</span>
-          </div>
-          <div className="detail-item">
-            <Clock size={18} />
-            <span>Joined: {profile.created_at?.split("T")[0]}</span>
-          </div>
+          <div className="detail-item"><GraduationCap size={18} /><span>Avg Score: {userInfo.averageScore || "N/A"}%</span></div>
+          <div className="detail-item"><Award size={18} /><span>Rank: {profile.batchRank || "N/A"}</span></div>
+          <div className="detail-item"><Clock size={18} /><span>Joined: {profile.created_at?.split("T")[0]}</span></div>
         </div>
         <div className="profile-skills">
           <div className="skill-section">
             <h4>Strengths</h4>
-            <div className="skill-list">
-              {profile.strengths?.length > 0
-                ? renderSkillChips(profile.strengths, "strength")
-                : "No strengths recorded"}
-            </div>
+            <div className="skill-list">{profile.strengths?.length > 0 ? renderSkillChips(profile.strengths, "strength") : "No strengths recorded"}</div>
           </div>
           <div className="skill-section">
-            <h4>Weaknesses / Areas to Improve</h4>
-            <div className="skill-list">
-              {profile.weaknesses?.length > 0
-                ? renderSkillChips(profile.weaknesses, "weakness")
-                : "No weaknesses recorded"}
-            </div>
+            <h4>Areas to Improve</h4>
+            <div className="skill-list">{profile.weaknesses?.length > 0 ? renderSkillChips(profile.weaknesses, "weakness") : "No weaknesses recorded"}</div>
           </div>
         </div>
       </div>
     );
   };
 
-  // Skill gap analysis card
-  const renderSkillGaps = () => {
-    if (loading.dashboard) return <div className="loading-spinner">Loading insights...</div>;
-    if (!skillGaps.length) return null;
-
-    return (
-      <div className="insight-card">
-        <h3><Target size={20} /> Skill Gap Analysis</h3>
-        <p className="insight-advice">{dashboardAdvice}</p>
-        <div className="gaps-list">
-          {skillGaps.map((gap, idx) => (
-            <div key={idx} className="gap-item">
-              <div className="gap-header">
-                <span className="job-title">{gap.job_title}</span>
-                <span className={`match-percent ${gap.has_all_skills ? "full" : "partial"}`}>
-                  {gap.match_percentage}% Match
-                </span>
-              </div>
-              {!gap.has_all_skills && (
-                <div className="missing-skills">
-                  <strong>Missing skills:</strong> {gap.missing_skills.join(", ")}
-                </div>
-              )}
-              {gap.has_all_skills && <div className="full-match">✅ You have all required skills!</div>}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Similar projects card
-  const renderSimilarProjects = () => {
-    if (loading.dashboard) return null;
-    if (!similarProjects.length) return null;
-
-    return (
-      <div className="insight-card">
-        <h3><TrendingUp size={20} /> People with Your Strengths Were Selected For</h3>
-        <div className="project-list">
-          {similarProjects.map((project) => (
-            <div key={project.id} className="project-item">
-              <h4>{project.title}</h4>
-              <p><Briefcase size={14} /> {project.department}</p>
-              <p><Map size={14} /> {project.location?.join(", ")}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Skill demand card
-  const renderSkillDemand = () => {
-    if (loading.demand) return <div className="loading-spinner">Loading market data...</div>;
-    if (!skillDemand.length) return null;
-
-    return (
-      <div className="insight-card">
-        <h3><BarChart size={20} /> Top Skills in Demand</h3>
-        <div className="demand-list">
-          {skillDemand.map((item, idx) => (
-            <div key={idx} className="demand-item">
-              <span className="skill-name">{item.skill}</span>
-              <div className="demand-bar-container">
-                <div
-                  className="demand-bar"
-                  style={{ width: `${(item.count / skillDemand[0].count) * 100}%` }}
-                />
-              </div>
-              <span className="skill-count">{item.count} jobs</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Recent selections card
-  const renderRecentSelections = () => {
-    if (loading.selections) return <div className="loading-spinner">Loading recent hires...</div>;
-    if (!recentSelections.length) return null;
-
-    return (
-      <div className="insight-card">
-        <h3><Users size={20} /> Recent Hires</h3>
-        <div className="recent-list">
-          {recentSelections.map((sel) => (
-            <div key={sel.id} className="recent-item">
-              <div className="recent-avatar">{sel.trainee_name?.charAt(0)}</div>
-              <div className="recent-info">
-                <span className="recent-name">{sel.trainee_name}</span>
-                <span className="recent-job">{sel.job_title}</span>
-              </div>
-              <span className="recent-date">{new Date(sel.interview_datetime).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Match distribution card (pie chart simplified as stacked bar)
+  // Match Distribution
   const renderMatchDistribution = () => {
     if (loading.matches || !traineeMatches) return null;
-
     const total = traineeMatches.total_matches || 0;
     if (total === 0) return null;
-
     const perfect = traineeMatches.perfect_match?.length || 0;
     const skills = traineeMatches.skills_only?.length || 0;
     const location = traineeMatches.location_only?.length || 0;
     const nearby = traineeMatches.nearby?.length || 0;
     const noMatch = traineeMatches.no_match?.length || 0;
-
     return (
       <div className="insight-card">
         <h3><PieChart size={20} /> Your Match Distribution</h3>
         <div className="match-distribution">
           <div className="stacked-bar">
-            {perfect > 0 && (
-              <div className="bar-segment perfect" style={{ width: `${(perfect / total) * 100}%` }}>
-                {perfect}
-              </div>
-            )}
-            {skills > 0 && (
-              <div className="bar-segment skills" style={{ width: `${(skills / total) * 100}%` }}>
-                {skills}
-              </div>
-            )}
-            {location > 0 && (
-              <div className="bar-segment location" style={{ width: `${(location / total) * 100}%` }}>
-                {location}
-              </div>
-            )}
-            {nearby > 0 && (
-              <div className="bar-segment nearby" style={{ width: `${(nearby / total) * 100}%` }}>
-                {nearby}
-              </div>
-            )}
-            {noMatch > 0 && (
-              <div className="bar-segment nomatch" style={{ width: `${(noMatch / total) * 100}%` }}>
-                {noMatch}
-              </div>
-            )}
+            {perfect > 0 && <div className="bar-segment perfect" style={{ width: `${(perfect / total) * 100}%` }}>{perfect}</div>}
+            {skills > 0 && <div className="bar-segment skills" style={{ width: `${(skills / total) * 100}%` }}>{skills}</div>}
+            {location > 0 && <div className="bar-segment location" style={{ width: `${(location / total) * 100}%` }}>{location}</div>}
+            {nearby > 0 && <div className="bar-segment nearby" style={{ width: `${(nearby / total) * 100}%` }}>{nearby}</div>}
+            {noMatch > 0 && <div className="bar-segment nomatch" style={{ width: `${(noMatch / total) * 100}%` }}>{noMatch}</div>}
           </div>
           <div className="legend">
             <div className="legend-item"><span className="legend-color perfect"></span> Perfect ({perfect})</div>
@@ -444,30 +352,31 @@ function AssociateDashboard({ userData, onLogout }) {
     );
   };
 
-  // Skill demand vs your score (for top matched jobs)
-  const renderSkillVsScore = () => {
-    if (!skillGaps.length) return null;
+  // Self Assessment Section (replaces feedback viewer)
+  const renderSelfAssessmentSection = () => {
+    if (loading.interviews) return <div className="loading-spinner">Loading interviews...</div>;
+    if (myInterviews.length === 0) return null;
+
+    const completedInterviews = myInterviews.filter(i => i.status === 'selected' || i.status === 'rejected');
+    if (completedInterviews.length === 0) return null;
 
     return (
       <div className="insight-card">
-        <h3><Zap size={20} /> Skill Demand vs. Your Score</h3>
-        <div className="vs-list">
-          {skillGaps.slice(0, 3).map((gap, idx) => (
-            <div key={idx} className="vs-item">
-              <span className="vs-job">{gap.job_title}</span>
-              <div className="vs-bar-container">
-                <div className="vs-bar-label">Required</div>
-                <div className="vs-bar required" style={{ width: "100%" }}>
-                  <span>100%</span>
-                </div>
-                <div className="vs-bar-label">Your Match</div>
-                <div
-                  className="vs-bar your"
-                  style={{ width: `${gap.match_percentage}%` }}
-                >
-                  <span>{gap.match_percentage}%</span>
-                </div>
+        <h3><FileText size={20} /> Self‑Assessment Required</h3>
+        <p className="insight-advice">Please fill out a brief self‑assessment for your completed interviews.</p>
+        <div className="interview-list">
+          {completedInterviews.map(interview => (
+            <div key={interview.id} className={`interview-item ${interview.status}`}>
+              <div className="interview-header">
+                <span className="job-title">{interview.job_title}</span>
+                <span className={`status-badge status-${interview.status}`}>{interview.status}</span>
               </div>
+              <div className="interview-meta">
+                <Calendar size={14} /> {new Date(interview.interview_datetime).toLocaleString()}
+              </div>
+              <button className="btn-primary-small" onClick={() => openSelfAssessment(interview)}>
+                <FileText size={14} /> Fill Self‑Assessment
+              </button>
             </div>
           ))}
         </div>
@@ -475,10 +384,97 @@ function AssociateDashboard({ userData, onLogout }) {
     );
   };
 
-  // Job Listings
+  // Self-Assessment Modal
+  const renderSelfAssessmentModal = () => {
+    if (!selectedInterviewForForm) return null;
+    return (
+      <div className="modal-overlay" onClick={() => setSelectedInterviewForForm(null)}>
+        <div className="modal-content assessment-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3><FileText size={20} /> Self‑Assessment: {selectedInterviewForForm.job_title}</h3>
+            <button className="modal-close" onClick={() => setSelectedInterviewForForm(null)}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="form-group">
+              <label>Total Questions Asked</label>
+              <input
+                type="number"
+                min="0"
+                value={selfAssessment.questions_asked}
+                onChange={(e) => setSelfAssessment(prev => ({ ...prev, questions_asked: parseInt(e.target.value) || 0 }))}
+                className="form-control"
+              />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Technical %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={selfAssessment.technical_percentage}
+                  onChange={(e) => handlePercentageChange('technical_percentage', e.target.value)}
+                  className="form-control"
+                />
+              </div>
+              <div className="form-group">
+                <label>Theoretical %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={selfAssessment.theoretical_percentage}
+                  onChange={(e) => handlePercentageChange('theoretical_percentage', e.target.value)}
+                  className="form-control"
+                />
+              </div>
+            </div>
+            <div className="percentage-bar">
+              <div className="tech-bar" style={{ width: `${selfAssessment.technical_percentage}%` }}>
+                Tech {selfAssessment.technical_percentage}%
+              </div>
+              <div className="theory-bar" style={{ width: `${selfAssessment.theoretical_percentage}%` }}>
+                Theory {selfAssessment.theoretical_percentage}%
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Questions Asked (list as many as you remember)</label>
+              {selfAssessment.question_list.map((q, idx) => (
+                <div key={idx} className="question-input-group">
+                  <input
+                    type="text"
+                    value={q}
+                    onChange={(e) => handleQuestionChange(idx, e.target.value)}
+                    placeholder={`Question ${idx + 1}`}
+                    className="form-control"
+                  />
+                  {selfAssessment.question_list.length > 1 && (
+                    <button type="button" className="btn-icon" onClick={() => removeQuestionField(idx)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="btn-secondary" onClick={addQuestionField}>
+                <Plus size={14} /> Add Question
+              </button>
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => setSelectedInterviewForForm(null)}>Cancel</button>
+            <button className="btn-primary" onClick={submitSelfAssessment} disabled={loading.assessment}>
+              <Save size={14} /> {loading.assessment ? "Submitting..." : "Submit Assessment"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Jobs List
   const renderJobsList = () => {
     if (loading.jobs) return <div className="loading-spinner">Loading jobs...</div>;
-    if (!jobs.length) return <div>No public jobs available at the moment.</div>;
+    if (!jobs.length) return <div>No relevant jobs available at the moment.</div>;
 
     return (
       <div className="jobs-list">
@@ -492,23 +488,16 @@ function AssociateDashboard({ userData, onLogout }) {
               <span><Briefcase size={14} /> {job.department}</span>
               <span><Map size={14} /> {job.location?.join(", ")}</span>
               <span><Target size={14} /> Openings: {job.openings}</span>
+              {job.batch_name && <span><Layers size={14} /> {job.batch_name}</span>}
             </div>
             <div className="job-skills">
               <strong>Tech:</strong> {job.techSkills?.join(", ")}
             </div>
             <div className="job-actions">
-              <button
-                className="btn-suggestion"
-                onClick={() => handleGetSuggestion(job)}
-                disabled={loading.suggestion && selectedJob?.id === job.id}
-              >
+              <button className="btn-suggestion" onClick={() => handleGetSuggestion(job)} disabled={loading.suggestion && selectedJob?.id === job.id}>
                 <Lightbulb size={16} /> Suggestion
               </button>
-              <button
-                className="btn-interview"
-                onClick={() => handleGetInterviewQA(job)}
-                disabled={loading.interview && selectedJob?.id === job.id}
-              >
+              <button className="btn-interview" onClick={() => handleGetInterviewQA(job)} disabled={loading.interview && selectedJob?.id === job.id}>
                 <BookOpen size={16} /> Interview Q&A
               </button>
             </div>
@@ -518,12 +507,9 @@ function AssociateDashboard({ userData, onLogout }) {
     );
   };
 
-  // Suggestion Display
+  // AI Suggestion Display
   const renderSuggestion = () => {
-    if (!selectedJob) return null;
-    if (loading.suggestion) return <div className="loading-spinner">Generating suggestion...</div>;
-    if (!suggestion) return null;
-
+    if (!selectedJob || !suggestion) return null;
     return (
       <div className="suggestion-card">
         <h3><Sparkles size={20} /> AI Suggestion for {selectedJob.title}</h3>
@@ -535,8 +521,6 @@ function AssociateDashboard({ userData, onLogout }) {
   // Interview Q&A Display
   const renderInterviewQA = () => {
     if (!selectedJob || !interviewQA) return null;
-    if (loading.interview) return <div className="loading-spinner">Generating questions...</div>;
-
     return (
       <div className="interview-qa-card">
         <h3>Interview Questions & Answers for {selectedJob.title}</h3>
@@ -555,11 +539,10 @@ function AssociateDashboard({ userData, onLogout }) {
     );
   };
 
-  // Career Path Display (enhanced)
+  // Career Path Display
   const renderCareerPath = () => {
     if (loading.career) return <div className="loading-spinner">Generating career path...</div>;
     if (!careerPath) return null;
-
     return (
       <div className="career-path-card">
         <h2>Your Personalized Career Roadmap</h2>
@@ -567,18 +550,14 @@ function AssociateDashboard({ userData, onLogout }) {
           <h3>Short Term (1-2 years)</h3>
           <div className="path-roles"><strong>Roles:</strong> {careerPath.short_term?.roles?.join(" → ")}</div>
           <div className="path-skills"><strong>Skills to develop:</strong> {careerPath.short_term?.skills_to_develop?.join(", ")}</div>
-          {careerPath.short_term?.certifications?.length > 0 && (
-            <div className="path-certs"><strong>Certifications:</strong> {careerPath.short_term.certifications.join(", ")}</div>
-          )}
+          {careerPath.short_term?.certifications?.length > 0 && <div className="path-certs"><strong>Certifications:</strong> {careerPath.short_term.certifications.join(", ")}</div>}
           <p className="path-advice">{careerPath.short_term?.advice}</p>
         </div>
         <div className="path-section">
           <h3>Long Term (3-5 years)</h3>
           <div className="path-roles"><strong>Roles:</strong> {careerPath.long_term?.roles?.join(" → ")}</div>
           <div className="path-skills"><strong>Skills to develop:</strong> {careerPath.long_term?.skills_to_develop?.join(", ")}</div>
-          {careerPath.long_term?.certifications?.length > 0 && (
-            <div className="path-certs"><strong>Certifications:</strong> {careerPath.long_term.certifications.join(", ")}</div>
-          )}
+          {careerPath.long_term?.certifications?.length > 0 && <div className="path-certs"><strong>Certifications:</strong> {careerPath.long_term.certifications.join(", ")}</div>}
           <p className="path-advice">{careerPath.long_term?.advice}</p>
         </div>
         <div className="path-overall">
@@ -589,55 +568,48 @@ function AssociateDashboard({ userData, onLogout }) {
     );
   };
 
-  // Overview tab (all insights)
+  // Overview Tab
   const renderOverview = () => (
     <div className="tab-content overview-tab">
-      {/* Profile row */}
       <div className="grid-2col">
         <div className="left-col">{renderProfileCard()}</div>
         <div className="right-col">
-          <div className="insights-grid-small">
-            {renderSkillGaps()}
-            {renderSimilarProjects()}
+          {renderMatchDistribution()}
+        </div>
+      </div>
+      <div className="grid-2col">
+        <div className="left-col">{renderSelfAssessmentSection()}</div>
+        <div className="right-col">
+          <div className="insight-card">
+            <h3><Target size={20} /> Skill Gap Analysis</h3>
+            <p className="insight-advice">{dashboardAdvice}</p>
+            {skillGaps.map((gap, idx) => (
+              <div key={idx} className="gap-item">
+                <div className="gap-header">
+                  <span className="job-title">{gap.job_title}</span>
+                  <span className={`match-percent ${gap.has_all_skills ? "full" : "partial"}`}>{gap.match_percentage}% Match</span>
+                </div>
+                {!gap.has_all_skills && <div className="missing-skills"><strong>Missing:</strong> {gap.missing_skills.join(", ")}</div>}
+              </div>
+            ))}
           </div>
         </div>
       </div>
-
-      {/* Insights row 2 */}
-      <div className="grid-2col">
-        <div className="left-col">{renderSkillDemand()}</div>
-        <div className="right-col">{renderRecentSelections()}</div>
-      </div>
-
-      {/* Insights row 3 */}
-      <div className="grid-2col">
-        <div className="left-col">{renderMatchDistribution()}</div>
-        <div className="right-col">{renderSkillVsScore()}</div>
-      </div>
-
-      {/* Career Path button and Job listings */}
       <div className="section-header">
-        <h3>Public Job Opportunities</h3>
-        <button className="btn-career" onClick={handleGetCareerPath}>
-          <Map size={16} /> Get Career Path
-        </button>
+        <h3>Available Job Opportunities</h3>
+        <button className="btn-career" onClick={handleGetCareerPath}><Map size={16} /> Get Career Path</button>
       </div>
       {renderJobsList()}
-
-      {/* AI Suggestions */}
       {renderSuggestion()}
       {renderInterviewQA()}
+      {renderSelfAssessmentModal()}
     </div>
   );
 
   const renderCareerTab = () => (
     <div className="tab-content career-tab">
       {renderCareerPath()}
-      {!careerPath && !loading.career && (
-        <div className="placeholder">
-          <p>Click "Get Career Path" in the Overview tab to generate your roadmap.</p>
-        </div>
-      )}
+      {!careerPath && !loading.career && <div className="placeholder"><p>Click "Get Career Path" to generate your roadmap.</p></div>}
     </div>
   );
 
@@ -648,9 +620,7 @@ function AssociateDashboard({ userData, onLogout }) {
 
   return (
     <div className="associate-dashboard">
-      <Toaster richColors position="top-right" duration={3000} />
-
-      {/* Sidebar */}
+      <Toaster richColors position="top-right" />
       <div className="assoc-sidebar">
         <div className="assoc-sidebar-header">
           <h2>Associate Portal</h2>
@@ -658,24 +628,16 @@ function AssociateDashboard({ userData, onLogout }) {
         </div>
         <div className="assoc-sidebar-nav">
           {sidebarItems.map((item) => (
-            <div
-              key={item.id}
-              className={`assoc-nav-item ${activeTab === item.id ? "active" : ""}`}
-              onClick={() => setActiveTab(item.id)}
-            >
+            <div key={item.id} className={`assoc-nav-item ${activeTab === item.id ? "active" : ""}`} onClick={() => setActiveTab(item.id)}>
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
             </div>
           ))}
           <div className="assoc-footer">
-            <button className="logout-btn" onClick={onLogout}>
-              Logout
-            </button>
+            <button className="logout-btn" onClick={onLogout}>Logout</button>
           </div>
         </div>
       </div>
-
-      {/* Main Content */}
       <div className="assoc-main-content">
         <div className="assoc-dashboard-header">
           <h1>Associate Dashboard</h1>

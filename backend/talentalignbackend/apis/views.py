@@ -34,7 +34,7 @@ from .serializers import (
     JobSerializer, ProfileRecordSerializer, UserInfoSerializer, UserInfoMappingSerializer,
     RecommendationSerializer, MatchListSerializer, InterviewLockSerializer,
     InterviewLockCreateSerializer, InterviewFeedbackSerializer,
-    ManagerChatSessionSerializer, ManagerChatMessageSerializer
+    ManagerChatSessionSerializer, ManagerChatMessageSerializer,TraineeSelfAssessmentSerializer
 )
 from .tokens import CustomTokenObtainPairSerializer
 from .matching_engine import run_matching_logic, llm, clean
@@ -821,6 +821,38 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
+
+# apis/views.py
+
+class TraineeSelfAssessmentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Get the trainee profile for the logged-in user
+        profile = get_trainee_profile(request.user)
+        if not profile:
+            return Response({"error": "Profile not found"}, status=404)
+
+        interview_lock_id = request.data.get('interview_lock_id')
+        try:
+            lock = InterviewLock.objects.get(id=interview_lock_id, trainee=profile)
+        except InterviewLock.DoesNotExist:
+            return Response({"error": "Invalid interview lock"}, status=400)
+
+        if lock.status not in ['selected', 'rejected']:
+            return Response({"error": "Assessment only allowed for completed interviews"}, status=400)
+
+        if hasattr(lock, 'self_assessment'):
+            return Response({"error": "Assessment already submitted"}, status=400)
+
+        serializer = TraineeSelfAssessmentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(interview_lock=lock)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+
+
+
 # ---------- Reports ----------
 class MappedTraineesReportView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1304,11 +1336,13 @@ class CreateInterviewerView(APIView):
             return Response({"error": "Permission denied"}, status=403)
 
         username = request.data.get('username')
-        password = request.data.get('password')
-        if not username or not password:
-            return Response({"error": "Username and password required"}, status=400)
-
+        password = request.data.get('password', 'Tcs#12345')   # default password
         email = request.data.get('email', f"{username}@tcs.com")
+        access_start = request.data.get('access_start')
+        access_end = request.data.get('access_end')
+
+        if not username:
+            return Response({"error": "Username required"}, status=400)
         if not email.endswith('@tcs.com'):
             return Response({"error": "Email must be @tcs.com"}, status=400)
 
@@ -1320,10 +1354,11 @@ class CreateInterviewerView(APIView):
             email=email,
             password=password,
             role='interviewer',
-            is_active=True
+            is_active=True,
+            access_start=access_start,
+            access_end=access_end,
         )
         return Response({"message": "Interviewer created", "user_id": user.id}, status=201)
-
 # ==================== Manager Chatbot ====================
 from .models import ManagerChatSession, ManagerChatMessage
 from .serializers import ManagerChatSessionSerializer, ManagerChatMessageSerializer

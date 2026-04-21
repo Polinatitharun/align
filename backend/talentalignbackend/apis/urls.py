@@ -15,6 +15,7 @@ from .views import (
     AddUserView,
     ManagerChatContextView,
     ManagerChatSessionViewSet,
+    TraineeSelfAssessmentView,
     UploadAddExcelView,
     UserListView,
     UploadBulkDeleteUsersView,
@@ -158,6 +159,8 @@ urlpatterns = [
     path('associate/suggest/', AISuggestionView.as_view(), name='ai-suggest'),
     path('associate/interview-questions/', InterviewQuestionsView.as_view(), name='interview-questions'),
     path('associate/career-path/', CareerPathView.as_view(), name='career-path'),
+
+    path('associate/self-assessment/', TraineeSelfAssessmentView.as_view(), name='self-assessment'),
 
     # ===== NEW ASSOCIATE ENDPOINTS =====
     path('associate/dashboard/', AssociateDashboardView.as_view(), name='associate-dashboard'),

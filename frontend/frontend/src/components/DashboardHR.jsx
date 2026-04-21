@@ -159,8 +159,13 @@ function DashboardHR({ userData, onLogout }) {
 
   // Interviewer Creation
   const [showCreateInterviewerModal, setShowCreateInterviewerModal] = useState(false);
-  const [newInterviewer, setNewInterviewer] = useState({ username: '', password: '', email: '' });
-
+  const [newInterviewer, setNewInterviewer] = useState({
+    username: '',
+    password: 'Tcs#12345',   // default
+    email: '',
+    access_start: '',
+    access_end: '',
+  });
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
   const getBatchParam = () => (selectedBatch ? `?batch=${selectedBatch}` : '');
@@ -1038,17 +1043,35 @@ function DashboardHR({ userData, onLogout }) {
     finally { setLoading(false); }
   };
 
-  const handleCreateInterviewer = async () => {
-    if (!newInterviewer.username || !newInterviewer.password) { toast.error('Username and password required'); return; }
-    if (!newInterviewer.email.endsWith('@tcs.com')) { toast.error('Email must end with @tcs.com'); return; }
-    try {
-      await api.post('/users/create-interviewer/', newInterviewer);
-      toast.success('Interviewer created');
-      setShowCreateInterviewerModal(false);
-      setNewInterviewer({ username: '', password: '', email: '' });
-      fetchInterviewers();
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to create interviewer'); }
-  };
+ const handleCreateInterviewer = async () => {
+  if (!newInterviewer.username) {
+    toast.error('Username required');
+    return;
+  }
+  if (!newInterviewer.email.endsWith('@tcs.com')) {
+    toast.error('Email must end with @tcs.com');
+    return;
+  }
+  if (!newInterviewer.access_start || !newInterviewer.access_end) {
+    toast.error('Access start and end are required');
+    return;
+  }
+  try {
+    await api.post('/users/create-interviewer/', newInterviewer);
+    toast.success('Interviewer created');
+    setShowCreateInterviewerModal(false);
+    setNewInterviewer({
+      username: '',
+      password: 'Tcs#12345',
+      email: '',
+      access_start: '',
+      access_end: '',
+    });
+    fetchInterviewers();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'Failed to create interviewer');
+  }
+};
 
   const runMatchingEngine = async (jobId = '') => {
     try {
@@ -1234,27 +1257,78 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const renderCreateInterviewerModal = () => {
-    if (!showCreateInterviewerModal) return null;
-    return (
-      <div className="modal-overlay" onClick={() => setShowCreateInterviewerModal(false)}>
-        <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3><User size={20} /> Create Interviewer</h3>
-            <button className="modal-close" onClick={() => setShowCreateInterviewerModal(false)}><X /></button>
+  if (!showCreateInterviewerModal) return null;
+  return (
+    <div className="modal-overlay" onClick={() => setShowCreateInterviewerModal(false)}>
+      <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3><User size={20} /> Create Interviewer</h3>
+          <button className="modal-close" onClick={() => setShowCreateInterviewerModal(false)}><X /></button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Username</label>
+            <input
+              type="text"
+              className="form-control"
+              value={newInterviewer.username}
+              onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })}
+              required
+            />
           </div>
-          <div className="modal-body">
-            <div className="form-group"><label>Username</label><input type="text" className="form-control" value={newInterviewer.username} onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })} /></div>
-            <div className="form-group"><label>Email</label><input type="email" className="form-control" value={newInterviewer.email} onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })} placeholder="must end with @tcs.com" /></div>
-            <div className="form-group"><label>Password</label><input type="password" className="form-control" value={newInterviewer.password} onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })} /></div>
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              className="form-control"
+              value={newInterviewer.email}
+              onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })}
+              placeholder="must end with @tcs.com"
+              required
+            />
           </div>
-          <div className="modal-actions">
-            <button className="btn-secondary" onClick={() => setShowCreateInterviewerModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleCreateInterviewer}>Create</button>
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="text"
+              className="form-control"
+              value={newInterviewer.password}
+              onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })}
+              required
+            />
+            <small className="helper-text">Default: Tcs#12345</small>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Access Start</label>
+              <input
+                type="datetime-local"
+                className="form-control"
+                value={newInterviewer.access_start}
+                onChange={(e) => setNewInterviewer({ ...newInterviewer, access_start: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Access End</label>
+              <input
+                type="datetime-local"
+                className="form-control"
+                value={newInterviewer.access_end}
+                onChange={(e) => setNewInterviewer({ ...newInterviewer, access_end: e.target.value })}
+                required
+              />
+            </div>
           </div>
         </div>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={() => setShowCreateInterviewerModal(false)}>Cancel</button>
+          <button className="btn-primary" onClick={handleCreateInterviewer}>Create</button>
+        </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const renderExcelTemplateModal = () => {
     if (!showExcelTemplate) return null;

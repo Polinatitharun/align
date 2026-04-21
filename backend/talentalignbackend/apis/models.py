@@ -1,5 +1,4 @@
 import uuid
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator
@@ -14,6 +13,8 @@ class User(AbstractUser):
         ('interviewer','Interviewer')
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    access_start = models.DateTimeField(null=True, blank=True)      # new
+    access_end = models.DateTimeField(null=True, blank=True)        # new
 
 
 class Job(models.Model):
@@ -25,7 +26,7 @@ class Job(models.Model):
     ]
     title = models.CharField(max_length=200)
     department = models.CharField(max_length=100)
-    location = models.JSONField()  # Store as JSON array
+    location = models.JSONField()
     openings = models.IntegerField(default=1)
     filled = models.IntegerField(default=0)
     matches = models.IntegerField(default=0)
@@ -41,7 +42,7 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_public = models.BooleanField(default=True, help_text="Public jobs are visible to associates")
-    batch_name = models.CharField(max_length=100, null=True, blank=True)   # NEW FIELD
+    batch_name = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return f"{self.title} - {self.department} (Batch: {self.batch_name or 'N/A'})"
@@ -80,7 +81,7 @@ class ProfileRecord(models.Model):
     batchRank = models.CharField(max_length=32, null=True, blank=True)
     groupRank = models.CharField(max_length=32, null=True, blank=True)
     dpi = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0.0)])
-    batch_name = models.CharField(max_length=100, null=True, blank=True)   # existing
+    batch_name = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -192,7 +193,6 @@ class InterviewFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback for {self.lock.trainee.userInfo.name} - {self.recommendation}"
-    
 
 
 class ManagerChatSession(models.Model):
@@ -200,6 +200,7 @@ class ManagerChatSession(models.Model):
     session_key = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
 
 class ManagerChatMessage(models.Model):
     session = models.ForeignKey(ManagerChatSession, on_delete=models.CASCADE, related_name='messages')
@@ -209,3 +210,12 @@ class ManagerChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+
+
+class TraineeSelfAssessment(models.Model):
+    interview_lock = models.OneToOneField(InterviewLock, on_delete=models.CASCADE, related_name='self_assessment')
+    questions_asked = models.PositiveIntegerField(default=0)
+    technical_percentage = models.PositiveSmallIntegerField(default=50)
+    theoretical_percentage = models.PositiveSmallIntegerField(default=50)
+    question_list = models.JSONField(default=list)
+    submitted_at = models.DateTimeField(auto_now_add=True)
