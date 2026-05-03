@@ -1,0 +1,141 @@
+/* ============================================================
+   TaDashboard.css — extends dashboard-base.css
+   ============================================================ */
+@import './dashboard-base.css';
+
+/* ── Team Overview Grid ── */
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.team-member-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.team-member-card:hover {
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  transform: translateY(-3px);
+}
+
+.team-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0070C0, #5F68C3);
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(0,112,192,0.25);
+}
+
+.team-member-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.team-member-id {
+  font-size: 0.78rem;
+  color: #888;
+  margin: 0.25rem 0;
+}
+
+.team-score-pill {
+  background: rgba(0,112,192,0.08);
+  color: #0070C0;
+  border-radius: 100px;
+  padding: 0.25rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+}
+
+.team-member-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+/* ── TA stat banner ── */
+.ta-summary-banner {
+  background: linear-gradient(135deg, #0b1437 50%, #0070C0 100%);
+  border-radius: 16px;
+  padding: 2rem;
+  color: #fff;
+  margin-bottom: 2rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2rem;
+  align-items: center;
+}
+
+.ta-banner-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.ta-banner-sub {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-top: 0.35rem;
+}
+
+.ta-banner-stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.ta-banner-stat {
+  text-align: center;
+}
+
+.ta-banner-stat-value {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ta-banner-stat-label {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin-top: 0.2rem;
+}
+
+/* ── Performance charts ── */
+.performance-panel {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 1.5rem;
+}
+
+.performance-panel h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .ta-summary-banner { grid-template-columns: 1fr; }
+  .ta-banner-stats   { justify-content: center; }
+}

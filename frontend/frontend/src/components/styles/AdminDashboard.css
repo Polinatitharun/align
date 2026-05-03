@@ -1,0 +1,603 @@
+/* ── User Management Header ── */
+.adm-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  padding: 1.5rem 2rem;
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+}
+
+.adm-header-title h2 {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0 0 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.adm-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin: 0;
+}
+
+.adm-header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.adm-search-box .adm-search-input {
+  padding: 0.75rem 1.25rem;
+  border-radius: 30px;
+  border: 1.5px solid var(--border-light);
+  min-width: 320px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.adm-search-box .adm-search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(0, 112, 192, 0.08);
+}
+
+.adm-action-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* ── Table Cells ── */
+.adm-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.adm-user-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--primary), #5F68C3);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 112, 192, 0.2);
+}
+
+.adm-user-name {
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 0.95rem;
+}
+
+.adm-user-id {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.adm-email-cell {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.adm-date-cell {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+/* ── Status Toggles ── */
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 30px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.status-active:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+}
+
+.status-inactive {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.status-inactive:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+}
+
+/* ── Modals & Forms ── */
+.adm-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ── Role Badges ── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.role-admin      { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.role-hr         { background: rgba(0, 112, 192, 0.1); color: var(--primary); }
+.role-manager    { background: rgba(95, 104, 195, 0.12); color: #5F68C3; }
+.role-trainee    { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.role-ta         { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.role-interviewer{ background: rgba(100, 116, 139, 0.1); color: #64748b; }
+
+/* ── Add User Form ── */
+.add-user-form {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  padding: 2.5rem;
+  box-shadow: var(--shadow-md);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.role-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.role-option {
+  border: 2px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.role-option:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(0, 112, 192, 0.02);
+  transform: translateY(-2px);
+}
+
+.role-option.selected {
+  border-color: var(--primary);
+  background: rgba(0, 112, 192, 0.08);
+  color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0, 112, 192, 0.1);
+}
+
+/* ── Bulk Upload Section ── */
+.bulk-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.bulk-action-card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  padding: 2rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.bulk-action-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.bulk-action-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  background: rgba(0, 112, 192, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+}
+
+.bulk-action-card h4 {
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  color: var(--text-dark);
+}
+
+.bulk-action-card p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+
+/* ── Admin Stats Hero ── */
+.admin-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.75rem;
+  margin-bottom: 3rem;
+}
+
+.hero-stat-card {
+  background: linear-gradient(135deg, var(--primary), #5F68C3);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(0, 112, 192, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.hero-stat-card:hover {
+  transform: scale(1.02);
+}
+
+.hero-stat-card::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+}
+
+.hero-stat-value {
+  font-size: 2.75rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+  position: relative;
+  z-index: 2;
+}
+
+.hero-stat-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Password Reset Section ── */
+.password-strength-bar {
+  height: 6px;
+  background: var(--bg-light);
+  border-radius: 10px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.password-strength-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease;
+}
+
+.strength-weak   { width: 33%;  background: #ef4444; }
+.strength-medium { width: 66%;  background: #f59e0b; }
+.strength-strong { width: 100%; background: #10b981; }
+
+
+
+/* ── Analytics & Statistics ── */
+.adm-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.adm-analytics-card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  padding: 2rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.adm-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.adm-card-header h3 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+/* ── Distribution List ── */
+.adm-distribution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.adm-dist-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.adm-dist-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.adm-dist-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.adm-progress-container {
+  height: 8px;
+  background: var(--bg-light);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.adm-progress-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Audit Feed ── */
+.adm-audit-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.adm-audit-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--bg-light);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary);
+  transition: all 0.2s ease;
+}
+
+.adm-audit-item:hover {
+  transform: translateX(5px);
+  background: var(--bg-white);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-circle {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-white);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.adm-audit-action {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.adm-audit-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* ── Deco Integration ── */
+.adm-deco-panels {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.adm-deco-card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  padding: 2rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 30px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.connection-status.connected { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.connection-status.disconnected { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-dot 1.5s infinite alternate;
+}
+
+@keyframes pulse-dot {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0.4; transform: scale(0.8); }
+}
+
+.status-badge-large {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 3rem 2rem;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  font-weight: 800;
+  border: 1px dashed transparent;
+}
+
+.status-badge-large.online { 
+  background: rgba(16, 185, 129, 0.05); 
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.status-badge-large.offline { 
+  background: rgba(239, 68, 68, 0.05); 
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.sync-instructions {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.sync-instructions h4 {
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  color: var(--text-dark);
+}
+
+.sync-instructions ul {
+  padding-left: 1.25rem;
+  list-style-type: none;
+}
+
+.sync-instructions li {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  position: relative;
+}
+
+.sync-instructions li::before {
+  content: '→';
+  position: absolute;
+  left: -1.25rem;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+/* ── UI Components ── */
+.btn-text {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.btn-text:hover {
+  background: rgba(0, 112, 192, 0.08);
+  color: #0056b3;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.5rem;
+}
+
+.input-with-action .form-control {
+  flex: 1;
+}
+
+.input-with-action .btn {
+  height: 42px; /* Align with input height */
+  white-space: nowrap;
+}
+
+.badge-outline {
+  padding: 0.25rem 0.75rem;
+  border: 1.5px solid var(--border-light);
+  border-radius: 30px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
