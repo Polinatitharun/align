@@ -1,3 +1,4 @@
+# apis/models.py
 import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -13,8 +14,8 @@ class User(AbstractUser):
         ('interviewer','Interviewer')
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    access_start = models.DateTimeField(null=True, blank=True)      # new
-    access_end = models.DateTimeField(null=True, blank=True)        # new
+    access_start = models.DateTimeField(null=True, blank=True)
+    access_end = models.DateTimeField(null=True, blank=True)
 
 
 class Job(models.Model):
@@ -24,20 +25,27 @@ class Job(models.Model):
         ('filled', 'Filled'),
         ('expired', 'Expired')
     ]
-    title = models.CharField(max_length=200)
-    department = models.CharField(max_length=100)
-    location = models.JSONField()
-    openings = models.IntegerField(default=1)
+    # Required fields
+    project_name = models.CharField(max_length=200, help_text="Project Name")
+    location = models.CharField(max_length=500, help_text="Location(s) - comma separated for multiple")
+    demand_id = models.CharField(max_length=100, help_text="Demand ID")
+    skills = models.CharField(max_length=1000, help_text="Skills - comma separated")
+    openings = models.IntegerField(default=1, help_text="Number of openings")
+
+    # Optional fields
+    bg = models.CharField(max_length=50, null=True, blank=True, help_text="BG")
+    isu_hsu = models.CharField(max_length=50, null=True, blank=True, help_text="ISU/HSU")
+    stream = models.CharField(max_length=100, null=True, blank=True, help_text="Stream (Java, Python etc)")
+    role = models.CharField(max_length=100, null=True, blank=True, help_text="Role (Developer, Tech Support, etc)")
+    spoc_name = models.CharField(max_length=150, null=True, blank=True, help_text="Project SPOC Name")
+    spoc_emp_id = models.CharField(max_length=50, null=True, blank=True, help_text="Project SPOC Emp ID")
+    rmg_head = models.CharField(max_length=150, null=True, blank=True, help_text="RMG Head")
+
+    # System fields
     filled = models.IntegerField(default=0)
     matches = models.IntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
-    description = models.TextField()
-    requirements = models.TextField()
-    techSkills = models.JSONField(default=list)
-    softSkills = models.JSONField(default=list)
-    salary = models.CharField(max_length=100, blank=True, null=True)
     postedDate = models.DateField(auto_now_add=True)
-    expiryDate = models.DateField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_jobs')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -45,7 +53,7 @@ class Job(models.Model):
     batch_name = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.title} - {self.department} (Batch: {self.batch_name or 'N/A'})"
+        return f"{self.project_name} - {self.demand_id} (Batch: {self.batch_name or 'N/A'})"
 
     class Meta:
         ordering = ['-created_at']

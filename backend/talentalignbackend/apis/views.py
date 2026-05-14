@@ -1,4 +1,4 @@
-# views.py – Complete with updated matching engine integration
+# views.py – Complete with all new bulk operations, updated job upload, and HR summary report
 
 import pandas as pd
 import threading
@@ -11,6 +11,8 @@ from datetime import datetime
 from io import BytesIO
 from docx import Document
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
+from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.db import models as django_models
@@ -263,39 +265,48 @@ class UploadExcelView(APIView):
 
         try:
             df = pd.read_excel(file)
+            # Normalize column names to lower case
+            df.columns = [c.strip() for c in df.columns]
+            required = ['demand id', 'location', 'skills', 'openings']
+            missing = [c for c in required if c not in [x.lower() for x in df.columns]]
+            if missing:
+                return Response({"error": f"Missing required columns: {missing}"}, status=400)
+
             created_jobs = []
             errors = []
-            required_columns = ['Title','Department','Location','Openings','Requirements','Tech Skills','Soft Skills','Description','Expiry Date']
-            missing = [col for col in required_columns if col not in df.columns]
-            if missing:
-                return Response({"error": f"Missing columns: {missing}"}, status=400)
-
-            for index, row in df.iterrows():
-                if pd.isna(row.get('Title')):
+            for idx, row in df.iterrows():
+                if pd.isna(row.get('Demand ID')) or pd.isna(row.get('Location')) or pd.isna(row.get('Skills')) or pd.isna(row.get('Openings')):
                     continue
                 try:
-                    locations = [loc.strip() for loc in str(row['Location']).split(',') if loc.strip()]
-                    tech_skills = [skill.strip() for skill in str(row['Tech Skills']).split(',') if skill.strip()]
-                    soft_skills = [skill.strip() for skill in str(row['Soft Skills']).split(',') if skill.strip()]
-                    openings = int(row['Openings']) if not pd.isna(row['Openings']) else 1
-                    expiry = row['Expiry Date']
-                    if pd.isna(expiry):
-                        expiry = ''
-                    elif isinstance(expiry, (pd.Timestamp, datetime)):
-                        expiry = expiry.strftime('%Y-%m-%d')
-                    else:
-                        expiry = str(expiry).strip()
+                    # Required fields
+                    project_name = str(row.get('Project Name', '')).strip() or 'Unnamed Project'
+                    location = str(row['Location']).strip()
+                    demand_id = str(row['Demand ID']).strip()
+                    skills = str(row['Skills']).strip()
+                    openings = int(row['Openings'])
+
+                    # Optional fields
+                    bg = str(row.get('BG', '')).strip() or None
+                    isu_hsu = str(row.get('ISU/HSU', '')).strip() or None
+                    stream = str(row.get('Stream', '')).strip() or None
+                    role = str(row.get('Role', '')).strip() or None
+                    spoc_name = str(row.get('Project SPOC Name', '')).strip() or None
+                    spoc_emp_id = str(row.get('Project SPOC Emp ID', '')).strip() or None
+                    rmg_head = str(row.get('RMG Head', '')).strip() or None
 
                     job_data = {
-                        'title': str(row['Title']).strip(),
-                        'department': str(row['Department']).strip(),
-                        'location': locations,
+                        'project_name': project_name,
+                        'location': location,
+                        'demand_id': demand_id,
+                        'skills': skills,
                         'openings': openings,
-                        'requirements': str(row['Requirements']).strip(),
-                        'techSkills': tech_skills,
-                        'softSkills': soft_skills,
-                        'description': str(row['Description']).strip(),
-                        'expiryDate': expiry,
+                        'bg': bg,
+                        'isu_hsu': isu_hsu,
+                        'stream': stream,
+                        'role': role,
+                        'spoc_name': spoc_name,
+                        'spoc_emp_id': spoc_emp_id,
+                        'rmg_head': rmg_head,
                         'status': 'active',
                         'filled': 0,
                         'matches': 0,
@@ -305,12 +316,12 @@ class UploadExcelView(APIView):
                     serializer = JobSerializer(data=job_data)
                     if serializer.is_valid():
                         job = serializer.save()
-                        created_jobs.append(job.title)
+                        created_jobs.append(job.project_name)
                         threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
                     else:
-                        errors.append(f"Row {index+2}: {serializer.errors}")
+                        errors.append(f"Row {idx+2}: {serializer.errors}")
                 except Exception as e:
-                    errors.append(f"Row {index+2}: {str(e)}")
+                    errors.append(f"Row {idx+2}: {str(e)}")
 
             response = {"message": f"Processed {len(created_jobs)} jobs", "created_jobs": created_jobs}
             if errors:
@@ -337,7 +348,7 @@ class UploadWordView(APIView):
                 if serializer.is_valid():
                     job = serializer.save()
                     threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
-                    return Response({"message": "Job created", "job": job.title}, status=201)
+                    return Response({"message": "Job created", "job": job.project_name}, status=201)
                 return Response(serializer.errors, status=400)
             return Response({"error": "Could not parse Word document"}, status=400)
         except Exception as e:
@@ -351,24 +362,30 @@ class UploadWordView(APIView):
                 key, value = line.split(':', 1)
                 key = key.strip().lower()
                 value = value.strip()
-                if 'job title' in key:
-                    job_data['title'] = value
-                elif 'department' in key:
-                    job_data['department'] = value
+                if 'project name' in key or 'job title' in key:
+                    job_data['project_name'] = value
                 elif 'location' in key:
-                    job_data['location'] = [loc.strip() for loc in value.split(',')]
+                    job_data['location'] = value
+                elif 'demand' in key and 'id' in key:
+                    job_data['demand_id'] = value
+                elif 'skill' in key:
+                    job_data['skills'] = value
                 elif 'openings' in key:
                     job_data['openings'] = int(value) if value.isdigit() else 1
-                elif 'requirements' in key:
-                    job_data['requirements'] = value
-                elif 'tech' in key and 'skill' in key:
-                    job_data['techSkills'] = [s.strip() for s in value.split(',')]
-                elif 'soft' in key and 'skill' in key:
-                    job_data['softSkills'] = [s.strip() for s in value.split(',')]
-                elif 'description' in key:
-                    job_data['description'] = value
-                elif 'expiry' in key or 'deadline' in key:
-                    job_data['expiryDate'] = value
+                elif 'bg' in key:
+                    job_data['bg'] = value
+                elif 'isu' in key or 'hsu' in key:
+                    job_data['isu_hsu'] = value
+                elif 'stream' in key:
+                    job_data['stream'] = value
+                elif 'role' in key:
+                    job_data['role'] = value
+                elif 'spoc' in key and 'name' in key:
+                    job_data['spoc_name'] = value
+                elif 'spoc' in key and 'emp' in key:
+                    job_data['spoc_emp_id'] = value
+                elif 'rmg' in key and 'head' in key:
+                    job_data['rmg_head'] = value
         job_data.update({
             'status': 'active',
             'filled': 0,
@@ -382,10 +399,10 @@ class DownloadExcelTemplateView(APIView):
         wb = Workbook()
         ws = wb.active
         ws.title = "Job Template"
-        headers = ['Title','Department','Location','Openings','Requirements','Tech Skills','Soft Skills','Description','Expiry Date']
+        headers = ['Location', 'BG', 'ISU/HSU', 'Project Name', 'Stream', 'Role', 'Project SPOC Name', 'Openings', 'Project SPOC Emp ID', 'RMG Head', 'Skills', 'Demand ID']
         for col, h in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=h)
-        sample = ['Frontend Developer','Technology','Hyderabad,Bangalore','3','3+ years React','React,JavaScript','Communication,Teamwork','Develop web apps','2024-03-15']
+        sample = ['Hyderabad,Bangalore', 'Technology', 'ISU', 'Frontend Developer', 'Java', 'Developer', 'John Doe', '3', 'EMP001', 'Jane Smith', 'React,JavaScript', 'DEMAND001']
         for col, val in enumerate(sample, 1):
             ws.cell(row=2, column=col, value=val)
         buffer = BytesIO()
@@ -399,14 +416,18 @@ class DownloadWordTemplateView(APIView):
     def get(self, request):
         doc = Document()
         doc.add_heading('Job Profile Template', 0)
-        doc.add_paragraph('Job Title: ')
-        doc.add_paragraph('Department: ')
-        doc.add_paragraph('Locations: (comma separated)')
+        doc.add_paragraph('Project Name: ')
+        doc.add_paragraph('Location: ')
+        doc.add_paragraph('Demand ID: ')
+        doc.add_paragraph('Skills: (comma separated)')
         doc.add_paragraph('Openings: ')
-        doc.add_paragraph('Requirements: ')
-        doc.add_paragraph('Tech Skills: (comma separated)')
-        doc.add_paragraph('Soft Skills: (comma separated)')
-        doc.add_paragraph('Description: ')
+        doc.add_paragraph('BG: ')
+        doc.add_paragraph('ISU/HSU: ')
+        doc.add_paragraph('Stream: ')
+        doc.add_paragraph('Role: ')
+        doc.add_paragraph('Project SPOC Name: ')
+        doc.add_paragraph('Project SPOC Emp ID: ')
+        doc.add_paragraph('RMG Head: ')
         doc.add_paragraph('Expiry Date: (YYYY-MM-DD)')
         buffer = BytesIO()
         doc.save(buffer)
@@ -597,7 +618,7 @@ class JobMatchListView(APIView):
         batch = request.query_params.get('batch')
         if batch and job.batch_name != batch:
             return Response({
-                "job_title": job.title,
+                "job_title": job.project_name,
                 "job_id": job.id,
                 "total_matches": 0,
                 "perfect_match": [],
@@ -613,7 +634,7 @@ class JobMatchListView(APIView):
         matches = Match.objects.filter(job_ref=job).exclude(trainee_ref_id__in=all_excluded)
 
         response = {
-            "job_title": job.title,
+            "job_title": job.project_name,
             "job_id": job.id,
             "total_matches": matches.count(),
             "perfect_match": [],
@@ -659,7 +680,7 @@ class TraineeMatchListView(APIView):
             data = {
                 "match_id": match.id,
                 "job_id": match.job_ref.id,
-                "job_title": match.job_ref.title,
+                "job_title": match.job_ref.project_name,
                 "job_location": match.job_ref.location,
                 "posted_date": match.job_ref.postedDate,
                 "bucket": match.bucket,
@@ -762,7 +783,7 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         total_locked = qs.filter(status='locked').count()
         total_selected = qs.filter(status='selected').count()
         total_rejected = qs.filter(status='rejected').count()
-        by_job = qs.values('job__title').annotate(
+        by_job = qs.values('job__project_name').annotate(
             locked=django_models.Count('id', filter=django_models.Q(status='locked')),
             selected=django_models.Count('id', filter=django_models.Q(status='selected')),
             rejected=django_models.Count('id', filter=django_models.Q(status='rejected')),
@@ -784,7 +805,7 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         for lock in locks:
             writer.writerow([
                 lock.trainee.userInfo.name,
-                lock.job.title,
+                lock.job.project_name,
                 lock.interview_datetime,
                 lock.status,
                 lock.comments,
@@ -1120,11 +1141,8 @@ class AISuggestionView(APIView):
         - Average score: {profile.userInfo.averageScore}%
 
         Job Details:
-        - Title: {job.title}
-        - Department: {job.department}
-        - Required tech skills: {', '.join(job.techSkills)}
-        - Required soft skills: {', '.join(job.softSkills)}
-        - Description: {job.description}
+        - Title: {job.project_name}
+        - Required skills: {job.skills}
 
         Suggestion:
         """
@@ -1145,9 +1163,8 @@ class InterviewQuestionsView(APIView):
         job = get_object_or_404(Job, id=job_id, status='active', is_public=True)
 
         prompt = f"""
-        Generate interview questions and answers for a {job.title} position.
-        The job requires these technical skills: {', '.join(job.techSkills)}.
-        Soft skills: {', '.join(job.softSkills)}.
+        Generate interview questions and answers for a {job.project_name} position.
+        The job requires these skills: {job.skills}.
 
         For each difficulty level (low, medium, high), provide 3 questions with concise answers.
         Output in JSON format exactly like this:
@@ -1253,12 +1270,12 @@ class AssociateDashboardView(APIView):
         skill_gaps = []
         for match in matches:
             job = match.job_ref
-            required = set(job.techSkills)
+            required = set([skill.strip() for skill in job.skills.split(',') if skill.strip()])
             trainee_skills = set(profile.strengths.values_list('courseName', flat=True))
             missing = list(required - trainee_skills)
             skill_gaps.append({
                 'job_id': job.id,
-                'job_title': job.title,
+                'job_title': job.project_name,
                 'match_percentage': match.total_percentage,
                 'missing_skills': missing,
                 'has_all_skills': len(missing) == 0
@@ -1336,7 +1353,7 @@ class CreateInterviewerView(APIView):
             return Response({"error": "Permission denied"}, status=403)
 
         username = request.data.get('username')
-        password = request.data.get('password', 'Tcs#12345')   # default password
+        password = request.data.get('password', 'Tcs#12345')
         email = request.data.get('email', f"{username}@tcs.com")
         access_start = request.data.get('access_start')
         access_end = request.data.get('access_end')
@@ -1359,6 +1376,363 @@ class CreateInterviewerView(APIView):
             access_end=access_end,
         )
         return Response({"message": "Interviewer created", "user_id": user.id}, status=201)
+
+# ==================== NEW BULK OPERATIONS ====================
+
+# --- Bulk Interview Lock ---
+class DownloadInterviewLockTemplateView(APIView):
+    """Download Excel template for bulk interview lock"""
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Interview Lock Template"
+        headers = ["Trainee Email/EmpID", "Interviewer Email/EmpID", "Job ID", "Interview DateTime", "Comments"]
+        ws.append(headers)
+        ws.column_dimensions['D'].width = 20
+        ws.append(["emp001@tcs.com", "interviewer@tcs.com", 1, "2025-05-15 14:00:00", "Sample comment"])
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="interview_lock_template.xlsx"'
+        return response
+
+class BulkInterviewLockView(APIView):
+    """Bulk create interview locks from Excel upload"""
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({"error": f"Invalid Excel file: {str(e)}"}, status=400)
+
+        df.columns = [c.strip().lower() for c in df.columns]
+        col_map = {}
+        for col in df.columns:
+            if 'trainee' in col:
+                col_map['trainee'] = col
+            elif 'interviewer' in col:
+                col_map['interviewer'] = col
+            elif 'job' in col:
+                col_map['job'] = col
+            elif 'datetime' in col or 'date' in col:
+                col_map['datetime'] = col
+            elif 'comment' in col:
+                col_map['comments'] = col
+        if 'trainee' not in col_map or 'interviewer' not in col_map or 'job' not in col_map or 'datetime' not in col_map:
+            return Response({"error": "Missing required columns"}, status=400)
+
+        results = {'created': 0, 'errors': []}
+        for idx, row in df.iterrows():
+            try:
+                trainee_identifier = str(row[col_map['trainee']]).strip()
+                interviewer_identifier = str(row[col_map['interviewer']]).strip()
+                job_id = int(row[col_map['job']])
+                dt_str = str(row[col_map['datetime']]).strip()
+                comments = str(row.get(col_map.get('comments', ''), '')).strip() if col_map.get('comments') in row else ''
+                # Resolve trainee
+                trainee_profile = None
+                user_info = UserInfo.objects.filter(employeeId=trainee_identifier).first()
+                if not user_info:
+                    user_info = UserInfo.objects.filter(email=trainee_identifier).first()
+                if user_info:
+                    trainee_profile = user_info.profile
+                if not trainee_profile:
+                    results['errors'].append(f"Row {idx+2}: Trainee not found")
+                    continue
+
+                # Resolve interviewer
+                interviewer_user = None
+                try:
+                    interviewer_user = User.objects.get(username=interviewer_identifier)
+                except User.DoesNotExist:
+                    try:
+                        interviewer_user = User.objects.get(email=interviewer_identifier)
+                    except User.DoesNotExist:
+                        pass
+                if not interviewer_user:
+                    results['errors'].append(f"Row {idx+2}: Interviewer not found")
+                    continue
+
+                # Parse datetime
+                try:
+                    interview_dt = pd.to_datetime(dt_str).to_pydatetime()
+                except:
+                    results['errors'].append(f"Row {idx+2}: Invalid datetime format")
+                    continue
+
+                # Create lock
+                lock, created = InterviewLock.objects.get_or_create(
+                    trainee=trainee_profile,
+                    job_id=job_id,
+                    defaults={
+                        'locked_by': request.user,
+                        'interview_datetime': interview_dt,
+                        'comments': comments,
+                        'assigned_to': interviewer_user,
+                    }
+                )
+                if created:
+                    results['created'] += 1
+                else:
+                    results['errors'].append(f"Row {idx+2}: Already locked for this job")
+            except Exception as e:
+                results['errors'].append(f"Row {idx+2}: {str(e)}")
+
+        return Response(results, status=201 if results['created'] > 0 else 400)
+
+# --- Bulk Status Update ---
+class DownloadStatusUpdateTemplateView(APIView):
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Status Update Template"
+        ws.append(["Trainee Email/EmpID", "Job ID", "Status (selected/rejected)"])
+        ws.append(["emp001@tcs.com", 1, "selected"])
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="status_update_template.xlsx"'
+        return response
+
+class BulkStatusUpdateView(APIView):
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        df.columns = [c.strip().lower() for c in df.columns]
+        col_map = {}
+        for col in df.columns:
+            if 'trainee' in col:
+                col_map['trainee'] = col
+            elif 'job' in col:
+                col_map['job'] = col
+            elif 'status' in col:
+                col_map['status'] = col
+        if not all(k in col_map for k in ['trainee','job','status']):
+            return Response({"error": "Missing required columns"}, status=400)
+
+        results = {'updated': 0, 'errors': []}
+        for idx, row in df.iterrows():
+            try:
+                trainee_id = str(row[col_map['trainee']]).strip()
+                job_id = int(row[col_map['job']])
+                new_status = str(row[col_map['status']]).strip().lower()
+                if new_status not in ['selected','rejected']:
+                    results['errors'].append(f"Row {idx+2}: Invalid status")
+                    continue
+
+                trainee_profile = None
+                user_info = UserInfo.objects.filter(employeeId=trainee_id).first()
+                if not user_info:
+                    user_info = UserInfo.objects.filter(email=trainee_id).first()
+                if user_info:
+                    trainee_profile = user_info.profile
+                if not trainee_profile:
+                    results['errors'].append(f"Row {idx+2}: Trainee not found")
+                    continue
+
+                lock = InterviewLock.objects.filter(trainee=trainee_profile, job_id=job_id).first()
+                if not lock:
+                    results['errors'].append(f"Row {idx+2}: No existing lock")
+                    continue
+                if lock.status in ['selected','rejected']:
+                    results['errors'].append(f"Row {idx+2}: Already finalised")
+                    continue
+                lock.status = new_status
+                lock.save()
+                results['updated'] += 1
+            except Exception as e:
+                results['errors'].append(f"Row {idx+2}: {str(e)}")
+        return Response(results, status=200)
+
+# --- Bulk Mapping ---
+class DownloadBulkMappingTemplateView(APIView):
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Bulk Mapping Template"
+        ws.append(["Trainee Email/EmpID", "Job ID"])
+        ws.append(["emp001@tcs.com", 1])
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="bulk_mapping_template.xlsx"'
+        return response
+
+class BulkMappingView(APIView):
+    def post(self, request):
+        file = request.FILES.get('file')
+        batch = request.data.get('batch', '')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        df.columns = [c.strip().lower() for c in df.columns]
+        col_map = {}
+        for col in df.columns:
+            if 'trainee' in col:
+                col_map['trainee'] = col
+            elif 'job' in col:
+                col_map['job'] = col
+        if not all(k in col_map for k in ['trainee','job']):
+            return Response({"error": "Missing columns"}, status=400)
+
+        job_map_requests = {}
+        trainee_job_pairs = []
+        for idx, row in df.iterrows():
+            trainee_id = str(row[col_map['trainee']]).strip()
+            job_id = int(row[col_map['job']])
+            trainee_job_pairs.append((trainee_id, job_id))
+            job_map_requests[job_id] = job_map_requests.get(job_id, 0) + 1
+
+        for job_id, count in job_map_requests.items():
+            try:
+                job = Job.objects.get(id=job_id, batch_name=batch if batch else None)
+                if job.openings - job.filled < count:
+                    return Response({"error": f"Job {job.project_name} (ID {job_id}) has only {job.openings - job.filled} openings, but {count} mappings requested."}, status=400)
+            except Job.DoesNotExist:
+                return Response({"error": f"Job ID {job_id} not found in batch {batch or 'any'}"}, status=400)
+
+        results = {'mapped': 0, 'errors': []}
+        for trainee_id, job_id in trainee_job_pairs:
+            try:
+                trainee_profile = None
+                user_info = UserInfo.objects.filter(employeeId=trainee_id).first()
+                if not user_info:
+                    user_info = UserInfo.objects.filter(email=trainee_id).first()
+                if user_info:
+                    trainee_profile = user_info.profile
+                if not trainee_profile:
+                    results['errors'].append(f"Trainee {trainee_id}: not found")
+                    continue
+
+                job = Job.objects.get(id=job_id)
+                if job.openings - job.filled <= 0:
+                    results['errors'].append(f"Trainee {trainee_id}: job {job_id} has no openings left")
+                    continue
+
+                user_info_to_update = trainee_profile.userInfo
+                user_info_to_update.isMapped = True
+                user_info_to_update.projectId = str(job.id)
+                user_info_to_update.projectName = job.project_name
+                user_info_to_update.save()
+
+                job.filled += 1
+                if job.filled >= job.openings:
+                    job.status = 'filled'
+                job.save()
+                results['mapped'] += 1
+            except Exception as e:
+                results['errors'].append(f"Trainee {trainee_id}: {str(e)}")
+        return Response(results, status=200 if results['mapped'] > 0 else 400)
+
+# --- HR Summary Report (Excel with charts) ---
+class HRSummaryReportView(APIView):
+    """Generate a comprehensive Excel report for the selected batch with embedded charts."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        batch = request.query_params.get('batch', '')
+        jobs = Job.objects.all()
+        trainees = ProfileRecord.objects.select_related('userInfo').all()
+        locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
+        if batch:
+            jobs = jobs.filter(batch_name=batch)
+            trainees = trainees.filter(batch_name=batch)
+            locks = locks.filter(job__batch_name=batch) | locks.filter(trainee__batch_name=batch)
+
+        wb = Workbook()
+        # Sheet 1: Overview Stats
+        ws1 = wb.active
+        ws1.title = "Overview"
+        total_trainees = trainees.count()
+        mapped = trainees.filter(userInfo__isMapped=True).count()
+        unmapped = total_trainees - mapped
+        active_jobs = jobs.filter(status='active').count()
+        locked_count = locks.filter(status='locked').count()
+        selected_count = locks.filter(status='selected').count()
+        rejected_count = locks.filter(status='rejected').count()
+        ws1.append(['HR Summary Report', f'Batch: {batch if batch else "All"}'])
+        ws1.append([])
+        ws1.append(['Metric', 'Value'])
+        ws1.append(['Total Trainees', total_trainees])
+        ws1.append(['Mapped Trainees', mapped])
+        ws1.append(['Unmapped Trainees', unmapped])
+        ws1.append(['Active Jobs', active_jobs])
+        ws1.append(['Interview Locks', locked_count])
+        ws1.append(['Selected', selected_count])
+        ws1.append(['Rejected', rejected_count])
+
+        # Sheet 2: Job Details
+        ws2 = wb.create_sheet("Job Details")
+        ws2.append(['Job Title', 'Demand ID', 'Department', 'Location', 'Openings', 'Filled', 'Status', 'Batch'])
+        for job in jobs:
+            ws2.append([job.project_name, job.demand_id or '', '', ', '.join(job.location) if job.location else '',
+                        job.openings, job.filled, job.status, job.batch_name or ''])
+
+        # Sheet 3: Trainee Status
+        ws3 = wb.create_sheet("Trainee Status")
+        ws3.append(['Name', 'Employee ID', 'Location', 'Batch', 'Mapped', 'Project'])
+        for t in trainees:
+            ws3.append([t.userInfo.name if t.userInfo else '', t.userInfo.employeeId if t.userInfo else '',
+                        t.userInfo.location if t.userInfo else '', t.batch_name or '',
+                        'Yes' if (t.userInfo and t.userInfo.isMapped) else 'No',
+                        t.userInfo.projectName if t.userInfo else ''])
+
+        # Sheet 4: Interview Locks
+        ws4 = wb.create_sheet("Interview Locks")
+        ws4.append(['Trainee', 'Job', 'Status', 'Interview DateTime', 'Interviewer'])
+        for lock in locks:
+            ws4.append([lock.trainee.userInfo.name if lock.trainee.userInfo else '',
+                        lock.job.project_name, lock.status, lock.interview_datetime.strftime('%Y-%m-%d %H:%M'),
+                        lock.assigned_to.username if lock.assigned_to else ''])
+
+        # Sheet 5: Skills Demand
+        ws5 = wb.create_sheet("Skills Demand")
+        from collections import Counter
+        skill_counter = Counter()
+        for job in jobs:
+            # Parse skills from comma-separated string
+            skills_list = [skill.strip() for skill in (job.skills or '').split(',') if skill.strip()]
+            for skill in skills_list:
+                skill_counter[skill] += 1
+        ws5.append(['Skill', 'Count'])
+        for skill, count in skill_counter.most_common(20):
+            ws5.append([skill, count])
+
+        # Sheet 6: Chart
+        chart_sheet = wb.create_sheet("Chart")
+        chart = BarChart()
+        chart.type = "col"
+        chart.title = "Top Skills Demand"
+        chart.y_axis.title = 'Number of Jobs'
+        chart.x_axis.title = 'Skills'
+        data = Reference(ws5, min_col=2, min_row=1, max_row=min(21, len(skill_counter)+1))
+        cats = Reference(ws5, min_col=1, min_row=2, max_row=min(21, len(skill_counter)+1))
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart_sheet.add_chart(chart, "A1")
+
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="hr_summary_{batch or "all"}.xlsx"'
+        return response
+
 # ==================== Manager Chatbot ====================
 from .models import ManagerChatSession, ManagerChatMessage
 from .serializers import ManagerChatSessionSerializer, ManagerChatMessageSerializer
@@ -1379,12 +1753,12 @@ def build_manager_chat_context(batch=None):
     top_jobs = jobs[:5]
     job_summaries = []
     for job in top_jobs:
-        skills = (job.techSkills or [])[:2]
-        job_summaries.append(f"- {job.title} ({job.openings} openings, skills: {', '.join(skills)})")
+        skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()][:2]
+        job_summaries.append(f"- {job.project_name} ({job.openings} openings, skills: {', '.join(skills)})")
     
     demand_map = {}
     for job in jobs:
-        for skill in (job.techSkills or []) + (job.softSkills or []):
+        for skill in [skill.strip() for skill in job.skills.split(',') if skill.strip()]:
             demand_map[skill] = demand_map.get(skill, 0) + 1
     supply_map = {}
     for trainee in trainees.prefetch_related('strengths'):
@@ -1490,3 +1864,189 @@ class ManagerChatSessionViewSet(viewsets.ModelViewSet):
             'user_message': ManagerChatMessageSerializer(user_msg_obj).data,
             'bot_reply': ManagerChatMessageSerializer(bot_msg_obj).data
         })
+
+
+
+# ---------- HR Summary PDF Report ----------
+import matplotlib
+matplotlib.use('Agg')                            # Non‑GUI backend
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    Image as RLImage, PageBreak
+)
+from io import BytesIO
+from collections import Counter
+
+class HRSummaryPDFView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        batch = request.query_params.get('batch', '')
+
+        # ---- Gather data (same as Excel report) ----
+        jobs = Job.objects.all()
+        trainees = ProfileRecord.objects.select_related('userInfo').all()
+        locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
+        if batch:
+            jobs = jobs.filter(batch_name=batch)
+            trainees = trainees.filter(batch_name=batch)
+            locks = locks.filter(job__batch_name=batch) | locks.filter(trainee__batch_name=batch)
+
+        total_trainees = trainees.count()
+        mapped = trainees.filter(userInfo__isMapped=True).count()
+        unmapped = total_trainees - mapped
+        active_jobs = jobs.filter(status='active').count()
+        locked_count = locks.filter(status='locked').count()
+        selected_count = locks.filter(status='selected').count()
+        rejected_count = locks.filter(status='rejected').count()
+
+        # ---- Create charts using matplotlib ----
+        chart_images = []
+
+        # 1. Skills demand bar chart
+        skill_counter = Counter()
+        for job in jobs:
+            # Parse skills from comma-separated string
+            skills_list = [skill.strip() for skill in (job.skills or '').split(',') if skill.strip()]
+            for skill in skills_list:
+                skill_counter[skill] += 1
+        top_skills = skill_counter.most_common(10)
+        if top_skills:
+            skills, counts = zip(*top_skills)
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ax.bar(skills, counts, color='#3b82f6')
+            ax.set_title('Top Skills in Demand')
+            ax.set_ylabel('Number of Jobs')
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png', dpi=100)
+            plt.close(fig)
+            buf.seek(0)
+            chart_images.append(('skills_demand', buf))
+
+        # 2. Status distribution pie chart
+        status_data = {
+            'Locked': locked_count,
+            'Selected': selected_count,
+            'Rejected': rejected_count,
+            'Cancelled': locks.filter(status='cancelled').count()
+        }
+        status_data = {k:v for k,v in status_data.items() if v > 0}
+        if status_data:
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.pie(status_data.values(), labels=status_data.keys(), autopct='%1.1f%%',
+                   colors=['#fbbf24','#10b981','#ef4444','#6b7280'])
+            ax.set_title('Interview Status Distribution')
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png', dpi=100)
+            plt.close(fig)
+            buf.seek(0)
+            chart_images.append(('status_dist', buf))
+
+        # ---- Build PDF with reportlab ----
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+        title_style = styles['Title']
+        heading_style = styles['Heading2']
+        normal_style = styles['Normal']
+
+        # Title
+        elements.append(Paragraph(f"HR Summary Report (Batch: {batch or 'All'})", title_style))
+        elements.append(Spacer(1, 12))
+
+        # Summary stats
+        elements.append(Paragraph("Overview", heading_style))
+        summary_data = [
+            ['Metric', 'Value'],
+            ['Total Trainees', str(total_trainees)],
+            ['Mapped Trainees', str(mapped)],
+            ['Unmapped Trainees', str(unmapped)],
+            ['Active Jobs', str(active_jobs)],
+            ['Interview Locks', str(locked_count)],
+            ['Selected', str(selected_count)],
+            ['Rejected', str(rejected_count)],
+        ]
+        t = Table(summary_data, colWidths=[200, 100])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 10),
+            ('BOTTOMPADDING', (0,0), (-1,0), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 20))
+
+        # Charts
+        for name, img_buf in chart_images:
+            elements.append(Paragraph(name.replace('_', ' ').title(), heading_style))
+            img = RLImage(img_buf, width=480, height=320)
+            elements.append(img)
+            elements.append(Spacer(1, 12))
+
+        # Job Details table
+        elements.append(PageBreak())
+        elements.append(Paragraph("Job Details", heading_style))
+        job_table_data = [['Job Title', 'Demand ID', 'Dept', 'Location', 'Openings', 'Filled', 'Status']]
+        for job in jobs[:30]:
+            job_table_data.append([
+                job.project_name, job.demand_id or '', '',
+                ', '.join(job.location) if job.location else '',
+                str(job.openings), str(job.filled), job.status
+            ])
+        if len(job_table_data) > 1:
+            t = Table(job_table_data, colWidths=[80,60,60,80,50,50,60])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
+            ]))
+            elements.append(t)
+
+        # Trainee Status table
+        elements.append(PageBreak())
+        elements.append(Paragraph("Trainee Status", heading_style))
+        trainee_data = [['Name', 'Emp ID', 'Location', 'Batch', 'Mapped', 'Project']]
+        for t in trainees[:30]:
+            trainee_data.append([
+                t.userInfo.name if t.userInfo else '',
+                t.userInfo.employeeId if t.userInfo else '',
+                t.userInfo.location if t.userInfo else '',
+                t.batch_name or '',
+                'Yes' if (t.userInfo and t.userInfo.isMapped) else 'No',
+                t.userInfo.projectName if t.userInfo else ''
+            ])
+        if len(trainee_data) > 1:
+            t = Table(trainee_data, colWidths=[80,60,60,50,50,100])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
+            ]))
+            elements.append(t)
+
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        filename = f'hr_summary_{batch or "all"}.pdf'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response

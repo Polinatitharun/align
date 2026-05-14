@@ -20,18 +20,99 @@
 // api/index.js
 import axios from "axios";
 
-// Create axios instance (your existing code)
+const API_BASE_URL = "http://127.0.0.1:8000/api";
+
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL: API_BASE_URL,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access");
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+const getAccessToken = () => localStorage.getItem("access");
+const getRefreshToken = () => localStorage.getItem("refresh");
+
+const attachAccessToken = (config) => {
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+};
+
+api.interceptors.request.use(attachAccessToken, (error) => Promise.reject(error));
+
+let isRefreshing = false;
+let pendingRequests = [];
+
+const onRefreshed = (newToken) => {
+  pendingRequests.forEach((callback) => callback(newToken));
+  pendingRequests = [];
+};
+
+const addPendingRequest = (callback) => {
+  pendingRequests.push(callback);
+};
+
+const refreshAccessToken = async () => {
+  const refresh = getRefreshToken();
+  if (!refresh) {
+    throw new Error("Missing refresh token");
+  }
+
+  const response = await refreshClient.post("/token/refresh/", {
+    refresh,
+  });
+
+  const newAccess = response.data.access;
+  if (newAccess) {
+    localStorage.setItem("access", newAccess);
+  }
+  return newAccess;
+};
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      originalRequest.url !== "/token/refresh/"
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          addPendingRequest((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const newAccess = await refreshAccessToken();
+        onRefreshed(newAccess);
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("userData");
+        window.location.href = "/login";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 // Job API Service - Extending your existing api
 export const jobAPI = {

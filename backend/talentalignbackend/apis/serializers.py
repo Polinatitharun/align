@@ -1,3 +1,4 @@
+# apis/serializers.py
 from rest_framework import serializers
 from .models import (
     User, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
@@ -12,7 +13,6 @@ User = get_user_model()
 # ---------- Custom JWT with time‑based access check ----------
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Try email login
         login_value = attrs.get(self.username_field)
         try:
             user = User.objects.get(email=login_value)
@@ -23,7 +23,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         user = self.user
 
-        # Time‑based access for interviewers
         if user.role == 'interviewer':
             from django.utils import timezone
             now = timezone.now()
@@ -167,13 +166,19 @@ class RecommendationSerializer(serializers.ModelSerializer):
 # ---------- Interview Lock Serializers ----------
 class InterviewLockSerializer(serializers.ModelSerializer):
     trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
-    job_title = serializers.CharField(source='job.title', read_only=True)
+    job_title = serializers.CharField(source='job.project_name', read_only=True)
     locked_by_name = serializers.CharField(source='locked_by.username', read_only=True)
     assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
+    feedback = serializers.SerializerMethodField()
 
     class Meta:
         model = InterviewLock
         fields = '__all__'
+
+    def get_feedback(self, obj):
+        if hasattr(obj, 'feedback'):
+            return InterviewFeedbackSerializer(obj.feedback).data
+        return None
 
 
 class InterviewLockCreateSerializer(serializers.Serializer):
@@ -191,6 +196,8 @@ class InterviewLockCreateSerializer(serializers.Serializer):
 
 # ---------- Interview Feedback Serializers ----------
 class InterviewFeedbackSerializer(serializers.ModelSerializer):
+    interviewer_name = serializers.CharField(source='interviewer.username', read_only=True)
+
     class Meta:
         model = InterviewFeedback
         fields = '__all__'

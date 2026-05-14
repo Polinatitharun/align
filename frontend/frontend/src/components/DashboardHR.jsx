@@ -1,4 +1,4 @@
-// DashboardHR.js – Refactored to match Manager Dashboard style
+// DashboardHR.js – Complete HR Dashboard with Bulk Operations, New Job Fields, and Report
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import XlsxPopulate from 'xlsx-populate';
@@ -45,7 +45,9 @@ import {
   TrendingUp,
   Clock,
   Info,
-  MessageSquare
+  MessageSquare,
+  UploadCloud,
+  ChevronDown,
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import api from '../api/axios';
@@ -113,20 +115,20 @@ function DashboardHR({ userData, onLogout }) {
   const [mappedTrainees, setMappedTrainees] = useState([]);
   const [rejectedTrainees, setRejectedTrainees] = useState([]);
 
-  // New Job State
+  // New Job State (includes new fields)
   const [newJob, setNewJob] = useState({
-    title: '',
-    department: '',
-    location: [''],
+    project_name: '',
+    location: '',
+    demand_id: '',
+    skills: '',
     openings: 1,
-    requirements: '',
-    techSkills: [],
-    softSkills: [],
-    description: '',
-    salary: '',
-    expiryDate: '',
-    is_public: true,
-    batch_name: '',
+    bg: '',
+    isu_hsu: '',
+    stream: '',
+    role: '',
+    spoc_name: '',
+    spoc_emp_id: '',
+    rmg_head: '',
   });
 
   // Talent Search State
@@ -167,11 +169,21 @@ function DashboardHR({ userData, onLogout }) {
   const [showCreateInterviewerModal, setShowCreateInterviewerModal] = useState(false);
   const [newInterviewer, setNewInterviewer] = useState({
     username: '',
-    password: 'Tcs#12345',   // default
+    password: 'Tcs#12345',
     email: '',
     access_start: '',
     access_end: '',
   });
+
+  // Bulk operations state
+  const [showBulkLockModal, setShowBulkLockModal] = useState(false);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [showBulkMappingModal, setShowBulkMappingModal] = useState(false);
+  const [bulkLockFile, setBulkLockFile] = useState(null);
+  const [bulkStatusFile, setBulkStatusFile] = useState(null);
+  const [bulkMappingFile, setBulkMappingFile] = useState(null);
+  const [bulkOpsOpen, setBulkOpsOpen] = useState(false); // dropdown toggle
+
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
   const getBatchParam = () => (selectedBatch ? `?batch=${selectedBatch}` : '');
@@ -364,7 +376,7 @@ function DashboardHR({ userData, onLogout }) {
       const updated = { ...job, status: 'inactive' };
       await jobAPI.updateJob(job.id, updated);
       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
-      toast.success(`Job "${job.title}" auto‑deactivated.`);
+      toast.success(`Job "${job.project_name}" auto‑deactivated.`);
     }
   };
 
@@ -400,7 +412,7 @@ function DashboardHR({ userData, onLogout }) {
         return;
       }
 
-      const mappingData = { isMapped: true, projectId: job.id.toString(), projectName: job.title };
+      const mappingData = { isMapped: true, projectId: job.id.toString(), projectName: job.project_name };
       await mappingAPI.updateMapping(userId, mappingData);
       const updatedJob = await updateJobVacancies(job);
 
@@ -412,10 +424,10 @@ function DashboardHR({ userData, onLogout }) {
       setTraineesWithNoMatches((prev) => prev.filter((t) => t.userId !== userId));
 
       setAllTrainees((prev) =>
-        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.project_name } : t))
       );
       setTrainees((prev) =>
-        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.title } : t))
+        prev.map((t) => (t.userId === userId ? { ...t, isMapped: true, projectId: job.id, projectName: job.project_name } : t))
       );
 
       if (jobMatches) {
@@ -461,11 +473,11 @@ function DashboardHR({ userData, onLogout }) {
       }
 
       setRecentActivity(prev => [
-        { type: 'Mapped', trainee: traineeName, job: job.title, time: new Date().toLocaleString() },
+        { type: 'Mapped', trainee: traineeName, job: job.project_name, time: new Date().toLocaleString() },
         ...prev.slice(0, 4)
       ]);
 
-      toast.success(`Mapped ${traineeName} to ${job.title}`);
+      toast.success(`Mapped ${traineeName} to ${job.project_name}`);
     } catch (err) {
       console.error('Mapping error:', err);
       toast.error('Failed to map trainee: ' + (err.response?.data?.error || err.message));
@@ -606,41 +618,47 @@ function DashboardHR({ userData, onLogout }) {
 
   // Create job
   const handleCreateJob = async () => {
-    if (!newJob.title || !newJob.department || !newJob.description || !newJob.requirements) {
+    if (!newJob.project_name || !newJob.location || !newJob.demand_id || !newJob.skills || !newJob.openings) {
       toast.error('Please fill all required fields');
       return;
     }
     try {
       setLoading(true);
       const jobData = {
-        ...newJob,
-        location: newJob.location.filter((loc) => loc.trim() !== ''),
-        techSkills,
-        softSkills,
+        project_name: newJob.project_name,
+        location: newJob.location,
+        demand_id: newJob.demand_id,
+        skills: newJob.skills,
+        openings: newJob.openings,
+        bg: newJob.bg,
+        isu_hsu: newJob.isu_hsu,
+        stream: newJob.stream,
+        role: newJob.role,
+        spoc_name: newJob.spoc_name,
+        spoc_emp_id: newJob.spoc_emp_id,
+        rmg_head: newJob.rmg_head,
         status: 'active',
         filled: 0,
         matches: 0,
         postedDate: new Date().toISOString().split('T')[0],
-        is_public: newJob.is_public,
         batch_name: selectedBatch,
       };
       await jobAPI.createJob(jobData);
       await fetchJobs();
       setNewJob({
-        title: '',
-        department: '',
-        location: [''],
+        project_name: '',
+        location: '',
+        demand_id: '',
+        skills: '',
         openings: 1,
-        requirements: '',
-        techSkills: [],
-        softSkills: [],
-        description: '',
-        salary: '',
-        expiryDate: '',
-        is_public: true,
+        bg: '',
+        isu_hsu: '',
+        stream: '',
+        role: '',
+        spoc_name: '',
+        spoc_emp_id: '',
+        rmg_head: '',
       });
-      setTechSkills([]);
-      setSoftSkills([]);
       setActiveTab('jobs');
       toast.success('Job created');
     } catch (err) {
@@ -669,52 +687,54 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   // Skill handlers
+  // Skill handlers
   const handleTechSkillAdd = (e) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       const skill = e.target.value.trim();
-      if (skill && !techSkills.includes(skill)) {
-        const updated = [...techSkills, skill];
-        setTechSkills(updated);
-        if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, techSkills: updated });
-        else setNewJob({ ...newJob, techSkills: updated });
+      if (skill) {
+        const currentSkills = (selectedJob && isEditMode ? selectedJob.skills : newJob.skills) || '';
+        const skillArray = currentSkills.split(',').map(s => s.trim()).filter(s => s);
+        if (!skillArray.includes(skill)) {
+          const updatedSkills = [...skillArray, skill].join(', ');
+          if (selectedJob && isEditMode) {
+            setSelectedJob({ ...selectedJob, skills: updatedSkills });
+          } else {
+            setNewJob({ ...newJob, skills: updatedSkills });
+          }
+        }
         e.target.value = '';
       }
     }
   };
   const handleSoftSkillAdd = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const skill = e.target.value.trim();
-      if (skill && !softSkills.includes(skill)) {
-        const updated = [...softSkills, skill];
-        setSoftSkills(updated);
-        if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, softSkills: updated });
-        else setNewJob({ ...newJob, softSkills: updated });
-        e.target.value = '';
-      }
-    }
+    // For now, treat soft skills the same as tech skills
+    handleTechSkillAdd(e);
   };
   const removeTechSkill = (index) => {
-    const updated = techSkills.filter((_, i) => i !== index);
-    setTechSkills(updated);
-    if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, techSkills: updated });
-    else setNewJob({ ...newJob, techSkills: updated });
+    const currentSkills = (selectedJob && isEditMode ? selectedJob.skills : newJob.skills) || '';
+    const skillArray = currentSkills.split(',').map(s => s.trim()).filter(s => s);
+    skillArray.splice(index, 1);
+    const updatedSkills = skillArray.join(', ');
+    if (selectedJob && isEditMode) {
+      setSelectedJob({ ...selectedJob, skills: updatedSkills });
+    } else {
+      setNewJob({ ...newJob, skills: updatedSkills });
+    }
   };
   const removeSoftSkill = (index) => {
-    const updated = softSkills.filter((_, i) => i !== index);
-    setSoftSkills(updated);
-    if (selectedJob && isEditMode) setSelectedJob({ ...selectedJob, softSkills: updated });
-    else setNewJob({ ...newJob, softSkills: updated });
+    removeTechSkill(index);
   };
 
   // Location fields
-  const addLocationField = () => setNewJob({ ...newJob, location: [...newJob.location, ''] });
-  const removeLocationField = (index) => setNewJob({ ...newJob, location: newJob.location.filter((_, i) => i !== index) });
+  const addLocationField = () => {
+    // Since location is now a string, we don't need to add fields
+  };
+  const removeLocationField = (index) => {
+    // Since location is now a string, we don't need to remove fields
+  };
   const updateLocationField = (index, value) => {
-    const newLocs = [...newJob.location];
-    newLocs[index] = value;
-    setNewJob({ ...newJob, location: newLocs });
+    // Since location is now a string, we don't need to update fields
   };
 
   // Stats
@@ -950,7 +970,7 @@ function DashboardHR({ userData, onLogout }) {
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
-      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.title, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
+      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.project_name, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
       setShowLockModal(false);
       setSelectedTraineeIds([]);
       setLockInterviewDatetime('');
@@ -1049,35 +1069,35 @@ function DashboardHR({ userData, onLogout }) {
     finally { setLoading(false); }
   };
 
- const handleCreateInterviewer = async () => {
-  if (!newInterviewer.username) {
-    toast.error('Username required');
-    return;
-  }
-  if (!newInterviewer.email.endsWith('@tcs.com')) {
-    toast.error('Email must end with @tcs.com');
-    return;
-  }
-  if (!newInterviewer.access_start || !newInterviewer.access_end) {
-    toast.error('Access start and end are required');
-    return;
-  }
-  try {
-    await api.post('/users/create-interviewer/', newInterviewer);
-    toast.success('Interviewer created');
-    setShowCreateInterviewerModal(false);
-    setNewInterviewer({
-      username: '',
-      password: 'Tcs#12345',
-      email: '',
-      access_start: '',
-      access_end: '',
-    });
-    fetchInterviewers();
-  } catch (err) {
-    toast.error(err.response?.data?.error || 'Failed to create interviewer');
-  }
-};
+  const handleCreateInterviewer = async () => {
+    if (!newInterviewer.username) {
+      toast.error('Username required');
+      return;
+    }
+    if (!newInterviewer.email.endsWith('@tcs.com')) {
+      toast.error('Email must end with @tcs.com');
+      return;
+    }
+    if (!newInterviewer.access_start || !newInterviewer.access_end) {
+      toast.error('Access start and end are required');
+      return;
+    }
+    try {
+      await api.post('/users/create-interviewer/', newInterviewer);
+      toast.success('Interviewer created');
+      setShowCreateInterviewerModal(false);
+      setNewInterviewer({
+        username: '',
+        password: 'Tcs#12345',
+        email: '',
+        access_start: '',
+        access_end: '',
+      });
+      fetchInterviewers();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create interviewer');
+    }
+  };
 
   const runMatchingEngine = async (jobId = '') => {
     try {
@@ -1130,6 +1150,98 @@ function DashboardHR({ userData, onLogout }) {
       }));
       setRecentActivity(prev => { return [...locks, ...prev].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,5); });
     } catch (err) { console.error('Failed to fetch recent activity', err); }
+  };
+
+  // ==================== Bulk Operations ====================
+  const downloadInterviewLockTemplate = async () => {
+    try {
+      const res = await api.get('/jobs/download-interview-lock-template/', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = 'interview_lock_template.xlsx'; a.click();
+    } catch { toast.error('Download failed'); }
+  };
+
+  const handleBulkLockUpload = async () => {
+    if (!bulkLockFile) { toast.error('Please select a file'); return; }
+    const formData = new FormData();
+    formData.append('file', bulkLockFile);
+    try {
+      setLoading(true);
+      const res = await api.post('/jobs/bulk-interview-lock/', formData);
+      toast.success(`Locked ${res.data.created} trainees. Errors: ${res.data.errors.length}`);
+      setBulkLockFile(null);
+      setShowBulkLockModal(false);
+      fetchInterviewLocks();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Upload failed');
+    } finally { setLoading(false); }
+  };
+
+  const downloadStatusUpdateTemplate = async () => {
+    try {
+      const res = await api.get('/jobs/download-status-update-template/', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = 'status_update_template.xlsx'; a.click();
+    } catch { toast.error('Download failed'); }
+  };
+
+  const handleBulkStatusUpload = async () => {
+    if (!bulkStatusFile) { toast.error('Please select a file'); return; }
+    const formData = new FormData();
+    formData.append('file', bulkStatusFile);
+    try {
+      setLoading(true);
+      const res = await api.post('/jobs/bulk-status-update/', formData);
+      toast.success(`Updated ${res.data.updated} trainees. Errors: ${res.data.errors.length}`);
+      setBulkStatusFile(null);
+      setShowBulkStatusModal(false);
+      fetchInterviewLocks();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Upload failed');
+    } finally { setLoading(false); }
+  };
+
+  const downloadBulkMappingTemplate = async () => {
+    try {
+      const res = await api.get('/jobs/download-bulk-mapping-template/', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = 'bulk_mapping_template.xlsx'; a.click();
+    } catch { toast.error('Download failed'); }
+  };
+
+  const handleBulkMappingUpload = async () => {
+    if (!bulkMappingFile) { toast.error('Please select a file'); return; }
+    const formData = new FormData();
+    formData.append('file', bulkMappingFile);
+    formData.append('batch', selectedBatch);
+    try {
+      setLoading(true);
+      const res = await api.post('/jobs/bulk-mapping/', formData);
+      toast.success(`Mapped ${res.data.mapped} trainees. Errors: ${res.data.errors.length}`);
+      setBulkMappingFile(null);
+      setShowBulkMappingModal(false);
+      fetchTrainees();
+      fetchJobs();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Upload failed');
+    } finally { setLoading(false); }
+  };
+
+  const downloadHRSummaryReport = async () => {
+    try {
+      const response = await api.get(`/reports/hr-summary/${getBatchParam()}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hr_summary_${selectedBatch || 'all'}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Report downloaded');
+    } catch (err) {
+      toast.error('Failed to download report');
+    }
   };
 
   // ==================== Effects ====================
@@ -1228,7 +1340,23 @@ function DashboardHR({ userData, onLogout }) {
     try { setLoading(true); const blob = await jobAPI.downloadWordTemplate(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'job_template.docx'; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); toast.success('Template downloaded'); }
     catch { toast.error('Download failed'); } finally { setLoading(false); }
   };
-
+  
+    const downloadHRSummaryPDF = async () => {
+    try {
+      const response = await api.get(`/reports/hr-summary-pdf/${getBatchParam()}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hr_summary_${selectedBatch || 'all'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('PDF report downloaded');
+    } catch (err) {
+      toast.error('Failed to download PDF report');
+    }
+  };
   // Modals
   const renderPrivacyModal = () => {
     if (!showPrivacyModal) return null;
@@ -1263,78 +1391,47 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const renderCreateInterviewerModal = () => {
-  if (!showCreateInterviewerModal) return null;
-  return (
-    <div className="modal-overlay" onClick={() => setShowCreateInterviewerModal(false)}>
-      <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3><User size={20} /> Create Interviewer</h3>
-          <button className="modal-close" onClick={() => setShowCreateInterviewerModal(false)}><X /></button>
-        </div>
-        <div className="modal-body">
-          <div className="form-group">
-            <label>Username</label>
-            <input
-              type="text"
-              className="form-control"
-              value={newInterviewer.username}
-              onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })}
-              required
-            />
+    if (!showCreateInterviewerModal) return null;
+    return (
+      <div className="modal-overlay" onClick={() => setShowCreateInterviewerModal(false)}>
+        <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3><User size={20} /> Create Interviewer</h3>
+            <button className="modal-close" onClick={() => setShowCreateInterviewerModal(false)}><X /></button>
           </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input
-              type="email"
-              className="form-control"
-              value={newInterviewer.email}
-              onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })}
-              placeholder="must end with @tcs.com"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="text"
-              className="form-control"
-              value={newInterviewer.password}
-              onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })}
-              required
-            />
-            <small className="helper-text">Default: Tcs#12345</small>
-          </div>
-          <div className="form-row">
+          <div className="modal-body">
             <div className="form-group">
-              <label>Access Start</label>
-              <input
-                type="datetime-local"
-                className="form-control"
-                value={newInterviewer.access_start}
-                onChange={(e) => setNewInterviewer({ ...newInterviewer, access_start: e.target.value })}
-                required
-              />
+              <label>Username</label>
+              <input type="text" className="form-control" value={newInterviewer.username} onChange={(e) => setNewInterviewer({ ...newInterviewer, username: e.target.value })} required />
             </div>
             <div className="form-group">
-              <label>Access End</label>
-              <input
-                type="datetime-local"
-                className="form-control"
-                value={newInterviewer.access_end}
-                onChange={(e) => setNewInterviewer({ ...newInterviewer, access_end: e.target.value })}
-                required
-              />
+              <label>Email</label>
+              <input type="email" className="form-control" value={newInterviewer.email} onChange={(e) => setNewInterviewer({ ...newInterviewer, email: e.target.value })} placeholder="must end with @tcs.com" required />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input type="text" className="form-control" value={newInterviewer.password} onChange={(e) => setNewInterviewer({ ...newInterviewer, password: e.target.value })} required />
+              <small className="helper-text">Default: Tcs#12345</small>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Access Start</label>
+                <input type="datetime-local" className="form-control" value={newInterviewer.access_start} onChange={(e) => setNewInterviewer({ ...newInterviewer, access_start: e.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label>Access End</label>
+                <input type="datetime-local" className="form-control" value={newInterviewer.access_end} onChange={(e) => setNewInterviewer({ ...newInterviewer, access_end: e.target.value })} required />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={() => setShowCreateInterviewerModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleCreateInterviewer}>Create Account</button>
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={() => setShowCreateInterviewerModal(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleCreateInterviewer}>Create Account</button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   const renderExcelTemplateModal = () => {
     if (!showExcelTemplate) return null;
@@ -1489,26 +1586,42 @@ function DashboardHR({ userData, onLogout }) {
       </div>
     </div>
   );
+
   const renderJobManagement = () => (
     <div className="job-management">
       <div className="section-header">
         <div className="header-title">
           <h2><Briefcase size={24} /> Job Profiles</h2>
-          <p className="subtitle">Manage all job positions</p>
+          <p className="subtitle">Manage all job positions and bulk operations</p>
         </div>
         <div className="header-actions">
           <button className="btn btn-secondary" onClick={() => setShowCreateInterviewerModal(true)} disabled={loading}>
             <User size={18} /> Create Interviewer
           </button>
-          <button className="btn btn-success" onClick={() => setShowExcelTemplate(true)} disabled={loading}>
-            <FileSpreadsheet size={18} /> Import Excel
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowWordTemplate(true)} disabled={loading}>
-            <File size={18} /> Import Word
-          </button>
+          <div className="upload-buttons">
+            <button className="btn btn-success" onClick={() => setShowExcelTemplate(true)} disabled={loading}>
+              <FileSpreadsheet size={18} /> Import Excel
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowWordTemplate(true)} disabled={loading}>
+              <File size={18} /> Import Word
+            </button>
+          </div>
           <button className="btn btn-primary btn-cta" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }} disabled={loading}>
             <Plus size={18} /> Create New Job
           </button>
+          <div className="dropdown" style={{ position: 'relative' }}>
+            <button className="btn btn-secondary dropdown-toggle" onClick={() => setBulkOpsOpen(!bulkOpsOpen)}>
+              <UploadCloud size={18} /> Bulk Ops <ChevronDown size={16} />
+            </button>
+            {bulkOpsOpen && (
+              <div className="dropdown-menu">
+                <button className="dropdown-item" onClick={() => { setShowBulkLockModal(true); setBulkOpsOpen(false); }}><Lock size={14} /> Bulk Interview Lock</button>
+                <button className="dropdown-item" onClick={() => { setShowBulkStatusModal(true); setBulkOpsOpen(false); }}><CheckCircle size={14} /> Bulk Status Update</button>
+                <button className="dropdown-item" onClick={() => { setShowBulkMappingModal(true); setBulkOpsOpen(false); }}><Link size={14} /> Bulk Mapping</button>
+                <button className="dropdown-item" onClick={() => downloadHRSummaryPDF()}><Download size={14} /> Download PDF Report</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading jobs...</p></div>}
@@ -1530,7 +1643,7 @@ function DashboardHR({ userData, onLogout }) {
                 <th>Remaining</th>
                 <th>Status</th>
                 <th>Actions</th>
-               </tr>
+              </tr>
             </thead>
             <tbody>
               {jobs.map((job) => {
@@ -1540,7 +1653,7 @@ function DashboardHR({ userData, onLogout }) {
                     <td>
                       <div className="job-title-cell">
                         <div className="job-icon"><BriefcaseBusiness size={16} /></div>
-                        <span className="font-medium">{job.title}</span>
+                        <span className="font-medium">{job.project_name}</span>
                       </div>
                     </td>
                     <td>
@@ -1567,7 +1680,7 @@ function DashboardHR({ userData, onLogout }) {
                         <button className="btn-icon btn-icon-view" onClick={() => handleViewJobDetails(job)} disabled={loading} title="View Details"><Eye size={16} /></button>
                         <button className="btn-icon btn-icon-edit" onClick={() => { setSelectedJob(job); setIsEditMode(true); setActiveTab('createJob'); setTechSkills(job.techSkills || []); setSoftSkills(job.softSkills || []); }} disabled={loading} title="Edit"><Edit size={16} /></button>
                         <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteJob(job.id)} disabled={loading} title="Delete"><Trash2 size={16} /></button>
-                        <button className="btn-icon btn-icon-match" onClick={() => runMatchingEngine(job.id)} disabled={loading} title="Generate Matches"> <Sparkles size={16} /> </button>
+                        <button className="btn-icon btn-icon-match" onClick={() => runMatchingEngine(job.id)} disabled={loading} title="Generate Matches"><Sparkles size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -1600,7 +1713,7 @@ function DashboardHR({ userData, onLogout }) {
             <h2>{isEditing ? <><Edit size={24} /> Edit Job Profile</> : <><Plus size={24} /> Create New Job Profile</>}</h2>
             <p className="subtitle">{isEditing ? 'Update existing job details' : 'Fill in the details to create a new job position'}</p>
           </div>
-          <button className="btn btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
+          <button className="btn btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ project_name: '', location: '', demand_id: '', skills: '', openings: 1, bg: '', isu_hsu: '', stream: '', role: '', spoc_name: '', spoc_emp_id: '', rmg_head: '' }); }} disabled={loading}><ArrowLeft size={18} /> Back to Jobs</button>
         </div>
         {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>{isEditing ? 'Updating...' : 'Creating...'}</p></div>}
         <div className="form-card">
@@ -1609,20 +1722,52 @@ function DashboardHR({ userData, onLogout }) {
               <h3 className="form-section-title"><Briefcase size={20} /> Basic Information</h3>
               <div className="form-row">
                 <div className="form-group">
-                  <label><span className="required">*</span> Job Title</label>
-                  <input type="text" className="form-control" value={jobToEdit.title} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, title: e.target.value }) : setNewJob({ ...newJob, title: e.target.value })} required placeholder="e.g., Senior Frontend Developer" disabled={loading} />
+                  <label><span className="required">*</span> Project Name</label>
+                  <input type="text" className="form-control" value={jobToEdit.project_name} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, project_name: e.target.value }) : setNewJob({ ...newJob, project_name: e.target.value })} required placeholder="e.g., Project Alpha" disabled={loading} />
                 </div>
                 <div className="form-group">
-                  <label><span className="required">*</span> Department</label>
-                  <select className="form-control" value={jobToEdit.department} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, department: e.target.value }) : setNewJob({ ...newJob, department: e.target.value })} required disabled={loading}>
-                    <option value="">Select Department</option>
-                    <option value="Technology">Technology</option>
-                    <option value="Analytics">Analytics</option>
-                    <option value="Design">Design</option>
-                    <option value="Operations">Operations</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Sales">Sales</option>
-                  </select>
+                  <label><span className="required">*</span> Location</label>
+                  <input type="text" className="form-control" value={jobToEdit.location} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, location: e.target.value }) : setNewJob({ ...newJob, location: e.target.value })} required placeholder="e.g., Bangalore, Mumbai" disabled={loading} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label><span className="required">*</span> Demand ID</label>
+                  <input type="text" className="form-control" value={jobToEdit.demand_id || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, demand_id: e.target.value }) : setNewJob({ ...newJob, demand_id: e.target.value })} required placeholder="Demand ID" disabled={loading} />
+                </div>
+                <div className="form-group">
+                  <label>BG</label>
+                  <input type="text" className="form-control" value={jobToEdit.bg || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, bg: e.target.value }) : setNewJob({ ...newJob, bg: e.target.value })} placeholder="BG" disabled={loading} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>ISU/HSU</label>
+                  <input type="text" className="form-control" value={jobToEdit.isu_hsu || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, isu_hsu: e.target.value }) : setNewJob({ ...newJob, isu_hsu: e.target.value })} placeholder="ISU/HSU" disabled={loading} />
+                </div>
+                <div className="form-group">
+                  <label>Stream</label>
+                  <input type="text" className="form-control" value={jobToEdit.stream || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, stream: e.target.value }) : setNewJob({ ...newJob, stream: e.target.value })} placeholder="e.g., Java, Python" disabled={loading} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Role</label>
+                  <input type="text" className="form-control" value={jobToEdit.role || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, role: e.target.value }) : setNewJob({ ...newJob, role: e.target.value })} placeholder="Developer, Tech Support" disabled={loading} />
+                </div>
+                <div className="form-group">
+                  <label>SPOC Name</label>
+                  <input type="text" className="form-control" value={jobToEdit.spoc_name || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_name: e.target.value }) : setNewJob({ ...newJob, spoc_name: e.target.value })} placeholder="SPOC Name" disabled={loading} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>SPOC Emp ID</label>
+                  <input type="text" className="form-control" value={jobToEdit.spoc_emp_id || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_emp_id: e.target.value }) : setNewJob({ ...newJob, spoc_emp_id: e.target.value })} placeholder="SPOC Emp ID" disabled={loading} />
+                </div>
+                <div className="form-group">
+                  <label>RMG Head</label>
+                  <input type="text" className="form-control" value={jobToEdit.rmg_head || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, rmg_head: e.target.value }) : setNewJob({ ...newJob, rmg_head: e.target.value })} placeholder="RMG Head" disabled={loading} />
                 </div>
               </div>
               <div className="form-row">
@@ -1635,61 +1780,26 @@ function DashboardHR({ userData, onLogout }) {
                 </div>
               </div>
               <div className="form-group">
-                <label><span className="required">*</span> Locations <span className="helper-text">(Add multiple)</span></label>
-                {jobToEdit.location.map((loc, index) => (
-                  <div key={index} className="location-input-group">
-                    <input type="text" className="form-control" value={loc} onChange={(e) => { if (isEditing) { const newLocs = [...jobToEdit.location]; newLocs[index] = e.target.value; setSelectedJob({ ...jobToEdit, location: newLocs }); } else updateLocationField(index, e.target.value); }} required={index === 0} placeholder="e.g., Hyderabad" disabled={loading} />
-                    {jobToEdit.location.length > 1 && <button type="button" className="btn-icon" onClick={() => { if (isEditing) { const newLocs = jobToEdit.location.filter((_, i) => i !== index); setSelectedJob({ ...jobToEdit, location: newLocs }); } else removeLocationField(index); }} disabled={loading}><X size={16} /></button>}
-                  </div>
-                ))}
-                <button type="button" className="btn btn-secondary btn-sm" onClick={addLocationField} disabled={loading}><Plus size={16} /> Add Another</button>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label><span className="required">*</span> Openings</label>
-                  <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
-                </div>
-                <div className="form-group">
-                  <label><Calendar size={16} /> Expiry Date</label>
-                  <input type="date" className="form-control" value={jobToEdit.expiryDate} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, expiryDate: e.target.value }) : setNewJob({ ...newJob, expiryDate: e.target.value })} disabled={loading} />
-                </div>
+                <label><span className="required">*</span> Openings</label>
+                <input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required disabled={loading} />
               </div>
             </div>
             <div className="form-section">
               <h3 className="form-section-title"><BookOpen size={20} /> Requirements & Skills</h3>
               <div className="form-group">
-                <label><span className="required">*</span> Technical Skills</label>
+                <label><span className="required">*</span> Skills</label>
                 <div className="skills-input">
-                  <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleTechSkillAdd} disabled={loading} />
+                  <input type="text" className="form-control" placeholder="Type skill and press Enter or comma" onKeyDown={handleTechSkillAdd} disabled={loading} />
                   <div className="skills-tags">
-                    {(isEditing ? jobToEdit.techSkills || [] : techSkills).map((skill, index) => (
+                    {(isEditing ? (jobToEdit.skills || '').split(',').map(s => s.trim()).filter(s => s) : (newJob.skills || '').split(',').map(s => s.trim()).filter(s => s)).map((skill, index) => (
                       <span key={index} className="skill-tag tech-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeTechSkill(index)} disabled={loading}><X size={12} /></button></span>
                     ))}
                   </div>
                 </div>
               </div>
-              <div className="form-group">
-                <label>Soft Skills</label>
-                <div className="skills-input">
-                  <input type="text" className="form-control" placeholder="Type skill and press Enter" onKeyDown={handleSoftSkillAdd} disabled={loading} />
-                  <div className="skills-tags">
-                    {(isEditing ? jobToEdit.softSkills || [] : softSkills).map((skill, index) => (
-                      <span key={index} className="skill-tag soft-tag">{skill}<button type="button" className="tag-remove" onClick={() => removeSoftSkill(index)} disabled={loading}><X size={12} /></button></span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="form-group">
-                <label><span className="required">*</span> Job Description</label>
-                <textarea className="form-control" rows="4" value={jobToEdit.description} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, description: e.target.value }) : setNewJob({ ...newJob, description: e.target.value })} placeholder="Describe the role..." required disabled={loading} />
-              </div>
-              <div className="form-group">
-                <label><span className="required">*</span> Requirements</label>
-                <textarea className="form-control" rows="4" value={jobToEdit.requirements} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, requirements: e.target.value }) : setNewJob({ ...newJob, requirements: e.target.value })} placeholder="List required qualifications..." required disabled={loading} />
-              </div>
             </div>
             <div className="form-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ title: '', department: '', location: [''], openings: 1, requirements: '', techSkills: [], softSkills: [], description: '', salary: '', expiryDate: '', is_public: true }); setTechSkills([]); setSoftSkills([]); }} disabled={loading}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('jobs'); setNewJob({ project_name: '', location: '', demand_id: '', skills: '', openings: 1, bg: '', isu_hsu: '', stream: '', role: '', spoc_name: '', spoc_emp_id: '', rmg_head: '' }); }} disabled={loading}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
                 {isEditing ? <><Check size={18} /> {loading ? 'Updating...' : 'Update Job'}</> : <><Plus size={18} /> {loading ? 'Creating...' : 'Create Job'}</>}
               </button>
@@ -1824,7 +1934,7 @@ function DashboardHR({ userData, onLogout }) {
       <div className="modal-overlay" onClick={() => setShowJobDetailsModal(false)}>
         <div className="modal-content job-details-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h2><Briefcase size={24} /> {jobDetailsJob.title}</h2>
+            <h2><Briefcase size={24} /> {jobDetailsJob.project_name}</h2>
             <button className="modal-close" onClick={() => setShowJobDetailsModal(false)}><X /></button>
           </div>
           <div className="modal-tabs">
@@ -1843,6 +1953,17 @@ function DashboardHR({ userData, onLogout }) {
                 <p><strong>Posted:</strong> {jobDetailsJob.postedDate}</p>
                 <p><strong>Expires:</strong> {jobDetailsJob.expiryDate}</p>
                 <p><strong>Salary:</strong> {jobDetailsJob.salary}</p>
+                <div className="job-section">
+                  <h4>Additional Details</h4>
+                  <p><strong>Demand ID:</strong> {jobDetailsJob.demand_id || '—'}</p>
+                  <p><strong>BG:</strong> {jobDetailsJob.bg || '—'}</p>
+                  <p><strong>ISU/HSU:</strong> {jobDetailsJob.isu_hsu || '—'}</p>
+                  <p><strong>Stream:</strong> {jobDetailsJob.stream || '—'}</p>
+                  <p><strong>Role:</strong> {jobDetailsJob.role || '—'}</p>
+                  <p><strong>SPOC Name:</strong> {jobDetailsJob.spoc_name || '—'}</p>
+                  <p><strong>SPOC Emp ID:</strong> {jobDetailsJob.spoc_emp_id || '—'}</p>
+                  <p><strong>RMG Head:</strong> {jobDetailsJob.rmg_head || '—'}</p>
+                </div>
                 <div className="job-section">
                   <h4>Description</h4>
                   <p>{jobDetailsJob.description}</p>
@@ -2103,7 +2224,7 @@ function DashboardHR({ userData, onLogout }) {
             </select>
             <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
               <option value="">All Jobs</option>
-              {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+              {jobs.map(job => <option key={job.id} value={job.id}>{job.project_name}</option>)}
             </select>
             <button className="btn-icon" onClick={() => setLockFilter({ status: '', job: '' })}><X size={18} /></button>
           </div>
@@ -2167,7 +2288,7 @@ function DashboardHR({ userData, onLogout }) {
         <div className="header-actions">
           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
             <option value="">All Jobs</option>
-            {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+            {jobs.map(job => <option key={job.id} value={job.id}>{job.project_name}</option>)}
           </select>
           <button className="btn btn-success" onClick={() => requestDownload('selected')}><Download size={18} /> Download All</button>
         </div>
@@ -2230,7 +2351,7 @@ function DashboardHR({ userData, onLogout }) {
         <div className="header-actions">
           <select className="filter-select" value={lockFilter.job} onChange={(e) => setLockFilter({ ...lockFilter, job: e.target.value })}>
             <option value="">All Jobs</option>
-            {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+            {jobs.map(job => <option key={job.id} value={job.id}>{job.project_name}</option>)}
           </select>
           <button className="btn btn-danger" onClick={() => requestDownload('rejected')}><Download size={18} /> Download All</button>
         </div>
@@ -2379,7 +2500,7 @@ function DashboardHR({ userData, onLogout }) {
           >
             <option value="">-- Choose a job --</option>
             {jobs.filter(job => job.status === 'active' && job.openings > job.filled).map(job => (
-              <option key={job.id} value={job.id}>{job.title} (Openings: {job.openings - job.filled})</option>
+              <option key={job.id} value={job.id}>{job.project_name} (Openings: {job.openings - job.filled})</option>
             ))}
           </select>
         </div>
@@ -2566,6 +2687,102 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
+  // Bulk modals
+  const renderBulkLockModal = () => {
+     if (!showBulkLockModal) return null;
+     return (
+    <div className="modal-overlay" onClick={() => setShowBulkLockModal(false)}>
+      <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title"><Lock size={24} /><h2>Bulk Interview Lock</h2></div>
+          <button className="modal-close" onClick={() => setShowBulkLockModal(false)}><X size={24} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="upload-instructions">
+            <p>Upload an Excel file with columns: Trainee Email/EmpID, Interviewer Email/EmpID, Job ID, Interview DateTime, Comments.</p>
+          </div>
+          <div className="form-group">
+            <button className="btn btn-secondary" onClick={downloadInterviewLockTemplate}><Download size={16} /> Download Template</button>
+          </div>
+          <div className="form-group">
+            <input type="file" accept=".xlsx,.xls" onChange={e => setBulkLockFile(e.target.files[0])} />
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={() => setShowBulkLockModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleBulkLockUpload} disabled={!bulkLockFile || loading}>
+            <Upload size={16} /> Upload and Lock
+          </button>
+        </div>
+      </div>
+    </div>
+     )
+    };
+
+
+
+  const renderBulkStatusModal = () => {
+    if(!showBulkStatusModal) return null;
+    return (
+    <div className="modal-overlay" onClick={() => setShowBulkStatusModal(false)}>
+      <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title"><CheckCircle size={24} /><h2>Bulk Status Update</h2></div>
+          <button className="modal-close" onClick={() => setShowBulkStatusModal(false)}><X size={24} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="upload-instructions">
+            <p>Upload an Excel file with columns: Trainee Email/EmpID, Job ID, Status (selected/rejected).</p>
+          </div>
+          <div className="form-group">
+            <button className="btn btn-secondary" onClick={downloadStatusUpdateTemplate}><Download size={16} /> Download Template</button>
+          </div>
+          <div className="form-group">
+            <input type="file" accept=".xlsx,.xls" onChange={e => setBulkStatusFile(e.target.files[0])} />
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={() => setShowBulkStatusModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleBulkStatusUpload} disabled={!bulkStatusFile || loading}>
+            <Upload size={16} /> Upload and Update
+          </button>
+        </div>
+      </div>
+    </div>
+    )
+  };
+
+  const renderBulkMappingModal = () => {
+    if(!showBulkMappingModal) return null;
+    return (
+    <div className="modal-overlay" onClick={() => setShowBulkMappingModal(false)}>
+      <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title"><Link size={24} /><h2>Bulk Mapping</h2></div>
+          <button className="modal-close" onClick={() => setShowBulkMappingModal(false)}><X size={24} /></button>
+        </div>
+        <div className="modal-body">
+          <div className="upload-instructions">
+            <p>Upload an Excel file with columns: Trainee Email/EmpID, Job ID.</p>
+          </div>
+          <div className="form-group">
+            <button className="btn btn-secondary" onClick={downloadBulkMappingTemplate}><Download size={16} /> Download Template</button>
+          </div>
+          <div className="form-group">
+            <input type="file" accept=".xlsx,.xls" onChange={e => setBulkMappingFile(e.target.files[0])} />
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={() => setShowBulkMappingModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleBulkMappingUpload} disabled={!bulkMappingFile || loading}>
+            <Upload size={16} /> Upload and Map
+          </button>
+        </div>
+      </div>
+    </div>
+      )
+  };
+
   // Sidebar items
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -2628,6 +2845,9 @@ function DashboardHR({ userData, onLogout }) {
       {renderFeedbackModal()}
       {renderPrivacyModal()}
       {renderCreateInterviewerModal()}
+      {renderBulkLockModal()}
+      {renderBulkStatusModal()}
+      {renderBulkMappingModal()}
     </div>
   );
 }

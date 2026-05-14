@@ -890,7 +890,7 @@ function DashboardManager({ userData, onLogout }) {
         <div className="job-profiles-grid">
           {filtered.map(job => (
             <div key={job.id} className="job-profile-card">
-              <h3>{job.title}</h3>
+              <h3>{job.project_name}</h3>
               <div className="meta"><Building size={14} /> {job.department} <MapPin size={14} /> {Array.isArray(job.location) ? job.location.join(", ") : job.location}</div>
               <div className="openings"><Users size={14} /> {job.openings} openings</div>
               <button onClick={() => { setSelectedJobForView(job); setActiveTab("job-details"); }} className="view-details-btn"><Eye size={16} /> View Details</button>
@@ -913,7 +913,7 @@ function DashboardManager({ userData, onLogout }) {
           <div className="header-main">
             <div className="job-icon-large"><BriefcaseBusiness size={32} /></div>
             <div className="job-title-section">
-              <h1>{job.title}</h1>
+              <h1>{job.project_name}</h1>
               <div className="job-meta-row">
                 <span className="meta-tag"><Building size={14} /> {job.department}</span>
                 <span className="meta-tag"><MapPin size={14} /> {Array.isArray(job.location) ? job.location.join(", ") : job.location}</span>

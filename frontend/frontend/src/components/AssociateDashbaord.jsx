@@ -483,7 +483,7 @@ function AssociateDashboard({ userData, onLogout }) {
         {jobs.map((job) => (
           <div key={job.id} className="job-card">
             <div className="job-header">
-              <h3>{job.title}</h3>
+              <h3>{job.project_name}</h3>
               <span className={`job-status ${job.status}`}>{job.status}</span>
             </div>
             <div className="job-meta">
@@ -514,7 +514,7 @@ function AssociateDashboard({ userData, onLogout }) {
     if (!selectedJob || !suggestion) return null;
     return (
       <div className="suggestion-card">
-        <h3><Sparkles size={20} /> AI Suggestion for {selectedJob.title}</h3>
+        <h3><Sparkles size={20} /> AI Suggestion for {selectedJob.project_name}</h3>
         <p>{suggestion}</p>
       </div>
     );
@@ -525,7 +525,7 @@ function AssociateDashboard({ userData, onLogout }) {
     if (!selectedJob || !interviewQA) return null;
     return (
       <div className="interview-qa-card">
-        <h3>Interview Questions & Answers for {selectedJob.title}</h3>
+        <h3>Interview Questions & Answers for {selectedJob.project_name}</h3>
         {["low", "medium", "high"].map((level) => (
           <div key={level} className="qa-level">
             <h4>{level.charAt(0).toUpperCase() + level.slice(1)} Level</h4>

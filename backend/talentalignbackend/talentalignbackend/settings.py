@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -79,6 +80,12 @@ REST_FRAMEWORK = {
     ),
 }
 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=10),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
 WSGI_APPLICATION = 'talentalignbackend.wsgi.application'
 
 AUTH_USER_MODEL = 'apis.User'
@@ -90,7 +97,7 @@ AUTH_USER_MODEL = 'apis.User'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'version10',
+        'NAME': 'tharunsalign',
         'USER': 'postgres',
         'PASSWORD': 'root',
         'HOST': 'localhost',

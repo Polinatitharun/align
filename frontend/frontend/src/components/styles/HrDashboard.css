@@ -858,6 +858,77 @@
   height: 20px;
 }
 
+/* ── Dropdown Menu Styling ── */
+.dropdown-menu {
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem 0;
+  min-width: 220px;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--text-dark);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  margin: 0 0.25rem;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-light);
+  color: var(--primary);
+  transform: translateX(2px);
+}
+
+.dropdown-item svg {
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.dropdown-item:hover svg {
+  color: var(--primary);
+}
+
+/* ── Dropdown Toggle Button ── */
+.dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-dark);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.dropdown-toggle:hover {
+  background: var(--bg-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.dropdown-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 112, 192, 0.1);
+}
+
 /* ── Trainees List Styling ── */
 .trainees-list .section-header {
   display: flex;
