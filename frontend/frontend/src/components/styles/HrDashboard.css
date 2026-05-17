@@ -1209,3 +1209,36 @@
   transform: none;
   box-shadow: none;
 }
+/* Add to HrDashboard.css */
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #d97706;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-icon.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-icon.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn-icon.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-icon.btn-warning:hover {
+  background: #d97706;
+}

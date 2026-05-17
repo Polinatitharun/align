@@ -1,9 +1,8 @@
-
 # apis/matching_engine.py
 """
 Matching Engine for Talent Align – semantic embeddings + parallel execution.
 
-- Skills are matched using cosine similarity of sentence-transformer embeddings.
+- Skills are matched using cosine similarity of local model embeddings.
 - Job embeddings are computed once per job.
 - Trainee skill embeddings are cached across the run.
 - Thread pool processes trainees in parallel.
@@ -19,14 +18,13 @@ from math import radians, cos, sin, asin, sqrt
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.db import transaction
 from django.core.cache import cache
-from sentence_transformers import SentenceTransformer, util
 import numpy as np
 from .models import Job, ProfileRecord, Match
 
 # ---------- LLM Setup (for views that use it) ----------
 try:
     from langchain_community.llms import Ollama
-    llm = Ollama(model="llama3")          # adjust if needed
+    llm = Ollama(model="llama3")          # Keep llama3 for text generation
 except ImportError:
     llm = None
     logging.warning("LangChain not installed. AI features will be limited.")
@@ -37,34 +35,113 @@ def clean(text):
 
 logger = logging.getLogger(__name__)
 
-# ---------- Embedding Model (loaded once) ----------
-# all-MiniLM-L6-v2 is fast, small, and good for short skill names.
-EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
+# ---------- Local embedding service configuration ----------
+# FIXED: Changed from /api/embeddings to /api/embed (correct Ollama endpoint)
+EMBEDDING_SERVICE_URL = os.environ.get(
+    'EMBEDDING_SERVICE_URL',
+    'http://localhost:11434/api/embed'  # Changed from 'embeddings' to 'embed'
+)
+# FIXED: Changed model from llama3 to nomic-embed-text
+EMBEDDING_MODEL = "nomic-embed-text:latest"  # Using the embedding model
+EMBEDDING_TIMEOUT = 30  # This should be fine now with the proper model
+
+_embedding_session = requests.Session()
 
 # ----------- Caches for embeddings -----------
-# Keyed by lower‑cased skill name -> tensor
+# Keyed by lower‑cased skill name -> numpy array
 _skill_embedding_cache = {}
 
-def get_skill_embedding(skill_name):
-    """Return the embedding vector for a skill, using an in‑memory cache."""
-    key = skill_name.lower().strip()
-    if key not in _skill_embedding_cache:
-        _skill_embedding_cache[key] = EMBEDDING_MODEL.encode(key, convert_to_tensor=True)
-    return _skill_embedding_cache[key]
-
-# Keyed by trainee.id -> dict {skill_name: tensor}
+# Keyed by trainee.id -> dict {skill_name: numpy array}
 _trainee_embedding_cache = {}
 
+
+def _parse_embedding_response(data):
+    """Parse embedding response from Ollama's /api/embed endpoint."""
+    if not isinstance(data, dict):
+        raise ValueError('Unexpected embedding response format')
+
+    # Ollama /api/embed returns {'embeddings': [[...]]} or {'embedding': [...]}
+    if 'embeddings' in data and isinstance(data['embeddings'], list) and data['embeddings']:
+        return data['embeddings'][0]
+    
+    if 'embedding' in data:
+        return data['embedding']
+
+    if 'data' in data and isinstance(data['data'], list) and data['data']:
+        first = data['data'][0]
+        if isinstance(first, dict) and 'embedding' in first:
+            return first['embedding']
+
+    raise ValueError(f'No embedding found in response. Response structure: {list(data.keys())}')
+
+
+def get_embedding(text):
+    """Get embedding vector for a text string using nomic-embed-text model."""
+    if not text:
+        return None
+
+    # Clean and truncate text if needed (nomic-embed-text supports up to 8192 tokens)
+    text = text.strip()[:8000]  # Safe limit
+    
+    payload = {
+        'model': EMBEDDING_MODEL,
+        'input': text,  # Ollama uses 'input' for embeddings, not 'prompt'
+    }
+
+    try:
+        response = _embedding_session.post(
+            EMBEDDING_SERVICE_URL,
+            json=payload,
+            timeout=EMBEDDING_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        embedding = _parse_embedding_response(data)
+        return np.array(embedding, dtype=np.float32)
+    except Exception as e:
+        logger.exception(f'Embedding service failed for "{text[:50]}...": {e}')
+        return None
+
+
+def is_valid_embedding(vec):
+    """Check if embedding vector is valid for similarity calculation."""
+    return isinstance(vec, np.ndarray) and vec.size > 0 and np.linalg.norm(vec) > 1e-6
+
+
+def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    """Calculate cosine similarity between two vectors."""
+    if not is_valid_embedding(vec1) or not is_valid_embedding(vec2):
+        return 0.0
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    if norm1 < 1e-6 or norm2 < 1e-6:
+        return 0.0
+    return float(np.dot(vec1, vec2) / (norm1 * norm2))
+
+
+def get_skill_embedding(skill_name):
+    """Return embedding vector for a skill with in‑memory cache."""
+    if not skill_name:
+        return None
+    key = skill_name.lower().strip()
+    if key not in _skill_embedding_cache:
+        _skill_embedding_cache[key] = get_embedding(key)
+    return _skill_embedding_cache[key]
+
+
 def get_trainee_skill_embeddings(trainee):
-    """Return a dict of skill->embedding for a trainee, cached per trainee."""
+    """Return dict of {skill_name -> embedding} for a trainee."""
     if trainee.id not in _trainee_embedding_cache:
-        emb = {s.courseName: get_skill_embedding(s.courseName)
-               for s in trainee.strengths.all()}
+        emb = {}
+        for s in trainee.strengths.all():
+            skill_name = s.courseName if hasattr(s, 'courseName') else str(s)
+            emb[skill_name] = get_skill_embedding(skill_name)
         _trainee_embedding_cache[trainee.id] = emb
     return _trainee_embedding_cache[trainee.id]
 
 # ---------- Haversine Distance ----------
 def haversine(lon1, lat1, lon2, lat2):
+    """Calculate distance between two points in km using haversine formula."""
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1
     dlat = lat2 - lat1
@@ -142,6 +219,7 @@ def geocode_city(city_name):
 
 # ---------- Location Percentage Calculation ----------
 def calculate_location_percentage(distance_km):
+    """Convert distance to percentage match score."""
     if distance_km <= 50:
         return 100.0
     elif distance_km <= 200:
@@ -157,12 +235,33 @@ def calculate_location_percentage(distance_km):
 def compute_skills_match(job_embeddings, trainee_embeddings):
     """
     Compute skills match percentage using pre‑computed embeddings.
+    If embeddings are unavailable, fall back to exact string matching.
     job_embeddings: dict {skill_name: tensor}
     trainee_embeddings: dict {skill_name: tensor}
     Returns (percentage, list_of_matched_skills)
     """
     if not job_embeddings:
         return 0.0, []
+
+    job_skill_names = list(job_embeddings.keys())
+    trainee_skill_names = list(trainee_embeddings.keys())
+
+    # Check if we have valid embeddings
+    valid_job_embeds = [v for v in job_embeddings.values() if is_valid_embedding(v)]
+    valid_trainee_embeds = [v for v in trainee_embeddings.values() if is_valid_embedding(v)]
+    
+    has_valid_job_embeddings = len(valid_job_embeds) == len(job_embeddings)
+    has_valid_trainee_embeddings = len(valid_trainee_embeds) == len(trainee_embeddings)
+
+    if not (has_valid_job_embeddings and has_valid_trainee_embeddings):
+        # Fallback to exact skill string matching when embeddings are unavailable
+        lower_job_skills = {skill.lower().strip() for skill in job_skill_names}
+        matched_skills = [skill for skill in trainee_skill_names if skill.lower().strip() in lower_job_skills]
+        if len(job_skill_names) > 0:
+            percentage = (len(matched_skills) / len(job_skill_names)) * 100
+        else:
+            percentage = 0.0
+        return min(percentage, 100.0), matched_skills
 
     matched_trainee_skills = []
     total_similarity = 0.0
@@ -171,15 +270,18 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
         best_sim = 0.0
         best_trainee_skill = None
         for trainee_skill, trainee_emb in trainee_embeddings.items():
-            sim = util.cos_sim(job_emb, trainee_emb).item()
+            sim = cosine_similarity(job_emb, trainee_emb)
             if sim > best_sim:
                 best_sim = sim
                 best_trainee_skill = trainee_skill
         total_similarity += best_sim
-        if best_sim > 0.5 and best_trainee_skill not in matched_trainee_skills:
+        if best_sim > 0.5 and best_trainee_skill and best_trainee_skill not in matched_trainee_skills:
             matched_trainee_skills.append(best_trainee_skill)
 
-    percentage = (total_similarity / len(job_embeddings)) * 100
+    if len(job_embeddings) > 0:
+        percentage = (total_similarity / len(job_embeddings)) * 100
+    else:
+        percentage = 0.0
     percentage = min(percentage, 100.0)
     return percentage, matched_trainee_skills
 
@@ -213,16 +315,20 @@ def process_trainee(args):
                     best_location = loc
                     best_location_percentage = loc_perc
 
-    total_perc = (skills_perc + best_location_percentage) / 2
+    # Calculate total percentage (weighted average)
+    if skills_perc >= 0 and best_location_percentage >= 0:
+        total_perc = (skills_perc + best_location_percentage) / 2
+    else:
+        total_perc = max(skills_perc, best_location_percentage)
 
-    # Bucket
+    # Bucket categorization
     if skills_perc >= 80 and best_location_percentage >= 80:
         bucket = 'PERFECT_MATCH'
-    elif skills_perc >= 50:
+    elif skills_perc >= 70:
         bucket = 'SKILLS_ONLY'
-    elif best_location_percentage >= 50:
+    elif best_location_percentage >= 70:
         bucket = 'LOCATION_ONLY'
-    elif best_location_percentage >= 30:
+    elif best_location_percentage >= 50:
         bucket = 'NEARBY'
     else:
         bucket = 'NO_MATCH'
@@ -230,7 +336,7 @@ def process_trainee(args):
     return {
         'trainee': trainee,
         'skills_percentage': round(skills_perc, 2),
-        'matched_skills': list(matched_skills),
+        'matched_skills': list(matched_skills) if matched_skills else [],
         'location_percentage': round(best_location_percentage, 2),
         'total_percentage': round(total_perc, 2),
         'bucket': bucket,
@@ -242,6 +348,7 @@ def process_trainee(args):
 def run_matching_logic(job_id=None):
     """
     Match a specific job (if job_id given) or all active jobs.
+    Returns True if successful, False otherwise.
     """
     if job_id:
         jobs = Job.objects.filter(id=job_id, status='active')
@@ -253,6 +360,15 @@ def run_matching_logic(job_id=None):
     if not jobs.exists():
         logger.info("No active jobs to match.")
         return False
+
+    # Test embedding service before starting
+    test_embedding = get_embedding("test")
+    if test_embedding is None:
+        logger.error("Embedding service is not responding. Please ensure your local embedding service is running and reachable.")
+        logger.error(f"Expected URL: {EMBEDDING_SERVICE_URL}, model: {EMBEDDING_MODEL}")
+        return False
+    else:
+        logger.info(f"✓ Embedding service active (vector dimension: {len(test_embedding)})")
 
     for job in jobs:
         logger.info(f"Processing job: {job.project_name} (Batch: {job.batch_name or 'None'})")
@@ -267,60 +383,94 @@ def run_matching_logic(job_id=None):
             logger.info(f"  No trainees found in this batch.")
             continue
 
-        job_locations = [loc.strip() for loc in job.location.split(',') if loc.strip()]
-        job_tech_skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()]
+        # Parse job locations and skills
+        job_locations = [loc.strip() for loc in job.location.split(',') if loc.strip()] if job.location else []
+        job_tech_skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()] if job.skills else []
+
+        if not job_tech_skills:
+            logger.warning(f"  Job has no skills defined. Skipping.")
+            continue
 
         # Pre‑compute job embeddings ONCE
-        job_embeddings = {skill: get_skill_embedding(skill) for skill in job_tech_skills}
+        logger.info(f"  Computing embeddings for {len(job_tech_skills)} skills...")
+        job_embeddings = {}
+        for skill in job_tech_skills:
+            emb = get_skill_embedding(skill)
+            if emb is not None:
+                job_embeddings[skill] = emb
+            else:
+                logger.warning(f"    Failed to get embedding for skill: {skill}")
+        
+        if not job_embeddings:
+            logger.error(f"  No valid embeddings for job skills. Skipping job.")
+            continue
 
         # Build argument list for threads
         trainee_args = [(trainee, job_locations, job_embeddings) for trainee in trainees]
 
         results = []
-        # Parallel execution – use all CPU cores (adjust max_workers if needed)
-        with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as executor:
+        # Parallel execution – use half of CPU cores to avoid overload
+        max_workers = max(1, (os.cpu_count() or 4) // 2)
+        logger.info(f"  Processing {len(trainee_args)} trainees with {max_workers} workers...")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_trainee = {executor.submit(process_trainee, args): args[0] for args in trainee_args}
+            completed = 0
             for future in as_completed(future_to_trainee):
                 try:
                     res = future.result()
                     results.append(res)
+                    completed += 1
+                    if completed % 10 == 0:
+                        logger.debug(f"    Processed {completed}/{len(trainee_args)} trainees")
                 except Exception as e:
-                    logger.exception(f"Error processing trainee {future_to_trainee[future].id}")
+                    trainee = future_to_trainee[future]
+                    logger.exception(f"Error processing trainee {trainee.id}: {e}")
 
         # Write results sequentially to avoid DB conflicts
+        matches_created = 0
         for res in results:
             trainee = res['trainee']
             trainee_location = trainee.userInfo.location if trainee.userInfo else ''
-            with transaction.atomic():
-                match, created = Match.objects.update_or_create(
-                    job_ref=job,
-                    trainee_ref=trainee,
-                    defaults={
-                        'trainee_name': trainee.userInfo.name if trainee.userInfo else '',
-                        'trainee_location': trainee_location,
-                        'trainee_id': trainee.userInfo.userId if trainee.userInfo else '',
-                        'job_id': job.id,
-                        'job_title': job.project_name,
-                        'skills_percentage': res['skills_percentage'],
-                        'location_percentage': res['location_percentage'],
-                        'total_percentage': res['total_percentage'],
-                        'bucket': res['bucket'],
-                        'distance': res['distance'],
-                        'matched_skills': res['matched_skills'],
-                        'matched_location': res['matched_location'],
-                    }
-                )
-                action = "Created" if created else "Updated"
-                logger.info(
-                    f"   👤 {trainee.userInfo.name} -> {res['bucket']} "
-                    f"(skills: {res['skills_percentage']:.1f}%, loc: {res['location_percentage']:.1f}% "
-                    f"from {res['matched_location'] or 'unknown'}) [{action}]"
-                )
+            try:
+                with transaction.atomic():
+                    match, created = Match.objects.update_or_create(
+                        job_ref=job,
+                        trainee_ref=trainee,
+                        defaults={
+                            'trainee_name': trainee.userInfo.name if trainee.userInfo else '',
+                            'trainee_location': trainee_location,
+                            'trainee_id': trainee.userInfo.userId if trainee.userInfo else '',
+                            'job_id': job.id,
+                            'job_title': job.project_name,
+                            'skills_percentage': res['skills_percentage'],
+                            'location_percentage': res['location_percentage'],
+                            'total_percentage': res['total_percentage'],
+                            'bucket': res['bucket'],
+                            'distance': res['distance'],
+                            'matched_skills': res['matched_skills'] or [],
+                            'matched_location': res['matched_location'] or '',
+                        }
+                    )
+                    if created:
+                        matches_created += 1
+            except Exception as e:
+                logger.exception(f"Error saving match for trainee {trainee.id}: {e}")
+
+        logger.info(f"  ✓ Job '{job.project_name}': {matches_created} matches created/updated")
 
         # Update job's match count
         job.matches = Match.objects.filter(job_ref=job).count()
         job.save(update_fields=['matches'])
         logger.info(f"  Job '{job.project_name}' now has {job.matches} total matches.")
 
-    logger.info("Matching engine finished.")
+    logger.info("✓ Matching engine finished successfully.")
     return True
+
+# Optional: Clear cache function for debugging
+def clear_embedding_cache():
+    """Clear all embedding caches."""
+    global _skill_embedding_cache, _trainee_embedding_cache
+    _skill_embedding_cache.clear()
+    _trainee_embedding_cache.clear()
+    logger.info("Embedding caches cleared.")

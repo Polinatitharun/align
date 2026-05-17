@@ -645,7 +645,7 @@ class JobMatchListView(APIView):
         }
         for match in matches:
             data = MatchListSerializer(match).data
-            bucket = match.bucket
+            bucket = normalize_bucket(match.bucket)
             if bucket == 'PERFECT_MATCH':
                 response["perfect_match"].append(data)
             elif bucket == 'SKILLS_ONLY':
@@ -657,6 +657,22 @@ class JobMatchListView(APIView):
             else:
                 response["no_match"].append(data)
         return Response(response)
+
+
+def normalize_bucket(bucket):
+    if bucket == 'SKILLS_POTENTIAL':
+        return 'SKILLS_ONLY'
+    if bucket == 'RELOCATABLE':
+        return 'NEARBY'
+    return bucket
+
+
+def normalize_matched_skills(value):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return [skill.strip() for skill in value.split(',') if skill.strip()]
+    return []
 
 class TraineeMatchListView(APIView):
     def get(self, request, trainee_id):
@@ -688,9 +704,9 @@ class TraineeMatchListView(APIView):
                 "skills_percentage": match.skills_percentage,
                 "location_percentage": match.location_percentage,
                 "distance": match.distance if match.bucket == 'NEARBY' else None,
-                "matched_skills": match.matched_skills if match.bucket != 'NO_MATCH' else None
+                "matched_skills": normalize_matched_skills(match.matched_skills) if normalize_bucket(match.bucket) != 'NO_MATCH' else None
             }
-            bucket = match.bucket
+            bucket = normalize_bucket(match.bucket)
             if bucket == 'PERFECT_MATCH':
                 response["perfect_match"].append(data)
             elif bucket == 'SKILLS_ONLY':
@@ -1386,16 +1402,39 @@ class DownloadInterviewLockTemplateView(APIView):
         wb = Workbook()
         ws = wb.active
         ws.title = "Interview Lock Template"
-        headers = ["Trainee Email/EmpID", "Interviewer Email/EmpID", "Job ID", "Interview DateTime", "Comments"]
+        headers = ["Trainee Email/EmpID", "Interviewer Email/EmpID", "Job ID / Demand ID", "Interview DateTime", "Comments"]
         ws.append(headers)
         ws.column_dimensions['D'].width = 20
-        ws.append(["emp001@tcs.com", "interviewer@tcs.com", 1, "2025-05-15 14:00:00", "Sample comment"])
+        ws.append(["emp001@tcs.com", "interviewer@tcs.com", "DEMAND001", "2025-05-15 14:00:00", "Sample comment"])
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="interview_lock_template.xlsx"'
         return response
+
+def resolve_job_identifier(value, batch=None):
+    if pd.isna(value):
+        return None
+    identifier = str(value).strip()
+    if not identifier:
+        return None
+
+    filters = {}
+    if batch:
+        filters['batch_name'] = batch
+
+    # Try numeric job primary key first, then Demand ID.
+    try:
+        return Job.objects.get(id=int(identifier), **filters)
+    except (ValueError, Job.DoesNotExist):
+        pass
+
+    try:
+        return Job.objects.get(demand_id=identifier, **filters)
+    except Job.DoesNotExist:
+        return None
+
 
 class BulkInterviewLockView(APIView):
     """Bulk create interview locks from Excel upload"""
@@ -1429,9 +1468,12 @@ class BulkInterviewLockView(APIView):
             try:
                 trainee_identifier = str(row[col_map['trainee']]).strip()
                 interviewer_identifier = str(row[col_map['interviewer']]).strip()
-                job_id = int(row[col_map['job']])
+                job = resolve_job_identifier(row[col_map['job']])
                 dt_str = str(row[col_map['datetime']]).strip()
                 comments = str(row.get(col_map.get('comments', ''), '')).strip() if col_map.get('comments') in row else ''
+                if not job:
+                    results['errors'].append(f"Row {idx+2}: Job not found")
+                    continue
                 # Resolve trainee
                 trainee_profile = None
                 user_info = UserInfo.objects.filter(employeeId=trainee_identifier).first()
@@ -1466,7 +1508,7 @@ class BulkInterviewLockView(APIView):
                 # Create lock
                 lock, created = InterviewLock.objects.get_or_create(
                     trainee=trainee_profile,
-                    job_id=job_id,
+                    job=job,
                     defaults={
                         'locked_by': request.user,
                         'interview_datetime': interview_dt,
@@ -1489,8 +1531,8 @@ class DownloadStatusUpdateTemplateView(APIView):
         wb = Workbook()
         ws = wb.active
         ws.title = "Status Update Template"
-        ws.append(["Trainee Email/EmpID", "Job ID", "Status (selected/rejected)"])
-        ws.append(["emp001@tcs.com", 1, "selected"])
+        ws.append(["Trainee Email/EmpID", "Job ID / Demand ID", "Status (selected/rejected)"])
+        ws.append(["emp001@tcs.com", "DEMAND001", "selected"])
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
@@ -1499,10 +1541,13 @@ class DownloadStatusUpdateTemplateView(APIView):
         return response
 
 class BulkStatusUpdateView(APIView):
+    """Bulk update interview lock status with job openings validation"""
+    
     def post(self, request):
         file = request.FILES.get('file')
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
+        
         try:
             df = pd.read_excel(file)
         except Exception as e:
@@ -1517,51 +1562,188 @@ class BulkStatusUpdateView(APIView):
                 col_map['job'] = col
             elif 'status' in col:
                 col_map['status'] = col
+        
         if not all(k in col_map for k in ['trainee','job','status']):
             return Response({"error": "Missing required columns"}, status=400)
 
-        results = {'updated': 0, 'errors': []}
+        # First, analyze all rows to calculate required openings per job
+        job_selected_counts = {}
+        row_details = []
+        
         for idx, row in df.iterrows():
             try:
                 trainee_id = str(row[col_map['trainee']]).strip()
-                job_id = int(row[col_map['job']])
+                job = resolve_job_identifier(row[col_map['job']])
                 new_status = str(row[col_map['status']]).strip().lower()
-                if new_status not in ['selected','rejected']:
-                    results['errors'].append(f"Row {idx+2}: Invalid status")
+                
+                if not job:
+                    row_details.append({
+                        'idx': idx,
+                        'error': f"Job not found",
+                        'trainee_id': trainee_id,
+                        'job': None,
+                        'status': new_status
+                    })
                     continue
-
+                    
+                if new_status not in ['selected', 'rejected']:
+                    row_details.append({
+                        'idx': idx,
+                        'error': f"Invalid status. Use 'selected' or 'rejected'",
+                        'trainee_id': trainee_id,
+                        'job': job,
+                        'status': new_status
+                    })
+                    continue
+                
+                # Count selected status per job
+                if new_status == 'selected':
+                    job_selected_counts[job.id] = job_selected_counts.get(job.id, 0) + 1
+                
+                row_details.append({
+                    'idx': idx,
+                    'trainee_id': trainee_id,
+                    'job': job,
+                    'status': new_status,
+                    'error': None
+                })
+                
+            except Exception as e:
+                row_details.append({
+                    'idx': idx,
+                    'error': str(e),
+                    'trainee_id': None,
+                    'job': None,
+                    'status': None
+                })
+        
+        # Validate job openings before processing
+        openings_errors = []
+        for job_id, selected_count in job_selected_counts.items():
+            try:
+                job = Job.objects.get(id=job_id)
+                remaining_openings = job.openings - job.filled
+                
+                if selected_count > remaining_openings:
+                    openings_errors.append(
+                        f"Job '{job.project_name}' (ID: {job_id}) has only {remaining_openings} openings left, "
+                        f"but you're trying to select {selected_count} candidates. Please reduce the number of selections or increase openings."
+                    )
+            except Job.DoesNotExist:
+                openings_errors.append(f"Job ID {job_id} not found")
+        
+        if openings_errors:
+            return Response({
+                "error": "Openings validation failed",
+                "details": openings_errors,
+                "suggestion": "Please check your file and reduce the number of 'selected' entries for these jobs."
+            }, status=400)
+        
+        # Process each row
+        results = {'updated': 0, 'errors': [], 'openings_remaining': {}}
+        
+        for detail in row_details:
+            if detail['error']:
+                results['errors'].append(f"Row {detail['idx']+2}: {detail['error']}")
+                continue
+            
+            try:
+                trainee_id = detail['trainee_id']
+                job = detail['job']
+                new_status = detail['status']
+                
+                # Find trainee profile
                 trainee_profile = None
                 user_info = UserInfo.objects.filter(employeeId=trainee_id).first()
                 if not user_info:
                     user_info = UserInfo.objects.filter(email=trainee_id).first()
                 if user_info:
                     trainee_profile = user_info.profile
+                
                 if not trainee_profile:
-                    results['errors'].append(f"Row {idx+2}: Trainee not found")
+                    results['errors'].append(f"Row {detail['idx']+2}: Trainee not found")
                     continue
-
-                lock = InterviewLock.objects.filter(trainee=trainee_profile, job_id=job_id).first()
+                
+                # Get existing lock
+                lock = InterviewLock.objects.filter(trainee=trainee_profile, job=job).first()
                 if not lock:
-                    results['errors'].append(f"Row {idx+2}: No existing lock")
+                    results['errors'].append(f"Row {detail['idx']+2}: No existing interview lock for this trainee and job")
                     continue
-                if lock.status in ['selected','rejected']:
-                    results['errors'].append(f"Row {idx+2}: Already finalised")
+                
+                if lock.status in ['selected', 'rejected']:
+                    results['errors'].append(f"Row {detail['idx']+2}: Already finalised as {lock.status}")
                     continue
-                lock.status = new_status
-                lock.save()
-                results['updated'] += 1
+                
+                # For selected status, verify openings again (double-check)
+                if new_status == 'selected':
+                    # Refresh job from database to get latest counts
+                    job.refresh_from_db()
+                    remaining_openings = job.openings - job.filled
+                    
+                    if remaining_openings <= 0:
+                        results['errors'].append(
+                            f"Row {detail['idx']+2}: Job '{job.project_name}' has no openings left. "
+                            f"Cannot mark as 'selected'."
+                        )
+                        continue
+                    
+                    # Update the lock status
+                    lock.status = new_status
+                    lock.save()
+                    
+                    # Update job openings if not already mapped
+                    # Check if trainee is already mapped to this job
+                    if not (user_info and user_info.isMapped and user_info.projectId == str(job.id)):
+                        # Check if trainee is mapped elsewhere
+                        if user_info and user_info.isMapped:
+                            results['errors'].append(
+                                f"Row {detail['idx']+2}: Trainee '{trainee_profile.userInfo.name}' is already mapped to "
+                                f"project '{user_info.projectName}'. Please unmap first."
+                            )
+                            continue
+                        
+                        # Mark as mapped
+                        user_info.isMapped = True
+                        user_info.projectId = str(job.id)
+                        user_info.projectName = job.project_name
+                        user_info.save()
+                        
+                        # Update job filled count
+                        job.filled += 1
+                        job.save()
+                        
+                        results['openings_remaining'][job.id] = job.openings - job.filled
+                    
+                    results['updated'] += 1
+                    
+                else:  # rejected status
+                    lock.status = new_status
+                    lock.save()
+                    results['updated'] += 1
+                    
             except Exception as e:
-                results['errors'].append(f"Row {idx+2}: {str(e)}")
-        return Response(results, status=200)
-
+                results['errors'].append(f"Row {detail['idx']+2}: {str(e)}")
+        
+        # Add openings summary to response
+        if results['openings_remaining']:
+            openings_summary = []
+            for job_id, remaining in results['openings_remaining'].items():
+                try:
+                    job = Job.objects.get(id=job_id)
+                    openings_summary.append(f"{job.project_name}: {remaining} openings left")
+                except:
+                    pass
+            results['openings_summary'] = openings_summary
+        
+        return Response(results, status=200 if results['updated'] > 0 else 400)
 # --- Bulk Mapping ---
 class DownloadBulkMappingTemplateView(APIView):
     def get(self, request):
         wb = Workbook()
         ws = wb.active
         ws.title = "Bulk Mapping Template"
-        ws.append(["Trainee Email/EmpID", "Job ID"])
-        ws.append(["emp001@tcs.com", 1])
+        ws.append(["Trainee Email/EmpID", "Job ID / Demand ID"])
+        ws.append(["emp001@tcs.com", "DEMAND001"])
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
@@ -1570,15 +1752,27 @@ class DownloadBulkMappingTemplateView(APIView):
         return response
 
 class BulkMappingView(APIView):
+    """Bulk map trainees to jobs with proper openings validation"""
+    
     def post(self, request):
         file = request.FILES.get('file')
         batch = request.data.get('batch', '')
+        
         if not file:
-            return Response({"error": "No file uploaded"}, status=400)
+            return Response({
+                "success": False,
+                "error": "No file uploaded",
+                "message": "Please select an Excel file to upload"
+            }, status=400)
+        
         try:
             df = pd.read_excel(file)
         except Exception as e:
-            return Response({"error": str(e)}, status=400)
+            return Response({
+                "success": False,
+                "error": "Invalid file format",
+                "message": f"Could not read the Excel file: {str(e)}"
+            }, status=400)
 
         df.columns = [c.strip().lower() for c in df.columns]
         col_map = {}
@@ -1587,58 +1781,194 @@ class BulkMappingView(APIView):
                 col_map['trainee'] = col
             elif 'job' in col:
                 col_map['job'] = col
+        
         if not all(k in col_map for k in ['trainee','job']):
-            return Response({"error": "Missing columns"}, status=400)
+            return Response({
+                "success": False,
+                "error": "Missing required columns",
+                "message": "Your Excel file must have 'Trainee' and 'Job' columns",
+                "found_columns": list(df.columns)
+            }, status=400)
 
-        job_map_requests = {}
-        trainee_job_pairs = []
+        # First pass: count mappings per job
+        job_mapping_counts = {}
+        mapping_requests = []
+        
         for idx, row in df.iterrows():
             trainee_id = str(row[col_map['trainee']]).strip()
-            job_id = int(row[col_map['job']])
-            trainee_job_pairs.append((trainee_id, job_id))
-            job_map_requests[job_id] = job_map_requests.get(job_id, 0) + 1
-
-        for job_id, count in job_map_requests.items():
+            job = resolve_job_identifier(row[col_map['job']], batch=batch if batch else None)
+            
+            if not job:
+                mapping_requests.append({
+                    'idx': idx,
+                    'error': f"Job '{row[col_map['job']]}' not found in batch '{batch or 'any'}'",
+                    'trainee_id': trainee_id,
+                    'job': None
+                })
+                continue
+            
+            mapping_requests.append({
+                'idx': idx,
+                'trainee_id': trainee_id,
+                'job': job,
+                'error': None
+            })
+            job_mapping_counts[job.id] = job_mapping_counts.get(job.id, 0) + 1
+        
+        # Validate openings for each job
+        openings_errors = []
+        for job_id, requested_count in job_mapping_counts.items():
             try:
-                job = Job.objects.get(id=job_id, batch_name=batch if batch else None)
-                if job.openings - job.filled < count:
-                    return Response({"error": f"Job {job.project_name} (ID {job_id}) has only {job.openings - job.filled} openings, but {count} mappings requested."}, status=400)
+                job = Job.objects.get(id=job_id)
+                if batch and job.batch_name != batch:
+                    openings_errors.append({
+                        'job': job.project_name,
+                        'message': f"Job '{job.project_name}' is not in batch '{batch}'"
+                    })
+                    continue
+                
+                remaining_openings = job.openings - job.filled
+                if requested_count > remaining_openings:
+                    openings_errors.append({
+                        'job': job.project_name,
+                        'openings_left': remaining_openings,
+                        'requested': requested_count,
+                        'message': f"Job '{job.project_name}' has only {remaining_openings} opening(s) left, but you're trying to map {requested_count} trainees. Please reduce to {remaining_openings} or fewer."
+                    })
             except Job.DoesNotExist:
-                return Response({"error": f"Job ID {job_id} not found in batch {batch or 'any'}"}, status=400)
-
-        results = {'mapped': 0, 'errors': []}
-        for trainee_id, job_id in trainee_job_pairs:
+                openings_errors.append({
+                    'job': f"ID {job_id}",
+                    'message': f"Job with ID {job_id} not found"
+                })
+        
+        if openings_errors:
+            return Response({
+                "success": False,
+                "error": "Openings validation failed",
+                "message": "Cannot process bulk mapping due to job opening constraints",
+                "details": openings_errors,
+                "suggestion": "Please check your file and reduce the number of mappings for the jobs listed above."
+            }, status=400)
+        
+        # Process mappings
+        results = {
+            'mapped': 0, 
+            'errors': [], 
+            'warnings': [],
+            'openings_remaining': {},
+            'success': True,
+            'message': ""
+        }
+        
+        for req in mapping_requests:
+            if req['error']:
+                results['errors'].append({
+                    'row': req['idx'] + 2,
+                    'trainee': req['trainee_id'],
+                    'message': req['error']
+                })
+                continue
+            
             try:
+                trainee_id = req['trainee_id']
+                job = req['job']
+                
+                # Find trainee
                 trainee_profile = None
                 user_info = UserInfo.objects.filter(employeeId=trainee_id).first()
                 if not user_info:
                     user_info = UserInfo.objects.filter(email=trainee_id).first()
                 if user_info:
                     trainee_profile = user_info.profile
+                
                 if not trainee_profile:
-                    results['errors'].append(f"Trainee {trainee_id}: not found")
+                    results['errors'].append({
+                        'row': req['idx'] + 2,
+                        'trainee': trainee_id,
+                        'message': f"Trainee '{trainee_id}' not found in system"
+                    })
                     continue
-
-                job = Job.objects.get(id=job_id)
-                if job.openings - job.filled <= 0:
-                    results['errors'].append(f"Trainee {trainee_id}: job {job_id} has no openings left")
+                
+                # Check if already mapped
+                if user_info.isMapped:
+                    results['errors'].append({
+                        'row': req['idx'] + 2,
+                        'trainee': user_info.name,
+                        'current_project': user_info.projectName,
+                        'message': f"Trainee '{user_info.name}' is already mapped to '{user_info.projectName}'. Please unmap first if you want to reassign."
+                    })
                     continue
-
-                user_info_to_update = trainee_profile.userInfo
-                user_info_to_update.isMapped = True
-                user_info_to_update.projectId = str(job.id)
-                user_info_to_update.projectName = job.project_name
-                user_info_to_update.save()
-
+                
+                # Refresh job to get latest counts
+                job.refresh_from_db()
+                remaining_openings = job.openings - job.filled
+                
+                if remaining_openings <= 0:
+                    results['errors'].append({
+                        'row': req['idx'] + 2,
+                        'trainee': user_info.name if user_info else trainee_id,
+                        'job': job.project_name,
+                        'message': f"Job '{job.project_name}' has no openings left"
+                    })
+                    continue
+                
+                # Map the trainee
+                user_info.isMapped = True
+                user_info.projectId = str(job.id)
+                user_info.projectName = job.project_name
+                user_info.save()
+                
+                # Update job filled count
                 job.filled += 1
-                if job.filled >= job.openings:
-                    job.status = 'filled'
                 job.save()
+                
+                # Track remaining openings
+                results['openings_remaining'][job.id] = {
+                    'job_name': job.project_name,
+                    'remaining': job.openings - job.filled
+                }
                 results['mapped'] += 1
+                
+                # Also create/update interview lock as selected
+                lock, created = InterviewLock.objects.get_or_create(
+                    trainee=trainee_profile,
+                    job=job,
+                    defaults={
+                        'locked_by': request.user,
+                        'interview_datetime': datetime.now(),
+                        'status': 'selected',
+                        'assigned_to': None,
+                        'comments': 'Bulk mapped from Excel'
+                    }
+                )
+                if not created and lock.status != 'selected':
+                    lock.status = 'selected'
+                    lock.save()
+                    
             except Exception as e:
-                results['errors'].append(f"Trainee {trainee_id}: {str(e)}")
-        return Response(results, status=200 if results['mapped'] > 0 else 400)
-
+                results['errors'].append({
+                    'row': req['idx'] + 2,
+                    'trainee': trainee_id if 'trainee_id' in locals() else 'Unknown',
+                    'message': str(e)
+                })
+        
+        # Set appropriate message
+        if results['mapped'] > 0 and len(results['errors']) == 0:
+            results['message'] = f"✅ Successfully mapped {results['mapped']} trainee(s)"
+        elif results['mapped'] > 0 and len(results['errors']) > 0:
+            results['message'] = f"⚠️ Partially successful: Mapped {results['mapped']} trainee(s), but {len(results['errors'])} error(s) occurred"
+            results['success'] = False
+        else:
+            results['message'] = f"❌ Failed to map any trainees. {len(results['errors'])} error(s) occurred"
+            results['success'] = False
+        
+        # Add openings summary
+        if results['openings_remaining']:
+            openings_list = [f"{data['job_name']}: {data['remaining']} left" for data in results['openings_remaining'].values()]
+            results['openings_summary'] = openings_list
+        
+        status_code = 200 if results['mapped'] > 0 else 400
+        return Response(results, status=status_code)
 # --- HR Summary Report (Excel with charts) ---
 class HRSummaryReportView(APIView):
     """Generate a comprehensive Excel report for the selected batch with embedded charts."""
@@ -1868,90 +2198,392 @@ class ManagerChatSessionViewSet(viewsets.ModelViewSet):
 
 
 # ---------- HR Summary PDF Report ----------
+# ---------- HR Summary PDF Report - Enhanced Version (Fixed) ----------
 import matplotlib
-matplotlib.use('Agg')                            # Non‑GUI backend
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+import numpy as np
+from matplotlib.ticker import MaxNLocator, PercentFormatter
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    Image as RLImage, PageBreak
+    Image as RLImage, PageBreak, KeepTogether
 )
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from io import BytesIO
 from collections import Counter
+from django.db.models import Count, Q, Avg, Sum
+from datetime import datetime, timedelta
 
 class HRSummaryPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         batch = request.query_params.get('batch', '')
-
-        # ---- Gather data (same as Excel report) ----
+        
+        # ==================== DATA COLLECTION ====================
+        
+        # Get all data with filters
         jobs = Job.objects.all()
         trainees = ProfileRecord.objects.select_related('userInfo').all()
         locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
+        matches = Match.objects.select_related('job_ref', 'trainee_ref__userInfo').all()
+        
         if batch:
             jobs = jobs.filter(batch_name=batch)
             trainees = trainees.filter(batch_name=batch)
-            locks = locks.filter(job__batch_name=batch) | locks.filter(trainee__batch_name=batch)
-
+            locks = locks.filter(Q(job__batch_name=batch) | Q(trainee__batch_name=batch))
+            matches = matches.filter(Q(job_ref__batch_name=batch) | Q(trainee_ref__batch_name=batch))
+        
+        # Basic Statistics
         total_trainees = trainees.count()
-        mapped = trainees.filter(userInfo__isMapped=True).count()
-        unmapped = total_trainees - mapped
+        mapped_trainees = trainees.filter(userInfo__isMapped=True).count()
+        unmapped_trainees = total_trainees - mapped_trainees
+        total_jobs = jobs.count()
         active_jobs = jobs.filter(status='active').count()
+        filled_jobs = jobs.filter(status='filled').count()
+        inactive_jobs = jobs.filter(status='inactive').count()
+        
+        # Lock Statistics
         locked_count = locks.filter(status='locked').count()
         selected_count = locks.filter(status='selected').count()
         rejected_count = locks.filter(status='rejected').count()
-
-        # ---- Create charts using matplotlib ----
-        chart_images = []
-
-        # 1. Skills demand bar chart
+        cancelled_count = locks.filter(status='cancelled').count()
+        
+        # Match Statistics
+        total_matches = matches.count()
+        perfect_matches = matches.filter(bucket='PERFECT_MATCH').count()
+        skills_only_matches = matches.filter(bucket='SKILLS_ONLY').count()
+        location_only_matches = matches.filter(bucket='LOCATION_ONLY').count()
+        nearby_matches = matches.filter(bucket='NEARBY').count()
+        no_matches = matches.filter(bucket='NO_MATCH').count()
+        
+        avg_match_percentage = matches.aggregate(Avg('total_percentage'))['total_percentage__avg'] or 0
+        
+        # Job-wise Statistics
+        job_stats = []
+        for job in jobs:
+            job_matches = matches.filter(job_ref=job)
+            job_locks = locks.filter(job=job)
+            
+            job_stats.append({
+                'name': job.project_name,
+                'batch': job.batch_name or 'N/A',
+                'openings': job.openings,
+                'filled': job.filled,
+                'remaining': job.openings - job.filled,
+                'fill_rate': (job.filled / job.openings * 100) if job.openings > 0 else 0,
+                'total_matches': job_matches.count(),
+                'perfect_matches': job_matches.filter(bucket='PERFECT_MATCH').count(),
+                'selected': job_locks.filter(status='selected').count(),
+                'rejected': job_locks.filter(status='rejected').count(),
+                'status': job.status
+            })
+        
+        # Batch-wise Statistics
+        batch_names = trainees.values_list('batch_name', flat=True).distinct()
+        if batch:
+            batch_names = [batch]
+        else:
+            batch_names = [b for b in batch_names if b]
+        
+        batch_stats = []
+        for batch_name in batch_names:
+            if not batch_name:
+                continue
+                
+            batch_trainees = trainees.filter(batch_name=batch_name)
+            batch_jobs = jobs.filter(batch_name=batch_name)
+            batch_matches = matches.filter(Q(job_ref__batch_name=batch_name) | Q(trainee_ref__batch_name=batch_name))
+            batch_locks = locks.filter(Q(job__batch_name=batch_name) | Q(trainee__batch_name=batch_name))
+            
+            batch_stats.append({
+                'name': batch_name,
+                'trainee_count': batch_trainees.count(),
+                'mapped_count': batch_trainees.filter(userInfo__isMapped=True).count(),
+                'mapping_rate': (batch_trainees.filter(userInfo__isMapped=True).count() / batch_trainees.count() * 100) if batch_trainees.count() > 0 else 0,
+                'job_count': batch_jobs.count(),
+                'total_matches': batch_matches.count(),
+                'selected_count': batch_locks.filter(status='selected').count(),
+                'rejection_rate': (batch_locks.filter(status='rejected').count() / batch_locks.count() * 100) if batch_locks.count() > 0 else 0
+            })
+        
+        # Skill Demand Analysis
         skill_counter = Counter()
         for job in jobs:
-            # Parse skills from comma-separated string
             skills_list = [skill.strip() for skill in (job.skills or '').split(',') if skill.strip()]
             for skill in skills_list:
                 skill_counter[skill] += 1
-        top_skills = skill_counter.most_common(10)
+        
+        top_skills = skill_counter.most_common(15)
+        
+        # Trainee Skill Distribution
+        trainee_skills = Counter()
+        for trainee in trainees:
+            for strength in trainee.strengths.all():
+                trainee_skills[strength.courseName] += 1
+        
+        # Skill Gap Analysis
+        skill_gaps = []
+        for skill, demand_count in skill_counter.items():
+            supply_count = trainee_skills.get(skill, 0)
+            gap = demand_count - supply_count
+            if gap > 0:
+                skill_gaps.append({
+                    'skill': skill,
+                    'demand': demand_count,
+                    'supply': supply_count,
+                    'gap': gap,
+                    'gap_percentage': (gap / demand_count * 100) if demand_count > 0 else 0
+                })
+        skill_gaps.sort(key=lambda x: x['gap'], reverse=True)
+        top_skill_gaps = skill_gaps[:10]
+        
+        # Location Analysis
+        location_counts = Counter()
+        for trainee in trainees:
+            if trainee.userInfo and trainee.userInfo.location:
+                location_counts[trainee.userInfo.location.title()] += 1
+        
+        job_locations = Counter()
+        for job in jobs:
+            if job.location:
+                if isinstance(job.location, list):
+                    for loc in job.location:
+                        job_locations[loc.title()] += 1
+                else:
+                    job_locations[job.location.title()] += 1
+        
+        # Monthly Trends (last 6 months) - Fixed version without updated_at
+        today = datetime.now().date()
+        six_months_ago = today - timedelta(days=180)
+        
+        monthly_locks = []
+        monthly_matches = []
+        monthly_mappings = []
+        
+        for i in range(6):
+            month_start = (today.replace(day=1) - timedelta(days=30*i)).replace(day=1)
+            month_end = (month_start + timedelta(days=32)).replace(day=1)
+            
+            month_locks = locks.filter(created_at__date__gte=month_start, created_at__date__lt=month_end).count()
+            month_matches = matches.filter(created_at__date__gte=month_start, created_at__date__lt=month_end).count()
+            # For mappings, count trainees where isMapped became True during this period
+            # Since we don't have updated_at, we'll use a different approach - count locks with status='selected'
+            month_mappings = locks.filter(status='selected', created_at__date__gte=month_start, created_at__date__lt=month_end).count()
+            
+            monthly_locks.append(month_locks)
+            monthly_matches.append(month_matches)
+            monthly_mappings.append(month_mappings)
+        
+        months_labels = [(today - timedelta(days=30*i)).strftime('%b %Y') for i in range(5, -1, -1)]
+        
+        # ==================== CREATE CHARTS ====================
+        chart_images = []
+        
+        # 1. Overall Status Dashboard Chart
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+        
+        # Top-left: Trainee Status Pie
+        axes[0, 0].pie([mapped_trainees, unmapped_trainees], 
+                       labels=['Mapped', 'Unmapped'], 
+                       autopct='%1.1f%%',
+                       colors=['#10b981', '#ef4444'],
+                       explode=(0.05, 0))
+        axes[0, 0].set_title('Trainee Mapping Status', fontsize=12, fontweight='bold')
+        
+        # Top-right: Job Status Pie
+        job_status_data = [active_jobs, filled_jobs, inactive_jobs]
+        job_status_labels = ['Active', 'Filled', 'Inactive']
+        # Filter out zero values
+        filtered_data = [(job_status_labels[i], job_status_data[i]) for i in range(3) if job_status_data[i] > 0]
+        if filtered_data:
+            labels, values = zip(*filtered_data)
+            axes[0, 1].pie(values, labels=labels, autopct='%1.1f%%',
+                          colors=['#3b82f6', '#10b981', '#6b7280'])
+        axes[0, 1].set_title('Job Status Distribution', fontsize=12, fontweight='bold')
+        
+        # Bottom-left: Interview Status Bar
+        interview_data = [locked_count, selected_count, rejected_count, cancelled_count]
+        interview_labels = ['Locked', 'Selected', 'Rejected', 'Cancelled']
+        interview_colors = ['#fbbf24', '#10b981', '#ef4444', '#6b7280']
+        bars = axes[1, 0].bar(interview_labels, interview_data, color=interview_colors)
+        axes[1, 0].set_title('Interview Status Overview', fontsize=12, fontweight='bold')
+        axes[1, 0].set_ylabel('Count')
+        for bar, val in zip(bars, interview_data):
+            if val > 0:
+                axes[1, 0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, str(val), ha='center', va='bottom')
+        
+        # Bottom-right: Match Distribution
+        match_data = [perfect_matches, skills_only_matches, location_only_matches, nearby_matches, no_matches]
+        match_labels = ['Perfect', 'Skills Only', 'Location Only', 'Nearby', 'No Match']
+        match_colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444']
+        bars = axes[1, 1].bar(match_labels, match_data, color=match_colors)
+        axes[1, 1].set_title('Match Distribution', fontsize=12, fontweight='bold')
+        axes[1, 1].set_ylabel('Count')
+        plt.setp(axes[1, 1].xaxis.get_majorticklabels(), rotation=45, ha='right')
+        for bar, val in zip(bars, match_data):
+            if val > 0:
+                axes[1, 1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, str(val), ha='center', va='bottom')
+        
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        chart_images.append(('dashboard_overview', buf))
+        
+        # 2. Top Skills Demand Chart
         if top_skills:
-            skills, counts = zip(*top_skills)
-            fig, ax = plt.subplots(figsize=(6, 4))
-            ax.bar(skills, counts, color='#3b82f6')
-            ax.set_title('Top Skills in Demand')
-            ax.set_ylabel('Number of Jobs')
-            plt.xticks(rotation=45, ha='right')
+            fig, ax = plt.subplots(figsize=(10, 6))
+            skills, counts = zip(*top_skills[:10])
+            bars = ax.barh(skills, counts, color='#3b82f6')
+            ax.set_xlabel('Number of Jobs', fontsize=11)
+            ax.set_title('Top 10 Skills in Demand', fontsize=14, fontweight='bold')
+            ax.invert_yaxis()
+            for bar, val in zip(bars, counts):
+                ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height()/2, str(val), ha='left', va='center')
             plt.tight_layout()
             buf = BytesIO()
-            plt.savefig(buf, format='png', dpi=100)
+            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
             plt.close(fig)
             buf.seek(0)
-            chart_images.append(('skills_demand', buf))
-
-        # 2. Status distribution pie chart
-        status_data = {
-            'Locked': locked_count,
-            'Selected': selected_count,
-            'Rejected': rejected_count,
-            'Cancelled': locks.filter(status='cancelled').count()
-        }
-        status_data = {k:v for k,v in status_data.items() if v > 0}
-        if status_data:
-            fig, ax = plt.subplots(figsize=(5, 5))
-            ax.pie(status_data.values(), labels=status_data.keys(), autopct='%1.1f%%',
-                   colors=['#fbbf24','#10b981','#ef4444','#6b7280'])
-            ax.set_title('Interview Status Distribution')
+            chart_images.append(('top_skills_demand', buf))
+        
+        # 3. Skill Gaps Chart
+        if top_skill_gaps:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            gap_data = top_skill_gaps[:8]
+            skills = [g['skill'] for g in gap_data]
+            demands = [g['demand'] for g in gap_data]
+            supplies = [g['supply'] for g in gap_data]
+            
+            x = np.arange(len(skills))
+            width = 0.35
+            
+            bars1 = ax.bar(x - width/2, demands, width, label='Demand', color='#ef4444')
+            bars2 = ax.bar(x + width/2, supplies, width, label='Supply', color='#10b981')
+            
+            ax.set_xlabel('Skills', fontsize=11)
+            ax.set_ylabel('Count', fontsize=11)
+            ax.set_title('Skill Gap Analysis (Demand vs Supply)', fontsize=14, fontweight='bold')
+            ax.set_xticks(x)
+            ax.set_xticklabels(skills, rotation=45, ha='right')
+            ax.legend()
+            
             plt.tight_layout()
             buf = BytesIO()
-            plt.savefig(buf, format='png', dpi=100)
+            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
             plt.close(fig)
             buf.seek(0)
-            chart_images.append(('status_dist', buf))
-
-        # ---- Build PDF with reportlab ----
+            chart_images.append(('skill_gaps', buf))
+        
+        # 4. Monthly Trends Line Chart
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(months_labels, monthly_locks, marker='o', label='Interview Locks', linewidth=2, markersize=6, color='#fbbf24')
+        ax.plot(months_labels, monthly_matches, marker='s', label='Matches Generated', linewidth=2, markersize=6, color='#3b82f6')
+        ax.plot(months_labels, monthly_mappings, marker='^', label='Selected/Hired', linewidth=2, markersize=6, color='#10b981')
+        ax.set_xlabel('Month', fontsize=11)
+        ax.set_ylabel('Count', fontsize=11)
+        ax.set_title('Monthly Activity Trends (Last 6 Months)', fontsize=14, fontweight='bold')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        chart_images.append(('monthly_trends', buf))
+        
+        # 5. Location Distribution
+        if location_counts:
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+            
+            top_locations = location_counts.most_common(8)
+            loc_names, loc_counts = zip(*top_locations)
+            bars = ax1.bar(loc_names, loc_counts, color='#8b5cf6')
+            ax1.set_title('Top Trainee Locations', fontsize=12, fontweight='bold')
+            ax1.set_ylabel('Number of Trainees')
+            plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            for bar, val in zip(bars, loc_counts):
+                ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, str(val), ha='center', va='bottom')
+            
+            top_job_locs = job_locations.most_common(8)
+            if top_job_locs:
+                loc_names2, loc_counts2 = zip(*top_job_locs)
+                bars = ax2.bar(loc_names2, loc_counts2, color='#f59e0b')
+                ax2.set_title('Top Job Locations', fontsize=12, fontweight='bold')
+                ax2.set_ylabel('Number of Jobs')
+                plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
+                for bar, val in zip(bars, loc_counts2):
+                    ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, str(val), ha='center', va='bottom')
+            
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            chart_images.append(('location_distribution', buf))
+        
+        # 6. Fill Rate Distribution
+        if job_stats:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            fill_rates = [j['fill_rate'] for j in job_stats if j['fill_rate'] > 0]
+            if fill_rates:
+                bins = [0, 20, 40, 60, 80, 100]
+                ax.hist(fill_rates, bins=bins, color='#10b981', edgecolor='black', alpha=0.7)
+                ax.set_xlabel('Fill Rate (%)', fontsize=11)
+                ax.set_ylabel('Number of Jobs', fontsize=11)
+                ax.set_title('Job Fill Rate Distribution', fontsize=14, fontweight='bold')
+                ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            chart_images.append(('fill_rate_distribution', buf))
+        
+        # 7. Batch Performance Comparison
+        if batch_stats and len(batch_stats) > 1:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            batch_names = [b['name'][:20] for b in batch_stats]
+            mapping_rates = [b['mapping_rate'] for b in batch_stats]
+            bars = ax.bar(batch_names, mapping_rates, color='#3b82f6')
+            ax.set_xlabel('Batch', fontsize=11)
+            ax.set_ylabel('Mapping Rate (%)', fontsize=11)
+            ax.set_title('Batch-wise Trainee Mapping Performance', fontsize=14, fontweight='bold')
+            ax.set_ylim(0, 100)
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            for bar, val in zip(bars, mapping_rates):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, f'{val:.1f}%', ha='center', va='bottom')
+            plt.tight_layout()
+            buf = BytesIO()
+            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            chart_images.append(('batch_performance', buf))
+        
+        # 8. Hiring Funnel Chart
+        fig, ax = plt.subplots(figsize=(8, 6))
+        funnel_stages = ['Total Matches', 'Interview Locks', 'Selected', 'Mapped']
+        funnel_counts = [total_matches, locked_count, selected_count, mapped_trainees]
+        bars = ax.barh(funnel_stages, funnel_counts, color=['#3b82f6', '#fbbf24', '#10b981', '#8b5cf6'])
+        ax.set_xlabel('Count', fontsize=11)
+        ax.set_title('Hiring Funnel (Match to Hire)', fontsize=14, fontweight='bold')
+        for bar, val in zip(bars, funnel_counts):
+            ax.text(bar.get_width() + 5, bar.get_y() + bar.get_height()/2, str(val), ha='left', va='center')
+        plt.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        chart_images.append(('hiring_funnel', buf))
+        
+        # ==================== BUILD PDF ====================
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=A4,
@@ -1959,94 +2591,246 @@ class HRSummaryPDFView(APIView):
         )
         elements = []
         styles = getSampleStyleSheet()
-        title_style = styles['Title']
-        heading_style = styles['Heading2']
+        
+        # Custom styles
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontSize=18, spaceAfter=20, alignment=TA_CENTER)
+        heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], fontSize=14, spaceAfter=12, textColor=colors.HexColor('#1e40af'))
+        subheading_style = ParagraphStyle('SubHeading', parent=styles['Heading3'], fontSize=12, spaceAfter=8, textColor=colors.HexColor('#3b82f6'))
         normal_style = styles['Normal']
-
-        # Title
-        elements.append(Paragraph(f"HR Summary Report (Batch: {batch or 'All'})", title_style))
+        
+        # Cover Page
+        elements.append(Paragraph("Talent Align - HR Analytics Report", title_style))
         elements.append(Spacer(1, 12))
-
-        # Summary stats
-        elements.append(Paragraph("Overview", heading_style))
-        summary_data = [
-            ['Metric', 'Value'],
-            ['Total Trainees', str(total_trainees)],
-            ['Mapped Trainees', str(mapped)],
-            ['Unmapped Trainees', str(unmapped)],
-            ['Active Jobs', str(active_jobs)],
-            ['Interview Locks', str(locked_count)],
-            ['Selected', str(selected_count)],
-            ['Rejected', str(rejected_count)],
+        elements.append(Paragraph(f"<b>Batch:</b> {batch if batch else 'All Batches'}", normal_style))
+        elements.append(Paragraph(f"<b>Generated On:</b> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}", normal_style))
+        elements.append(Spacer(1, 30))
+        
+        # Executive Summary
+        elements.append(PageBreak())
+        elements.append(Paragraph("Executive Summary", heading_style))
+        
+        summary_box_data = [
+            ['Total Trainees', str(total_trainees), 'Total Jobs', str(total_jobs)],
+            ['Mapped Trainees', f"{mapped_trainees} ({mapped_trainees/total_trainees*100:.1f}%)" if total_trainees > 0 else '0', 'Active Jobs', str(active_jobs)],
+            ['Unmapped Trainees', f"{unmapped_trainees} ({unmapped_trainees/total_trainees*100:.1f}%)" if total_trainees > 0 else '0', 'Fill Rate', f"{(filled_jobs/total_jobs*100):.1f}%" if total_jobs > 0 else '0%'],
+            ['Total Matches', str(total_matches), 'Avg Match Score', f"{avg_match_percentage:.1f}%"],
+            ['Selected Candidates', str(selected_count), 'Rejection Rate', f"{(rejected_count/locks.count()*100):.1f}%" if locks.count() > 0 else '0%'],
         ]
-        t = Table(summary_data, colWidths=[200, 100])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+        
+        summary_table = Table(summary_box_data, colWidths=[120, 100, 120, 100])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23, 0.44, 0.96)),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('FONTSIZE', (0,0), (-1,-1), 10),
-            ('BOTTOMPADDING', (0,0), (-1,0), 8),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('BACKGROUND', (0,1), (-1,-1), colors.Color(0.97, 0.97, 0.97)),
         ]))
-        elements.append(t)
+        elements.append(summary_table)
         elements.append(Spacer(1, 20))
-
-        # Charts
+        
+        # All Charts
         for name, img_buf in chart_images:
-            elements.append(Paragraph(name.replace('_', ' ').title(), heading_style))
-            img = RLImage(img_buf, width=480, height=320)
-            elements.append(img)
-            elements.append(Spacer(1, 12))
-
-        # Job Details table
+            elements.append(KeepTogether([
+                Paragraph(name.replace('_', ' ').title(), heading_style),
+                Spacer(1, 6),
+                RLImage(img_buf, width=500, height=350),
+                Spacer(1, 15)
+            ]))
+        
+        # Job-wise Detailed Table
         elements.append(PageBreak())
-        elements.append(Paragraph("Job Details", heading_style))
-        job_table_data = [['Job Title', 'Demand ID', 'Dept', 'Location', 'Openings', 'Filled', 'Status']]
-        for job in jobs[:30]:
-            job_table_data.append([
-                job.project_name, job.demand_id or '', '',
-                ', '.join(job.location) if job.location else '',
-                str(job.openings), str(job.filled), job.status
+        elements.append(Paragraph("Job-wise Performance Analysis", heading_style))
+        
+        job_detail_data = [['Job Title', 'Batch', 'Openings', 'Filled', 'Remaining', 'Fill Rate', 'Matches', 'Selected', 'Rejected', 'Status']]
+        for job in job_stats[:20]:
+            job_detail_data.append([
+                job['name'][:30], job['batch'], str(job['openings']), str(job['filled']), 
+                str(job['remaining']), f"{job['fill_rate']:.1f}%", str(job['total_matches']),
+                str(job['selected']), str(job['rejected']), job['status']
             ])
-        if len(job_table_data) > 1:
-            t = Table(job_table_data, colWidths=[80,60,60,80,50,50,60])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+        
+        job_table = Table(job_detail_data, colWidths=[100, 50, 50, 50, 50, 50, 50, 50, 50, 60])
+        job_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23, 0.44, 0.96)),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        elements.append(job_table)
+        
+        # Batch-wise Analysis
+        if batch_stats:
+            elements.append(PageBreak())
+            elements.append(Paragraph("Batch-wise Performance Analysis", heading_style))
+            
+            batch_detail_data = [['Batch Name', 'Trainees', 'Mapped', 'Mapping Rate', 'Jobs', 'Matches', 'Selected', 'Rejection Rate']]
+            for batch_stat in batch_stats:
+                batch_detail_data.append([
+                    batch_stat['name'], str(batch_stat['trainee_count']), str(batch_stat['mapped_count']),
+                    f"{batch_stat['mapping_rate']:.1f}%", str(batch_stat['job_count']), str(batch_stat['total_matches']),
+                    str(batch_stat['selected_count']), f"{batch_stat['rejection_rate']:.1f}%"
+                ])
+            
+            batch_table = Table(batch_detail_data, colWidths=[100, 60, 60, 60, 50, 60, 60, 70])
+            batch_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23, 0.44, 0.96)),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
             ]))
-            elements.append(t)
-
-        # Trainee Status table
-        elements.append(PageBreak())
-        elements.append(Paragraph("Trainee Status", heading_style))
-        trainee_data = [['Name', 'Emp ID', 'Location', 'Batch', 'Mapped', 'Project']]
-        for t in trainees[:30]:
-            trainee_data.append([
-                t.userInfo.name if t.userInfo else '',
-                t.userInfo.employeeId if t.userInfo else '',
-                t.userInfo.location if t.userInfo else '',
-                t.batch_name or '',
-                'Yes' if (t.userInfo and t.userInfo.isMapped) else 'No',
-                t.userInfo.projectName if t.userInfo else ''
-            ])
-        if len(trainee_data) > 1:
-            t = Table(trainee_data, colWidths=[80,60,60,50,50,100])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23,0.44,0.96)),
+            elements.append(batch_table)
+        
+        # Skill Gap Analysis Table
+        if top_skill_gaps:
+            elements.append(PageBreak())
+            elements.append(Paragraph("Critical Skill Gaps (Urgent Hiring Needs)", heading_style))
+            
+            skill_gap_data = [['Skill', 'Jobs Requiring', 'Available Trainees', 'Gap', 'Gap Percentage', 'Priority']]
+            for gap in top_skill_gaps[:10]:
+                priority = 'Critical' if gap['gap_percentage'] > 70 else 'High' if gap['gap_percentage'] > 50 else 'Medium' if gap['gap_percentage'] > 30 else 'Low'
+                skill_gap_data.append([
+                    gap['skill'], str(gap['demand']), str(gap['supply']), str(gap['gap']), 
+                    f"{gap['gap_percentage']:.1f}%", priority
+                ])
+            
+            skill_table = Table(skill_gap_data, colWidths=[120, 80, 80, 60, 70, 70])
+            skill_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23, 0.44, 0.96)),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0,0), (-1,-1), 8),
+                ('FONTSIZE', (0,0), (-1,-1), 9),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
             ]))
-            elements.append(t)
-
+            elements.append(skill_table)
+        
+        # Top Performing Jobs
+        elements.append(PageBreak())
+        elements.append(Paragraph("Top 10 Jobs by Fill Rate", heading_style))
+        
+        top_jobs = sorted(job_stats, key=lambda x: x['fill_rate'], reverse=True)[:10]
+        top_jobs_data = [['Rank', 'Job Title', 'Batch', 'Fill Rate', 'Openings', 'Filled', 'Matches']]
+        for idx, job in enumerate(top_jobs, 1):
+            top_jobs_data.append([
+                str(idx), job['name'][:35], job['batch'], f"{job['fill_rate']:.1f}%",
+                str(job['openings']), str(job['filled']), str(job['total_matches'])
+            ])
+        
+        top_jobs_table = Table(top_jobs_data, colWidths=[40, 150, 60, 60, 50, 50, 60])
+        top_jobs_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.Color(0.23, 0.44, 0.96)),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.grey),
+        ]))
+        elements.append(top_jobs_table)
+        
+        # Recommendations Section
+        elements.append(PageBreak())
+        elements.append(Paragraph("Key Insights & Recommendations", heading_style))
+        
+        recommendations = []
+        
+        if unmapped_trainees > mapped_trainees:
+            recommendations.append(f"• High number of unmapped trainees ({unmapped_trainees}). Focus on matching them with open positions.")
+        
+        if skill_gaps:
+            top_gap = top_skill_gaps[0] if top_skill_gaps else None
+            if top_gap:
+                recommendations.append(f"• Critical skill gap detected for '{top_gap['skill']}' with {top_gap['gap']} unfilled positions. Consider upskilling programs.")
+        
+        if selected_count > 0 and locked_count > 0 and selected_count < locked_count * 0.3:
+            recommendations.append("• Low conversion rate from interview locks to selections. Review interview process.")
+        
+        if avg_match_percentage < 50:
+            recommendations.append("• Low average match percentage. Consider updating job requirements or trainee skill assessments.")
+        
+        for job in job_stats[:3]:
+            if job['remaining'] > 0 and job['total_matches'] > 0:
+                recommendations.append(f"• Job '{job['name']}' has {job['remaining']} openings with {job['total_matches']} matches. Prioritize mapping.")
+        
+        if not recommendations:
+            recommendations.append("• All metrics are looking good! Continue with current strategy.")
+        
+        for rec in recommendations:
+            elements.append(Paragraph(rec, normal_style))
+            elements.append(Spacer(1, 6))
+        
+        # Footer
+        elements.append(Spacer(1, 30))
+        elements.append(Paragraph(f"<i>Report generated by Talent Align HR Analytics System on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</i>", normal_style))
+        
         # Build PDF
         doc.build(elements)
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
-        filename = f'hr_summary_{batch or "all"}.pdf'
+        filename = f'hr_summary_{batch if batch else "all"}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+# Add this to your views.py - Cancel Selection/Rejection endpoint
+class CancelCandidateSelectionView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, lock_id):
+        try:
+            lock = InterviewLock.objects.get(id=lock_id)
+        except InterviewLock.DoesNotExist:
+            return Response({"error": "Lock not found"}, status=404)
+        
+        # Store original status for logging
+        original_status = lock.status
+        
+        # Get the trainee and job
+        trainee = lock.trainee
+        job = lock.job
+        user_info = trainee.userInfo
+        
+        # Check if trainee is mapped to this job
+        is_mapped = (user_info.isMapped and user_info.projectId == str(job.id))
+        
+        # If status was 'selected' and trainee is mapped, restore job openings
+        if lock.status == 'selected' and is_mapped:
+            # Unmap the trainee
+            user_info.isMapped = False
+            user_info.projectId = ''
+            user_info.projectName = ''
+            user_info.save()
+            
+            # Restore job openings
+            job.filled = max(0, job.filled - 1)
+            if job.status == 'filled' or job.status == 'inactive':
+                job.status = 'active'
+            job.save()
+        
+        # Update lock status to 'cancelled'
+        lock.status = 'cancelled'
+        lock.save()
+        
+        # Log activity
+        from django.core.cache import cache
+        activity_key = f"recent_activity_{request.user.id}"
+        activity_list = cache.get(activity_key, [])
+        activity_list.insert(0, {
+            'type': 'Cancelled',
+            'trainee': user_info.name if user_info else 'Unknown',
+            'job': job.project_name,
+            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'original_status': original_status
+        })
+        cache.set(activity_key, activity_list[:20], 3600)
+        
+        return Response({
+            "message": f"Cancelled {original_status} for {user_info.name}",
+            "job_restored": is_mapped and original_status == 'selected',
+            "job_id": job.id,
+            "job_openings_remaining": job.openings - job.filled
+        }, status=200)

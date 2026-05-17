@@ -144,9 +144,21 @@ class ProfileRecordSerializer(serializers.ModelSerializer):
 
 # ---------- Job Serializers ----------
 class JobSerializer(serializers.ModelSerializer):
+    department = serializers.CharField(source='bg', read_only=True)
+    techSkills = serializers.SerializerMethodField()
+    softSkills = serializers.SerializerMethodField()
+
     class Meta:
         model = Job
         fields = '__all__'
+
+    def get_techSkills(self, obj):
+        skills = getattr(obj, 'skills', '') or ''
+        return [skill.strip() for skill in skills.split(',') if skill.strip()]
+
+    def get_softSkills(self, obj):
+        # No soft skills stored on the current Job model; return empty list for frontend compatibility.
+        return []
 
 
 # ---------- Match Serializers ----------

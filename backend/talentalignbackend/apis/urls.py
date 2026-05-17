@@ -3,6 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
+    CancelCandidateSelectionView,
     LoginView,
     AddUserView,
     UploadAddExcelView,
@@ -146,4 +147,7 @@ urlpatterns = [
     # Manager Chat
     path('manager/chat-context/', ManagerChatContextView.as_view(), name='manager-chat-context'),
     path('reports/hr-summary-pdf/', HRSummaryPDFView.as_view(), name='hr-summary-pdf'),
+
+    # In urls.py add:
+    path('api/cancel-selection/<int:lock_id>/', CancelCandidateSelectionView.as_view(), name='cancel-selection'),
 ]
