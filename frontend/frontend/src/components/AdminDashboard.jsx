@@ -3,7 +3,7 @@ import api from "../api/axios";
 import "./styles/AdminDashboard.css";
 import { Toaster, toast } from "sonner";
 import Sidebar from "./Sidebar";
-import { Cloud } from "lucide-react";
+import { Cloud, BookOpen, Edit, Trash2 } from "lucide-react";
 
 import {
   Users,
@@ -16,7 +16,7 @@ import {
   FileSpreadsheet,
   FileText,
   KeyRound,
-  Trash2,
+  Trash2 as TrashIcon,
   CheckCircle2,
   PauseCircle,
   PlayCircle,
@@ -93,6 +93,13 @@ function AdminDashboard({ userData, onLogout, onBack }) {
   const [decoLoading, setDecoLoading] = useState(false);
   const [decoMessage, setDecoMessage] = useState("");
 
+  // --- Courses State ---
+  const [courses, setCourses] = useState([]);
+  const [showCourseModal, setShowCourseModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [newCourse, setNewCourse] = useState({ name: '', description: '', owners: [] });
+  const [availableOwners, setAvailableOwners] = useState([]);
+
   const rolesDef = [
     { value: "trainee", label: "Trainee", icon: <GraduationCap size={16} /> },
     { value: "ta", label: "TL", icon: <UserCog size={16} /> },
@@ -100,6 +107,7 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     { value: "hr", label: "HR", icon: <UserRound size={16} /> },
     { value: "admin", label: "Admin", icon: <Crown size={16} /> },
     { value: "interviewer", label: "Interviewer", icon: <UserRound size={16} /> },
+    { value: "course_owner", label: "Course Owner", icon: <BookOpen size={16} /> },
   ];
 
   // --- Activity Log ---
@@ -119,6 +127,15 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     fetchUsers(true);
   }, []);
 
+  // Load courses and course owners when the courses tab is active
+  useEffect(() => {
+    if (activeTab === 'courses') {
+      fetchCourses();
+      fetchAvailableOwners();
+    }
+  }, [activeTab]);
+
+  // --- API Calls ---
   const fetchUsers = async (isInitialLoad = false) => {
     try {
       setLoading(true);
@@ -130,7 +147,6 @@ function AdminDashboard({ userData, onLogout, onBack }) {
       }));
       setUsers(usersWithFormattedData);
 
-      // Seed activities on first load
       if (isInitialLoad && usersWithFormattedData.length > 0) {
         const sortedUsers = [...usersWithFormattedData].sort(
           (a, b) => new Date(b.date_joined || 0) - new Date(a.date_joined || 0)
@@ -148,6 +164,24 @@ function AdminDashboard({ userData, onLogout, onBack }) {
       toast.error("Failed to fetch users");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCourses = async () => {
+    try {
+      const res = await api.get('/courses/');
+      setCourses(res.data);
+    } catch (err) {
+      toast.error('Failed to load courses');
+    }
+  };
+
+  const fetchAvailableOwners = async () => {
+    try {
+      const res = await api.get('/users/?role=course_owner');
+      setAvailableOwners(res.data);
+    } catch (err) {
+      toast.error('Failed to load course owners');
     }
   };
 
@@ -204,7 +238,6 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     if (!newUser.username.trim()) newErrors.username = "Username is required";
     if (!newUser.email.trim()) newErrors.email = "Email is required";
 
-    // Password optional on Add. Validate only if provided.
     if (!editingUser) {
       if (newUser.password) {
         const pwdErrors = validatePassword(newUser.password).errors;
@@ -230,7 +263,7 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // --- Handlers ---
+  // --- User Handlers ---
   const handleAddUser = async () => {
     if (!validateForm()) return;
     try {
@@ -244,7 +277,6 @@ function AdminDashboard({ userData, onLogout, onBack }) {
         logAction("User Updated", newUser.username);
       } else {
         const passwordToSend = newUser.password || DEFAULT_PASSWORD;
-
         await api.post("/users/add/", {
           username: newUser.username,
           email: newUser.email,
@@ -331,13 +363,8 @@ function AdminDashboard({ userData, onLogout, onBack }) {
       await api.patch(`/users/${userId}/toggle-status/`, {
         is_active: newStatus,
       });
-      toast.info(
-        `User ${newStatus ? "activated" : "deactivated"} successfully!`
-      );
-      logAction(
-        newStatus ? "User Activated" : "User Deactivated",
-        user.username
-      );
+      toast.info(`User ${newStatus ? "activated" : "deactivated"} successfully!`);
+      logAction(newStatus ? "User Activated" : "User Deactivated", user.username);
       fetchUsers();
     } catch (err) {
       toast.error("Failed to update user status");
@@ -452,6 +479,59 @@ function AdminDashboard({ userData, onLogout, onBack }) {
       toast.error(err.response?.data?.error || "Fetch failed");
     } finally {
       setDecoLoading(false);
+    }
+  };
+
+  // --- Courses Handlers ---
+  const handleAddCourse = () => {
+    setEditingCourse(null);
+    setNewCourse({ name: '', description: '', owners: [] });
+    setShowCourseModal(true);
+  };
+
+  const handleEditCourse = (course) => {
+    setEditingCourse(course);
+    setNewCourse({
+      name: course.name,
+      description: course.description,
+      owners: course.owners, // array of user IDs
+    });
+    setShowCourseModal(true);
+  };
+
+  const handleDeleteCourse = async (courseId) => {
+    if (!window.confirm('Delete this course?')) return;
+    try {
+      await api.delete(`/courses/${courseId}/`);
+      toast.success('Course deleted');
+      fetchCourses();
+    } catch (err) {
+      toast.error('Delete failed');
+    }
+  };
+
+  const handleSaveCourse = async () => {
+    if (!newCourse.name.trim()) {
+      toast.error('Course name required');
+      return;
+    }
+    const payload = {
+      name: newCourse.name,
+      description: newCourse.description,
+      owners: newCourse.owners,
+    };
+    try {
+      if (editingCourse) {
+        await api.put(`/courses/${editingCourse.id}/`, payload);
+        toast.success('Course updated');
+      } else {
+        await api.post('/courses/', payload);
+        toast.success('Course created');
+      }
+      setShowCourseModal(false);
+      fetchCourses();
+    } catch (err) {
+      toast.error('Save failed');
     }
   };
 
@@ -581,7 +661,7 @@ function AdminDashboard({ userData, onLogout, onBack }) {
                           onClick={() => askDeleteUser(user)}
                           title="Delete user"
                         >
-                          <Trash2 size={16} />
+                          <TrashIcon size={16} />
                         </button>
                       </div>
                     </td>
@@ -680,7 +760,6 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     </div>
   );
 
-  // --- NEW Deco Tab ---
   const renderDecoTab = () => (
     <div className="adm-deco-tab">
       <div className="adm-section-header">
@@ -802,7 +881,114 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     </div>
   );
 
-  // --- Modals ---
+  // --- Courses Tab ---
+  const renderCoursesTab = () => (
+    <div className="adm-users-tab">
+      <div className="adm-section-header">
+        <div className="adm-header-title">
+          <h2><BookOpen size={24} /> Course Management</h2>
+          <p className="adm-subtitle">Manage courses and assign course owners</p>
+        </div>
+        <div className="adm-header-actions">
+          <button className="btn btn-primary btn-cta" onClick={handleAddCourse}>
+            <Plus size={18} /> Add New Course
+          </button>
+        </div>
+      </div>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Course Name</th>
+              <th>Description</th>
+              <th>Owners</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {courses.map(course => (
+              <tr key={course.id}>
+                <td>{course.name}</td>
+                <td>{course.description}</td>
+                <td>
+                  {course.owners?.length > 0
+                    ? course.owners.map(ownerId => {
+                        const user = availableOwners.find(u => u.id === ownerId);
+                        return user ? user.username : ownerId;
+                      }).join(', ')
+                    : 'None'}
+                </td>
+                <td>
+                  <div className="adm-action-buttons">
+                    <button className="btn-icon btn-icon-edit" onClick={() => handleEditCourse(course)} title="Edit"><Edit size={16} /></button>
+                    <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteCourse(course.id)} title="Delete"><Trash2 size={16} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Course Modal */}
+      {showCourseModal && (
+        <div className="modal-overlay" onClick={() => setShowCourseModal(false)}>
+          <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingCourse ? 'Edit Course' : 'Create Course'}</h3>
+              <button className="modal-close" onClick={() => setShowCourseModal(false)}><X /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Course Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newCourse.name}
+                  onChange={e => setNewCourse({ ...newCourse, name: e.target.value })}
+                  placeholder="e.g., Java Full Stack"
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-control"
+                  value={newCourse.description}
+                  onChange={e => setNewCourse({ ...newCourse, description: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Course Owners</label>
+                <select
+                  multiple
+                  className="form-control"
+                  value={newCourse.owners}
+                  onChange={e => setNewCourse({
+                    ...newCourse,
+                    owners: Array.from(e.target.selectedOptions, option => parseInt(option.value))
+                  })}
+                  size={5}
+                >
+                  {availableOwners.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.username} ({user.email})
+                    </option>
+                  ))}
+                </select>
+                <small>Hold Ctrl/Cmd to select multiple owners</small>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowCourseModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSaveCourse}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // --- Modals (unchanged) ---
   const renderAddUserModal = () => (
     <div className="modal-overlay" onClick={() => setShowAddUserModal(false)}>
       <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
@@ -992,7 +1178,8 @@ function AdminDashboard({ userData, onLogout, onBack }) {
   const sidebarItems = [
     { id: "users", label: "User Management", icon: <Users size={18} /> },
     { id: "statistics", label: "Statistics", icon: <BarChart3 size={18} /> },
-    { id: "deco", label: "Deco Integration", icon: <Cloud size={18} /> }, // NEW
+    { id: "courses", label: "Courses", icon: <BookOpen size={18} /> },
+    { id: "deco", label: "Deco Integration", icon: <Cloud size={18} /> },
   ];
 
   return (
@@ -1013,6 +1200,7 @@ function AdminDashboard({ userData, onLogout, onBack }) {
           <div className="tab-panel">
             {activeTab === "users" && renderUsersTab()}
             {activeTab === "statistics" && renderStatisticsTab()}
+            {activeTab === "courses" && renderCoursesTab()}
             {activeTab === "deco" && renderDecoTab()}
           </div>
         </div>

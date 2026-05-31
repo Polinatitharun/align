@@ -4,6 +4,15 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     CancelCandidateSelectionView,
+    CourseListCreateView,
+    CourseDetailView,
+    NotificationListView,
+    AuditLogListView,
+    DashboardAnalyticsView,
+    SystemBackupView,
+    SystemRestoreView,
+    BulkCreateInterviewersView,
+    InterviewFeedbackListView,
     LoginView,
     AddUserView,
     UploadAddExcelView,
@@ -51,7 +60,6 @@ from .views import (
     ManagerChatContextView,
     ManagerChatSessionViewSet,
     TraineeSelfAssessmentView,
-    # New bulk views
     DownloadInterviewLockTemplateView,
     BulkInterviewLockView,
     DownloadStatusUpdateTemplateView,
@@ -60,6 +68,11 @@ from .views import (
     BulkMappingView,
     HRSummaryReportView,
     HRSummaryPDFView,
+    # New Course Owner workflow views
+    NotifyCourseOwnerView,
+    CourseOwnerJobListView,
+    CourseOwnerJobRecommendationsView,
+    HRJobRecommendationsView,
 )
 
 router = DefaultRouter()
@@ -72,6 +85,13 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # User Management
+    path('courses/', CourseListCreateView.as_view(), name='course-list-create'),
+    path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
+    path('notifications/', NotificationListView.as_view(), name='notifications'),
+    path('audit-logs/', AuditLogListView.as_view(), name='audit-logs'),
+    path('dashboard/analytics/', DashboardAnalyticsView.as_view(), name='dashboard-analytics'),
+    path('backup/', SystemBackupView.as_view(), name='system-backup'),
+    path('restore/', SystemRestoreView.as_view(), name='system-restore'),
     path('users/add/', AddUserView.as_view(), name='add-user'),
     path('users/upload-excel/', UploadAddExcelView.as_view(), name='upload-users-excel'),
     path('users/', UserListView.as_view(), name='list-users'),
@@ -83,6 +103,7 @@ urlpatterns = [
     path('users/<int:user_id>/toggle-status/', ToggleUserStatusView.as_view(), name='toggle-user-status'),
     path('users/<int:user_id>/reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('users/create-interviewer/', CreateInterviewerView.as_view(), name='create-interviewer'),
+    path('users/bulk-create-interviewers/', BulkCreateInterviewersView.as_view(), name='bulk-create-interviewers'),
 
     # Jobs
     path('jobs/', JobListView.as_view(), name='job-list'),
@@ -122,6 +143,7 @@ urlpatterns = [
 
     # Interview Locks (router included)
     path('', include(router.urls)),
+    path('interview-feedback/', InterviewFeedbackListView.as_view(), name='interview-feedback-list'),
 
     # Reports
     path('reports/mapped/', MappedTraineesReportView.as_view(), name='report-mapped'),
@@ -148,6 +170,12 @@ urlpatterns = [
     path('manager/chat-context/', ManagerChatContextView.as_view(), name='manager-chat-context'),
     path('reports/hr-summary-pdf/', HRSummaryPDFView.as_view(), name='hr-summary-pdf'),
 
-    # In urls.py add:
+    # Cancel selection
     path('api/cancel-selection/<int:lock_id>/', CancelCandidateSelectionView.as_view(), name='cancel-selection'),
+
+    # --- NEW Course Owner workflow endpoints ---
+    path('jobs/<int:job_id>/notify-owners/', NotifyCourseOwnerView.as_view(), name='notify-owners'),
+    path('course-owner/jobs/', CourseOwnerJobListView.as_view(), name='course-owner-jobs'),
+    path('course-owner/jobs/<int:job_id>/recommendations/', CourseOwnerJobRecommendationsView.as_view(), name='course-owner-job-recommendations'),
+    path('hr/recommendations/', HRJobRecommendationsView.as_view(), name='hr-recommendations'),
 ]

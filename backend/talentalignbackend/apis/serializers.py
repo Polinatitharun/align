@@ -1,9 +1,9 @@
-# apis/serializers.py
 from rest_framework import serializers
 from .models import (
-    User, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
+    User, Course, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
     Recommendation, InterviewLock, InterviewFeedback,
-    ManagerChatSession, ManagerChatMessage, TraineeSelfAssessment
+    ManagerChatSession, ManagerChatMessage, TraineeSelfAssessment,
+    Notification, AuditLog
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
@@ -34,11 +34,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 # ---------- User Serializers ----------
+class CourseSerializer(serializers.ModelSerializer):
+    owners = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role='course_owner'), many=True)
+
+    class Meta:
+        model = Course
+        fields = '__all__'
+
+
 class UserSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source='course.name', read_only=True)
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active',
-                  'access_start', 'access_end']
+                  'course', 'course_name', 'access_start', 'access_end']
 
 
 class AddUserSerializer(serializers.ModelSerializer):
@@ -46,7 +56,7 @@ class AddUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'first_name', 'last_name', 'role',
-                  'access_start', 'access_end']
+                  'course', 'access_start', 'access_end']
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
         return user
@@ -56,7 +66,7 @@ class EditUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['email', 'first_name', 'last_name', 'role', 'is_active',
-                  'access_start', 'access_end']
+                  'course', 'access_start', 'access_end']
 
 
 class ResetPasswordSerializer(serializers.Serializer):
@@ -77,6 +87,8 @@ class WeaknessSerializer(serializers.ModelSerializer):
 
 
 class UserInfoSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source='course.name', read_only=True)
+
     class Meta:
         model = UserInfo
         fields = '__all__'
@@ -147,6 +159,9 @@ class JobSerializer(serializers.ModelSerializer):
     department = serializers.CharField(source='bg', read_only=True)
     techSkills = serializers.SerializerMethodField()
     softSkills = serializers.SerializerMethodField()
+    remaining_count = serializers.IntegerField(read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    course_id = serializers.IntegerField(source='course.id', read_only=True)
 
     class Meta:
         model = Job
@@ -157,7 +172,6 @@ class JobSerializer(serializers.ModelSerializer):
         return [skill.strip() for skill in skills.split(',') if skill.strip()]
 
     def get_softSkills(self, obj):
-        # No soft skills stored on the current Job model; return empty list for frontend compatibility.
         return []
 
 
@@ -168,11 +182,42 @@ class MatchListSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = '__all__'
+
+
 # ---------- Recommendation Serializers ----------
 class RecommendationSerializer(serializers.ModelSerializer):
+    trainee_name = serializers.SerializerMethodField()
+    job_title = serializers.SerializerMethodField()
+
     class Meta:
         model = Recommendation
         fields = '__all__'
+
+    def get_trainee_name(self, obj):
+        try:
+            user_info = UserInfo.objects.get(userId=obj.trainee_id)
+            return user_info.name
+        except UserInfo.DoesNotExist:
+            return None
+
+    def get_job_title(self, obj):
+        try:
+            job = Job.objects.get(id=obj.job_id)
+            return job.project_name
+        except Job.DoesNotExist:
+            return None
 
 
 # ---------- Interview Lock Serializers ----------
@@ -206,9 +251,20 @@ class InterviewLockCreateSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
+class InterviewUnlockSerializer(serializers.Serializer):
+    assigned_to = serializers.IntegerField(required=False, allow_null=True)
+    job_id = serializers.IntegerField(required=False, allow_null=True)
+    interview_datetime = serializers.DateTimeField(required=False)
+    comments = serializers.CharField(required=False, allow_blank=True)
+    reopen = serializers.BooleanField(default=True)
+
+
 # ---------- Interview Feedback Serializers ----------
 class InterviewFeedbackSerializer(serializers.ModelSerializer):
     interviewer_name = serializers.CharField(source='interviewer.username', read_only=True)
+    trainee_name = serializers.CharField(source='lock.trainee.userInfo.name', read_only=True)
+    job_title = serializers.CharField(source='lock.job.project_name', read_only=True)
+    interview_date = serializers.DateTimeField(source='lock.interview_datetime', read_only=True)
 
     class Meta:
         model = InterviewFeedback

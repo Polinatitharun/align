@@ -1,8 +1,29 @@
-# apis/models.py
 import uuid
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator
+
+
+class Course(models.Model):
+    name = models.CharField(max_length=150, unique=True)
+    description = models.TextField(blank=True)
+    owners = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        limit_choices_to={'role': 'course_owner'},
+        related_name='owned_courses',
+        blank=True
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -11,9 +32,11 @@ class User(AbstractUser):
         ('manager', 'Manager'),
         ('hr', 'HR'),
         ('admin', 'Admin'),
-        ('interviewer','Interviewer')
+        ('interviewer','Interviewer'),
+        ('course_owner', 'Course Owner'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     access_start = models.DateTimeField(null=True, blank=True)
     access_end = models.DateTimeField(null=True, blank=True)
 
@@ -25,12 +48,18 @@ class Job(models.Model):
         ('filled', 'Filled'),
         ('expired', 'Expired')
     ]
+    RECOMMENDATION_STATUS_CHOICES = [
+        ('not_requested', 'Not Requested'),
+        ('pending', 'Pending Review'),
+        ('completed', 'Review Completed'),
+    ]
     # Required fields
     project_name = models.CharField(max_length=200, help_text="Project Name")
     location = models.CharField(max_length=500, help_text="Location(s) - comma separated for multiple")
     demand_id = models.CharField(max_length=100, help_text="Demand ID")
     skills = models.CharField(max_length=1000, help_text="Skills - comma separated")
     openings = models.IntegerField(default=1, help_text="Number of openings")
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='jobs')
 
     # Optional fields
     bg = models.CharField(max_length=50, null=True, blank=True, help_text="BG")
@@ -45,6 +74,9 @@ class Job(models.Model):
     filled = models.IntegerField(default=0)
     matches = models.IntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    recommendation_status = models.CharField(
+        max_length=20, choices=RECOMMENDATION_STATUS_CHOICES, default='not_requested'
+    )
     postedDate = models.DateField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_jobs')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -64,7 +96,20 @@ class Job(models.Model):
 
     @property
     def available_openings(self):
-        return self.openings - self.filled
+        return max(0, self.openings - self.filled)
+
+    @property
+    def remaining_count(self):
+        return self.available_openings
+
+    def sync_opening_status(self, save=True):
+        self.filled = max(0, min(self.filled or 0, self.openings or 0))
+        if self.openings and self.filled >= self.openings:
+            self.status = 'filled'
+        elif self.status == 'filled' and self.filled < self.openings:
+            self.status = 'active'
+        if save:
+            self.save(update_fields=['filled', 'status', 'updated_at'])
 
 
 class UserInfo(models.Model):
@@ -78,6 +123,7 @@ class UserInfo(models.Model):
     projectId = models.CharField(max_length=255, null=True, blank=True, default=None)
     projectName = models.CharField(max_length=255, null=True, blank=True, default=None)
     email = models.EmailField(null=True, blank=True)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='trainee_infos')
 
 
 class ProfileRecord(models.Model):
@@ -151,6 +197,10 @@ class Match(models.Model):
     bucket = models.CharField(max_length=50, choices=BUCKET_CHOICES, default='NO_MATCH')
     distance = models.FloatField(default=9999.0)
     matched_skills = models.JSONField(default=list)
+    experience_percentage = models.FloatField(default=0.0)
+    availability_percentage = models.FloatField(default=100.0)
+    is_recommended = models.BooleanField(default=False)
+    rank = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     matched_location = models.CharField(max_length=255, null=True, blank=True)
 
@@ -167,6 +217,10 @@ class InterviewLock(models.Model):
         ('locked', 'Locked for Interview'),
         ('selected', 'Selected'),
         ('rejected', 'Rejected'),
+        ('mapped', 'Mapped'),
+        ('unmapped', 'Unmapped'),
+        ('offered', 'Offered'),
+        ('joined', 'Joined'),
         ('cancelled', 'Cancelled'),
     ]
     trainee = models.ForeignKey('ProfileRecord', on_delete=models.CASCADE, related_name='interview_locks')
@@ -227,3 +281,48 @@ class TraineeSelfAssessment(models.Model):
     theoretical_percentage = models.PositiveSmallIntegerField(default=50)
     question_list = models.JSONField(default=list)
     submitted_at = models.DateTimeField(auto_now_add=True)
+
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('new_jd', 'New JD Created'),
+        ('matches_found', 'Matching Candidates Found'),
+        ('candidate_selected', 'Candidate Selected'),
+        ('candidate_rejected', 'Candidate Rejected'),
+        ('opening_filled', 'Opening Filled'),
+        ('interview_scheduled', 'Interview Scheduled'),
+        ('feedback_submitted', 'Interview Feedback Submitted'),
+        ('backup_restore', 'Backup/Restore'),
+        ('recommendation_requested', 'Recommendation Requested'),
+    ]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=40, choices=TYPE_CHOICES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    payload = models.JSONField(default=dict, blank=True)
+    is_read = models.BooleanField(default=False)
+    email_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.recipient} - {self.title}"
+
+
+class AuditLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    action = models.CharField(max_length=120)
+    entity_type = models.CharField(max_length=80, blank=True)
+    entity_id = models.CharField(max_length=80, blank=True)
+    previous_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.action} at {self.timestamp}"

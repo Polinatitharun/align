@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.db import transaction
 from django.core.cache import cache
 import numpy as np
-from .models import Job, ProfileRecord, Match
+from .models import Job, ProfileRecord, Match, Notification
 
 # ---------- LLM Setup (for views that use it) ----------
 try:
@@ -315,11 +315,14 @@ def process_trainee(args):
                     best_location = loc
                     best_location_percentage = loc_perc
 
-    # Calculate total percentage (weighted average)
-    if skills_perc >= 0 and best_location_percentage >= 0:
-        total_perc = (skills_perc + best_location_percentage) / 2
-    else:
-        total_perc = max(skills_perc, best_location_percentage)
+    experience_perc = float(min(max(trainee.dpi or 0, 0), 100)) if getattr(trainee, 'dpi', None) is not None else 50.0
+    availability_perc = 0.0 if trainee.userInfo and trainee.userInfo.isMapped else 100.0
+    total_perc = (
+        (skills_perc * 0.60) +
+        (best_location_percentage * 0.20) +
+        (experience_perc * 0.10) +
+        (availability_perc * 0.10)
+    )
 
     # Bucket categorization
     if skills_perc >= 80 and best_location_percentage >= 80:
@@ -338,6 +341,8 @@ def process_trainee(args):
         'skills_percentage': round(skills_perc, 2),
         'matched_skills': list(matched_skills) if matched_skills else [],
         'location_percentage': round(best_location_percentage, 2),
+        'experience_percentage': round(experience_perc, 2),
+        'availability_percentage': round(availability_perc, 2),
         'total_percentage': round(total_perc, 2),
         'bucket': bucket,
         'distance': round(best_distance, 2),
@@ -364,9 +369,7 @@ def run_matching_logic(job_id=None):
     # Test embedding service before starting
     test_embedding = get_embedding("test")
     if test_embedding is None:
-        logger.error("Embedding service is not responding. Please ensure your local embedding service is running and reachable.")
-        logger.error(f"Expected URL: {EMBEDDING_SERVICE_URL}, model: {EMBEDDING_MODEL}")
-        return False
+        logger.warning("Embedding service is not responding. Falling back to exact skill matching.")
     else:
         logger.info(f"✓ Embedding service active (vector dimension: {len(test_embedding)})")
 
@@ -374,7 +377,10 @@ def run_matching_logic(job_id=None):
         logger.info(f"Processing job: {job.project_name} (Batch: {job.batch_name or 'None'})")
 
         # Filter trainees by batch
-        trainees = ProfileRecord.objects.select_related('userInfo').prefetch_related('strengths')
+        trainees = ProfileRecord.objects.select_related('userInfo', 'userInfo__course').prefetch_related('strengths')
+        if job.course_id:
+            trainees = trainees.filter(userInfo__course_id=job.course_id)
+            logger.info(f"  Filtered to course '{job.course.name}': {trainees.count()} trainees")
         if job.batch_name:
             trainees = trainees.filter(batch_name=job.batch_name)
             logger.info(f"  Filtered to batch '{job.batch_name}': {trainees.count()} trainees")
@@ -402,8 +408,8 @@ def run_matching_logic(job_id=None):
                 logger.warning(f"    Failed to get embedding for skill: {skill}")
         
         if not job_embeddings:
-            logger.error(f"  No valid embeddings for job skills. Skipping job.")
-            continue
+            job_embeddings = {skill: None for skill in job_tech_skills}
+            logger.warning(f"  No valid embeddings for job skills. Using exact skill fallback.")
 
         # Build argument list for threads
         trainee_args = [(trainee, job_locations, job_embeddings) for trainee in trainees]
@@ -429,7 +435,9 @@ def run_matching_logic(job_id=None):
 
         # Write results sequentially to avoid DB conflicts
         matches_created = 0
-        for res in results:
+        sorted_results = sorted(results, key=lambda item: item['total_percentage'], reverse=True)
+        recommendation_limit = max(0, job.available_openings)
+        for rank, res in enumerate(sorted_results, 1):
             trainee = res['trainee']
             trainee_location = trainee.userInfo.location if trainee.userInfo else ''
             try:
@@ -445,11 +453,15 @@ def run_matching_logic(job_id=None):
                             'job_title': job.project_name,
                             'skills_percentage': res['skills_percentage'],
                             'location_percentage': res['location_percentage'],
+                            'experience_percentage': res['experience_percentage'],
+                            'availability_percentage': res['availability_percentage'],
                             'total_percentage': res['total_percentage'],
                             'bucket': res['bucket'],
                             'distance': res['distance'],
                             'matched_skills': res['matched_skills'] or [],
                             'matched_location': res['matched_location'] or '',
+                            'is_recommended': rank <= recommendation_limit and res['bucket'] != 'NO_MATCH',
+                            'rank': rank,
                         }
                     )
                     if created:
@@ -463,6 +475,20 @@ def run_matching_logic(job_id=None):
         job.matches = Match.objects.filter(job_ref=job).count()
         job.save(update_fields=['matches'])
         logger.info(f"  Job '{job.project_name}' now has {job.matches} total matches.")
+
+        if job.course and job.course.owner:
+            recommended_count = Match.objects.filter(job_ref=job, is_recommended=True).count()
+            if recommended_count:
+                Notification.objects.create(
+                    recipient=job.course.owner,
+                    notification_type='matches_found',
+                    title=f"{job.course.name} JD candidates ready",
+                    message=(
+                        f"{job.course.name} JD has {job.openings} openings. "
+                        f"Top {recommended_count} matching candidates have been identified and are ready for review."
+                    ),
+                    payload={'job_id': job.id, 'course_id': job.course_id, 'recommended_count': recommended_count},
+                )
 
     logger.info("✓ Matching engine finished successfully.")
     return True

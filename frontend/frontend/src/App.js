@@ -10,6 +10,7 @@ import AdminDashboard from './components/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardInterviewer from './components/interviewDashbaord';
 import AssociateDashboard from './components/AssociateDashbaord';
+import CourseOwnerDashboard from './components/CourseOwnerDashboard';
 import './App.css'
 function App() {
   const [userRole, setUserRole] = useState(null);
@@ -54,6 +55,8 @@ function App() {
       return '/admin-dashboard';
     case 'interviewer':
       return '/interviewer-dashboard'
+    case 'course_owner':
+      return '/course-owner-dashboard';
     default:
       return '/';
   }
@@ -130,6 +133,14 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/course-owner-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={['course_owner']} userRole={userRole}>
+                <CourseOwnerDashboard userData={userData} onLogout={handleLogout} />
+              </ProtectedRoute>
+            } 
+          />  
           
           {/* Catch-all route */}
           <Route path="*" element={<Navigate to="/" replace />} />

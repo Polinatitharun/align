@@ -27,6 +27,9 @@ const ProtectedRoute = ({ children, allowedRoles, userRole }) => {
         return <Navigate to="/admin-dashboard" replace />;
       case 'interviewer':
         return <Navigate to="/interviewer-dashboard" replace />;
+      case 'course_owner':
+        return <Navigate to="/course-owner-dashboard" replace />;
+      
       default:
         return <Navigate to="/login" replace />;
     }
