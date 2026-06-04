@@ -245,7 +245,10 @@ function DashboardHR({ userData, onLogout }) {
 
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
-  const getBatchParam = () => (selectedBatch ? `?batch=${selectedBatch}` : '');
+  const getBatchParam = () => (selectedBatch ? `?batch=${encodeURIComponent(selectedBatch)}` : '');
+  const getRemainingOpenings = (job) => Math.max(0, Number(job?.openings || 0) - Number(job?.filled || 0));
+  const getMatchTraineeUserId = (match) => String(match?.trainee_id || '');
+  const findTraineeByUserId = (userId) => allTrainees.find((t) => String(t.userId) === String(userId));
 
   const normalizeMatchedSkills = (skills) => {
     if (Array.isArray(skills)) return skills;
@@ -431,13 +434,13 @@ function DashboardHR({ userData, onLogout }) {
   // Update job vacancies after mapping
   const updateJobVacancies = async (job) => {
     try {
-      const newFilled = (job.filled || 0) + 1;
+      const newFilled = Math.min(Number(job.openings || 0), Number(job.filled || 0) + 1);
       const updated = { ...job, filled: newFilled };
       await jobAPI.updateJob(job.id, updated);
       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
       if (selectedJob?.id === job.id) setSelectedJob(updated);
       if (selectedJobForSearch?.id === job.id) setSelectedJobForSearch(updated);
-      if ((updated.openings || 0) - newFilled <= 0) await checkAndAutoDeactivateJob(updated);
+      if (getRemainingOpenings(updated) <= 0) await checkAndAutoDeactivateJob(updated);
       return updated;
     } catch (error) {
       toast.error('Failed to update job vacancies');
@@ -446,7 +449,7 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const checkAndAutoDeactivateJob = async (job) => {
-    if ((job.openings || 0) - (job.filled || 0) <= 0) {
+    if (getRemainingOpenings(job) <= 0) {
       const updated = { ...job, status: 'filled' };
       await jobAPI.updateJob(job.id, updated);
       setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
@@ -466,7 +469,7 @@ function DashboardHR({ userData, onLogout }) {
         traineeName = traineeOrMatch.name;
       } else {
         const match = traineeOrMatch;
-        const found = allTrainees.find(t => t.userId === match.trainee_id);
+        const found = findTraineeByUserId(getMatchTraineeUserId(match));
         if (found) {
           userId = found.userId;
           traineeName = found.name;
@@ -481,7 +484,7 @@ function DashboardHR({ userData, onLogout }) {
         return;
       }
 
-      if (job.openings <= 0) {
+      if (getRemainingOpenings(job) <= 0) {
         toast.error('No openings left for this job');
         return;
       }
@@ -506,12 +509,12 @@ function DashboardHR({ userData, onLogout }) {
 
       if (jobMatches) {
         const bucket = Object.keys(jobMatches).find((key) =>
-          Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => m.trainee_id === userId)
+          Array.isArray(jobMatches[key]) && jobMatches[key].some((m) => getMatchTraineeUserId(m) === String(userId))
         );
         if (bucket) {
           setJobMatches((prev) => ({
             ...prev,
-            [bucket]: prev[bucket].filter((m) => m.trainee_id !== userId),
+            [bucket]: prev[bucket].filter((m) => getMatchTraineeUserId(m) !== String(userId)),
             total_matches: prev.total_matches - 1,
           }));
         }
@@ -613,7 +616,7 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const handleViewTraineeProfileFromJob = (match) => {
-    const trainee = allTrainees.find((at) => at.userId === match.trainee_id);
+    const trainee = findTraineeByUserId(getMatchTraineeUserId(match));
     if (trainee) {
       setSelectedTrainee(trainee);
       setShowJobDetailsModal(false);
@@ -893,7 +896,7 @@ function DashboardHR({ userData, onLogout }) {
   const getFilteredSearchData = async () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
-      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      const trainee = findTraineeByUserId(getMatchTraineeUserId(m));
       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
     });
     if (filtered.length === 0) throw new Error('No data');
@@ -1004,8 +1007,23 @@ function DashboardHR({ userData, onLogout }) {
           fb.interview_date ? new Date(fb.interview_date).toLocaleString() : '',
         ]));
         data = rows; filename = 'interview_feedback.xlsx'; sheetName = 'Feedback';
-      }
-
+      } else if (type === 'recommendations') {
+          const rows = [['Trainee Name', 'Employee ID', 'Email', 'Job Title', 'Demand ID', 'Status']];
+          recommendations.forEach(rec => {
+            rows.push([
+              rec.trainee_name || rec.trainee_id,
+              rec.trainee_employee_id || rec.trainee_id,
+              rec.trainee_email || (rec.trainee_employee_id ? `${rec.trainee_employee_id}@tcs.com` : rec.trainee_id),
+              rec.job_title,
+              rec.demand_id || '',
+              rec.status,
+            ]);
+          });
+          data = rows;
+          filename = `recommendations_${selectedRecJobId || 'all'}.xlsx`;
+          sheetName = 'Recommendations';
+        }
+            
       if (!data || data.length === 0) { toast.error('No data to download'); return; }
       const excelBlob = await createPasswordProtectedExcel(data, sheetName, downloadPassword);
       const downloadUrl = window.URL.createObjectURL(excelBlob);
@@ -1113,10 +1131,23 @@ function DashboardHR({ userData, onLogout }) {
   };
 
   const handleJobSelectForSearch = async (jobId) => {
+    if (!jobId) {
+      setSelectedJobForSearch(null);
+      setSearchJobMatches(null);
+      setSelectedSearchTraineeIds([]);
+      setSelectAll(false);
+      return;
+    }
     const job = jobs.find(j => j.id === parseInt(jobId));
-    if (!job) return;
-    if (job.openings <= job.filled || job.status !== 'active') {
+    if (!job) {
+      setSelectedJobForSearch(null);
+      setSearchJobMatches(null);
+      return;
+    }
+    if (getRemainingOpenings(job) <= 0 || job.status !== 'active') {
       toast.error('This job has no openings or is inactive');
+      setSelectedJobForSearch(null);
+      setSearchJobMatches(null);
       return;
     }
     setSelectedJobForSearch(job);
@@ -1161,11 +1192,11 @@ function DashboardHR({ userData, onLogout }) {
   const handleSelectAllSearch = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
-      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      const trainee = findTraineeByUserId(getMatchTraineeUserId(m));
       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch.id.toString());
     });
     if (selectAll) setSelectedSearchTraineeIds([]);
-    else setSelectedSearchTraineeIds(filtered.map(m => String(m.trainee_id)));
+    else setSelectedSearchTraineeIds(filtered.map(m => getMatchTraineeUserId(m)));
     setSelectAll(!selectAll);
   };
 
@@ -1295,6 +1326,7 @@ function DashboardHR({ userData, onLogout }) {
  const executeNotify = async () => {
   try {
     setLoading(true);
+    const requestedCount = Math.max(1, Math.min(50, Number(notifyCount) || 10));
     // Fetch total matches for the job
     const matchRes = await api.get(`/matches/${notifyJobId}/${getBatchParam()}`);
     const totalMatches = matchRes.data.total_matches || 0;
@@ -1306,7 +1338,7 @@ function DashboardHR({ userData, onLogout }) {
       return;
     }
 
-    const countToSend = notifyCount;
+    const countToSend = requestedCount;
     if (countToSend > totalMatches) {
       // Ask for confirmation – browser confirm dialog
       const confirmed = window.confirm(
@@ -1676,7 +1708,6 @@ function DashboardHR({ userData, onLogout }) {
         <div className="stat-card"><div className="stat-icon"><CheckCircle /></div><div className="stat-content"><h3>Mapped</h3><div className="stat-value">{stats.mappedTrainees}</div></div></div>
         <div className="stat-card"><div className="stat-icon"><AlertCircle /></div><div className="stat-content"><h3>Unmapped</h3><div className="stat-value">{stats.unmappedTrainees}</div></div></div>
         <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
       </div>
 
       {lockStats && (
@@ -1931,7 +1962,7 @@ function DashboardHR({ userData, onLogout }) {
                 {!selectedTrainee.isMapped && (
                   <div className="projects-section"><div className="projects-header"><h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3></div>
                     {traineeMatches ? (
-                      <>{traineeMatches.total_matches === 0 ? (<div className="no-matches open-pool-message"><Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p><div className="open-pool-info"><p><strong>Open Pool</strong></p><button className="btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button></div></div>) : (<>{traineeMatches.perfect_match?.length > 0 && (<div className="bucket-section bucket-perfect"><h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3><div className="projects-grid">{traineeMatches.perfect_match.map((match) => { const job = jobs.find(j => j.id === match.job_id); if (job && job.openings <= 0) return null; return (<div key={match.match_id} className="project-match-card"><div className="match-card-header"><div className="project-title"><h4>{match.job_title}</h4><div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div></div><div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div></div><div className="match-details"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span><span><Calendar size={14} /> Posted: {match.posted_date}</span></div><div className="project-actions"><button className="map-to-project-btn" onClick={() => { const job = jobs.find(j => j.id === match.job_id); if (job) { if (job.openings <= 0) { toast.error('No openings'); return; } handleMapToProject(selectedTrainee, job); } }} disabled={job && job.openings <= 0}><Link size={16} /> {job && job.openings <= 0 ? 'Full' : 'Map'}</button></div></div>);})}</div></div>)}</>)}</>
+                      <>{traineeMatches.total_matches === 0 ? (<div className="no-matches open-pool-message"><Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p><div className="open-pool-info"><p><strong>Open Pool</strong></p><button className="btn btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button></div></div>) : (<>{traineeMatches.perfect_match?.length > 0 && (<div className="bucket-section bucket-perfect"><h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3><div className="projects-grid">{traineeMatches.perfect_match.map((match) => { const job = jobs.find(j => j.id === match.job_id); const isFull = job && getRemainingOpenings(job) <= 0; if (isFull) return null; return (<div key={match.match_id} className="project-match-card"><div className="match-card-header"><div className="project-title"><h4>{match.job_title}</h4><div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div></div><div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div></div><div className="match-details"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span><span><Calendar size={14} /> Posted: {match.posted_date}</span></div><div className="project-actions"><button className="map-to-project-btn" onClick={() => { const job = jobs.find(j => j.id === match.job_id); if (job) { if (getRemainingOpenings(job) <= 0) { toast.error('No openings'); return; } handleMapToProject(selectedTrainee, job); } }} disabled={isFull}><Link size={16} /> {isFull ? 'Full' : 'Map'}</button></div></div>);})}</div></div>)}</>)}</>
                     ) : (<div className="no-matches-data"><Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p><button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button></div>)}
                   </div>
                 )}
@@ -2001,7 +2032,7 @@ function DashboardHR({ userData, onLogout }) {
                 <td>
                   <div className="action-buttons">
                     <button className="btn-icon btn-icon-view" onClick={() => {
-                      const trainee = allTrainees.find(t => t.userId === c.trainee_id);
+                      const trainee = findTraineeByUserId(c.trainee_id);
                       if (trainee) handleViewTraineeProfile(trainee);
                     }} title="View Profile">
                       <User size={16} />
@@ -2012,7 +2043,7 @@ function DashboardHR({ userData, onLogout }) {
                         if (c.lock_id) {
                           handleCancelSelected(c.lock_id);
                         } else if (c.source === 'Direct') {
-                          const trainee = allTrainees.find(t => t.userId === c.trainee_id);
+                          const trainee = findTraineeByUserId(c.trainee_id);
                           if (trainee && trainee.isMapped) {
                             handleUnmapFromProject(trainee);
                           }
@@ -2184,10 +2215,10 @@ function DashboardHR({ userData, onLogout }) {
   const renderTalentSearch = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
-      const trainee = allTrainees.find(t => t.userId === m.trainee_id);
+      const trainee = findTraineeByUserId(getMatchTraineeUserId(m));
       return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch?.id?.toString());
     });
-    const jobHasOpenings = selectedJobForSearch && (selectedJobForSearch.openings > selectedJobForSearch.filled);
+    const jobHasOpenings = selectedJobForSearch && getRemainingOpenings(selectedJobForSearch) > 0;
 
     return (
       <div className="talent-search">
@@ -2199,8 +2230,8 @@ function DashboardHR({ userData, onLogout }) {
             <div className="auto-refresh-toggle"><label><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Auto-refresh (30s)</label></div>
           </div>
         </div>
-        <div className="search-job-selector"><label>Select Job:</label><select className="form-control" value={selectedJobForSearch?.id || ''} onChange={(e) => handleJobSelectForSearch(e.target.value)} style={{ maxWidth: '400px' }}><option value="">-- Choose a job --</option>{jobs.filter(job => job.status === 'active' && job.openings > job.filled).map(job => (<option key={job.id} value={job.id}>{job.project_name} (Openings: {job.openings - job.filled})</option>))}</select></div>
-        {selectedJobForSearch && (<><div className="filters-panel"><div className="filter-group"><label>Bucket</label><select className="filter-select" value={searchFilters.bucket} onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}><option value="">All Buckets</option><option value="PERFECT_MATCH">Perfect Match</option><option value="SKILLS_ONLY">Skills Only</option><option value="LOCATION_ONLY">Location Only</option><option value="NEARBY">Proximity</option><option value="NO_MATCH">No Match</option></select></div><div className="filter-group"><label>Location</label><input type="text" className="form-control" placeholder="Filter by location" value={searchFilters.location} onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })} /></div><div className="filter-group"><label>Min Total %</label><input type="number" className="form-control" min="0" max="100" value={searchFilters.minTotal} onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })} /></div><div className="filter-group"><label>Skill Keyword</label><input type="text" className="form-control" placeholder="e.g., React" value={searchFilters.skillKeyword} onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })} /></div><div className="filter-group align-end"><button className="btn-icon" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}><X size={18} /> Clear</button></div></div><div className="table-actions"><div><input type="checkbox" checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(String(m.trainee_id)))} onChange={handleSelectAllSearch} disabled={!jobHasOpenings} /> Select All ({filtered.length} matches){!jobHasOpenings && <span className="warning-text">(No openings left)</span>}</div><div className="action-buttons"><button className="btn-primary" onClick={() => { setSelectedTraineeIds(selectedSearchTraineeIds); setSelectedJob(selectedJobForSearch); fetchInterviewers(); setShowLockModal(true); }} disabled={selectedSearchTraineeIds.length === 0 || !jobHasOpenings}><Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})</button><button className="btn-secondary" onClick={() => requestDownload('search')} disabled={filtered.length === 0}><Download size={18} /> Download Filtered</button></div></div>{jobMatchesLoading ? (<div className="loading-overlay"><div className="loading-spinner"></div></div>) : (<div className="table-container"><table className="data-table"><thead><tr><th>Select</th><th>Trainee Name</th><th>Location</th><th>Bucket</th><th>Matched Location</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th></tr></thead><tbody>{filtered.map((match) => { const disabled = !jobHasOpenings; return (<tr key={match.trainee_id}><td><input type="checkbox" checked={selectedSearchTraineeIds.includes(String(match.trainee_id))} onChange={(e) => { const id = String(match.trainee_id); if (e.target.checked) { setSelectedSearchTraineeIds([...selectedSearchTraineeIds, id]); } else { setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(pid => pid !== id)); setSelectAll(false); } }} disabled={disabled} /></td><td><span className="font-medium">{match.trainee_name}</span></td><td>{match.trainee_location}</td><td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket === 'NEARBY' ? 'Proximity' : match.bucket?.replace('_', ' ')}</span></td><td>{match.matched_location || '—'}</td><td>{match.skills_percentage.toFixed(1)}%</td><td>{match.location_percentage.toFixed(1)}%</td><td><strong>{match.total_percentage.toFixed(1)}%</strong></td><td>{(() => { const skills = normalizeMatchedSkills(match.matched_skills); return skills.length > 0 ? skills.join(', ') : '-'; })()}</td><td><div className="action-buttons"><button className="btn-icon btn-icon-view" onClick={() => handleViewTraineeProfileFromJob(match)} title="View Profile"><User size={16} /></button><button className="btn-icon btn-icon-map" onClick={() => { if (!jobHasOpenings) { toast.error('No openings left'); return; } handleMapToProject(match, selectedJobForSearch); }} disabled={!jobHasOpenings} title="Map to Project"><Link size={16} /></button></div></td></tr>);})}{filtered.length === 0 && (<tr><td colSpan="9" className="no-data">No matches match your filters</td></tr>)}</tbody></table></div>)}</>)}
+        <div className="search-job-selector"><label>Select Job:</label><select className="form-control" value={selectedJobForSearch?.id || ''} onChange={(e) => handleJobSelectForSearch(e.target.value)} style={{ maxWidth: '400px' }}><option value="">-- Choose a job --</option>{jobs.filter(job => job.status === 'active' && getRemainingOpenings(job) > 0).map(job => (<option key={job.id} value={job.id}>{job.project_name} (Openings: {getRemainingOpenings(job)})</option>))}</select></div>
+        {selectedJobForSearch && (<><div className="filters-panel"><div className="filter-group"><label>Bucket</label><select className="filter-select" value={searchFilters.bucket} onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}><option value="">All Buckets</option><option value="PERFECT_MATCH">Perfect Match</option><option value="SKILLS_ONLY">Skills Only</option><option value="LOCATION_ONLY">Location Only</option><option value="NEARBY">Proximity</option><option value="NO_MATCH">No Match</option></select></div><div className="filter-group"><label>Location</label><input type="text" className="form-control" placeholder="Filter by location" value={searchFilters.location} onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })} /></div><div className="filter-group"><label>Min Total %</label><input type="number" className="form-control" min="0" max="100" value={searchFilters.minTotal} onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })} /></div><div className="filter-group"><label>Skill Keyword</label><input type="text" className="form-control" placeholder="e.g., React" value={searchFilters.skillKeyword} onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })} /></div><div className="filter-group align-end"><button className="btn btn-secondary btn-clear-filter" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}><X size={18} /> Clear</button></div></div><div className="table-actions"><div><input type="checkbox" checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(getMatchTraineeUserId(m)))} onChange={handleSelectAllSearch} disabled={!jobHasOpenings} /> Select All ({filtered.length} matches){!jobHasOpenings && <span className="warning-text">(No openings left)</span>}</div><div className="action-buttons"><button className="btn btn-primary" onClick={() => { setSelectedTraineeIds(selectedSearchTraineeIds); setSelectedJob(selectedJobForSearch); fetchInterviewers(); setShowLockModal(true); }} disabled={selectedSearchTraineeIds.length === 0 || !jobHasOpenings}><Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})</button><button className="btn btn-secondary" onClick={() => requestDownload('search')} disabled={filtered.length === 0}><Download size={18} /> Download Filtered</button></div></div>{jobMatchesLoading ? (<div className="loading-overlay"><div className="loading-spinner"></div></div>) : (<div className="table-container"><table className="data-table"><thead><tr><th>Select</th><th>Trainee Name</th><th>Location</th><th>Bucket</th><th>Matched Location</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th></tr></thead><tbody>{filtered.map((match) => { const disabled = !jobHasOpenings; const traineeUserId = getMatchTraineeUserId(match); return (<tr key={traineeUserId || match.id}><td><input type="checkbox" checked={selectedSearchTraineeIds.includes(traineeUserId)} onChange={(e) => { if (e.target.checked) { setSelectedSearchTraineeIds([...selectedSearchTraineeIds, traineeUserId]); } else { setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(pid => pid !== traineeUserId)); setSelectAll(false); } }} disabled={disabled || !traineeUserId} /></td><td><span className="font-medium">{match.trainee_name}</span></td><td>{match.trainee_location}</td><td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket === 'NEARBY' ? 'Proximity' : match.bucket?.replace('_', ' ')}</span></td><td>{match.matched_location || '—'}</td><td>{Number(match.skills_percentage || 0).toFixed(1)}%</td><td>{Number(match.location_percentage || 0).toFixed(1)}%</td><td><strong>{Number(match.total_percentage || 0).toFixed(1)}%</strong></td><td>{(() => { const skills = normalizeMatchedSkills(match.matched_skills); return skills.length > 0 ? skills.join(', ') : '-'; })()}</td><td><div className="action-buttons"><button className="btn-icon btn-icon-view" onClick={() => handleViewTraineeProfileFromJob(match)} title="View Profile"><User size={16} /></button><button className="btn-icon btn-icon-map" onClick={() => { if (!jobHasOpenings) { toast.error('No openings left'); return; } handleMapToProject(match, selectedJobForSearch); }} disabled={!jobHasOpenings || !traineeUserId} title="Map to Project"><Link size={16} /></button></div></td></tr>);})}{filtered.length === 0 && (<tr><td colSpan="10" className="no-data">No matches match your filters</td></tr>)}</tbody></table></div>)}</>)}
       </div>
     );
   };
@@ -2667,84 +2698,88 @@ function DashboardHR({ userData, onLogout }) {
 
   // New renderRecommendations
   const renderRecommendations = () => (
-    <div className="recommendations-tab">
-      <div className="section-header">
-        <div className="header-title">
-          <h2><ThumbsUp size={24} /> Recommendations from Course Owners</h2>
-          <p className="subtitle">Review recommendations before mapping or locking</p>
-        </div>
-        <div className="header-actions">
-          <select
-            className="filter-select"
-            value={selectedRecJobId}
-            onChange={(e) => setSelectedRecJobId(e.target.value)}
-          >
-            <option value="">All Jobs</option>
-            {jobs
-              .filter(j => j.recommendation_status !== 'not_requested')
-              .map(job => <option key={job.id} value={job.id}>{job.project_name}</option>)}
-          </select>
-          <select
-            className="filter-select"
-            value={recStatusFilter}
-            onChange={(e) => setRecStatusFilter(e.target.value)}
-          >
-            <option value="">All Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Accepted">Accepted</option>
-            <option value="Rejected">Rejected</option>
-          </select>
-          <button className="btn btn-secondary" onClick={() => requestDownload('recommendations')} disabled={recommendations.length === 0}>
-            <Download size={18} /> Download
-          </button>
-        </div>
+  <div className="recommendations-tab">
+    <div className="section-header">
+      <div className="header-title">
+        <h2><ThumbsUp size={24} /> Recommendations from Course Owners</h2>
+        <p className="subtitle">Review recommendations before mapping or locking</p>
       </div>
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Trainee Name</th>
-              <th>Employee ID / Email</th>
-              <th>Job Title</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recommendations.map(rec => (
-              <tr key={rec.id}>
-                <td>{rec.trainee_name || rec.trainee_id}</td>
-                <td>{rec.trainee_id}</td>
-                <td>{rec.job_title}</td>
-                <td>
-                  <span className={`status-badge status-${rec.status.toLowerCase()}`}>
-                    {rec.status}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button className="btn-icon btn-icon-view" onClick={() => {
-                      const trainee = allTrainees.find(t => t.userId === rec.trainee_id);
-                      if (trainee) handleViewTraineeProfile(trainee);
-                    }}><Eye size={16} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {recommendations.length === 0 && (
-              <tr><td colSpan="5" className="no-data">No recommendations found</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="header-actions">
+        <select
+          className="filter-select"
+          value={selectedRecJobId}
+          onChange={(e) => setSelectedRecJobId(e.target.value)}
+        >
+          <option value="">All Jobs</option>
+          {jobs
+            .filter(j => j.recommendation_status !== 'not_requested')
+            .map(job => <option key={job.id} value={job.id}>{job.project_name} ({job.demand_id})</option>)}
+        </select>
+        <select
+          className="filter-select"
+          value={recStatusFilter}
+          onChange={(e) => setRecStatusFilter(e.target.value)}
+        >
+          <option value="">All Status</option>
+          <option value="Pending">Pending</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <button className="btn btn-secondary" onClick={() => requestDownload('recommendations')} disabled={recommendations.length === 0}>
+          <Download size={18} /> Download
+        </button>
       </div>
     </div>
-  );
+    <div className="table-container">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Trainee Name</th>
+            <th>Employee ID</th>
+            <th>Email</th>
+            <th>Job Title</th>
+            <th>Demand ID</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recommendations.map(rec => (
+            <tr key={rec.id}>
+              <td>{rec.trainee_name || '—'}</td>
+              <td>{rec.trainee_employee_id || rec.trainee_id}</td>
+              <td>{rec.trainee_email || `${rec.trainee_employee_id || rec.trainee_id}@tcs.com`}</td>
+              <td>{rec.job_title}</td>
+              <td>{rec.demand_id || '—'}</td>
+              <td>
+                <span className={`status-badge status-${rec.status.toLowerCase()}`}>
+                  {rec.status}
+                </span>
+              </td>
+              <td>
+                <div className="action-buttons">
+                  <button className="btn-icon btn-icon-view" onClick={() => {
+                    const trainee = findTraineeByUserId(rec.trainee_id);
+                    if (trainee) handleViewTraineeProfile(trainee);
+                  }}><Eye size={16} /></button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {recommendations.length === 0 && (
+            <tr><td colSpan="7" className="no-data">No recommendations found</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
 
   // Notify Modal
   const renderNotifyModal = () => (
     showNotifyModal && (
       <div className="modal-overlay" onClick={() => setShowNotifyModal(false)}>
-        <div className="modal-content modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="modal-content modal-sm notify-modal" onClick={e => e.stopPropagation()}>
           <div className="modal-header">
             <h3><Megaphone size={20} /> Notify Course Owner</h3>
             <button className="modal-close" onClick={() => setShowNotifyModal(false)}><X /></button>
@@ -2758,7 +2793,7 @@ function DashboardHR({ userData, onLogout }) {
                 min="1"
                 max="50"
                 value={notifyCount}
-                onChange={e => setNotifyCount(parseInt(e.target.value) || 10)}
+                onChange={e => setNotifyCount(Math.max(1, Math.min(50, parseInt(e.target.value, 10) || 10)))}
               />
             </div>
           </div>

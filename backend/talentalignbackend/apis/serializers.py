@@ -200,6 +200,9 @@ class AuditLogSerializer(serializers.ModelSerializer):
 class RecommendationSerializer(serializers.ModelSerializer):
     trainee_name = serializers.SerializerMethodField()
     job_title = serializers.SerializerMethodField()
+    demand_id = serializers.SerializerMethodField()          # ← new
+    trainee_employee_id = serializers.SerializerMethodField()# ← new
+    trainee_email = serializers.SerializerMethodField()      # ← new
 
     class Meta:
         model = Recommendation
@@ -219,6 +222,29 @@ class RecommendationSerializer(serializers.ModelSerializer):
         except Job.DoesNotExist:
             return None
 
+    def get_demand_id(self, obj):
+        try:
+            job = Job.objects.get(id=obj.job_id)
+            return job.demand_id
+        except Job.DoesNotExist:
+            return None
+
+    def get_trainee_employee_id(self, obj):
+        try:
+            user_info = UserInfo.objects.get(userId=obj.trainee_id)
+            return user_info.employeeId
+        except UserInfo.DoesNotExist:
+            return None
+
+    def get_trainee_email(self, obj):
+        try:
+            user_info = UserInfo.objects.get(userId=obj.trainee_id)
+            # Construct email like employeeId@tcs.com if missing, else use what's stored
+            if user_info.employeeId and not user_info.email:
+                return f"{user_info.employeeId}@tcs.com"
+            return user_info.email
+        except UserInfo.DoesNotExist:
+            return None
 
 # ---------- Interview Lock Serializers ----------
 class InterviewLockSerializer(serializers.ModelSerializer):

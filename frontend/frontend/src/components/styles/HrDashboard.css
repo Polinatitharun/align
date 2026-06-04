@@ -1,7 +1,414 @@
 /* ============================================================
    HrDashboard.css — extends dashboard-base.css
    ============================================================ */
+/* ============================================================
+   HrDashboard.css — extends dashboard-base.css
+   ============================================================ */
 @import './dashboard-base.css';
+
+/* ── Prevent background scroll when modals are open ── */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* ── Modal Overlay (fixed, full‑screen backdrop) ── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  overflow: hidden; /* ← prevents background scrolling */
+  padding: 2rem;
+}
+
+/* ── Modal Container ── */
+.modal-content {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-light);
+  overflow: hidden; /* ← prevent inner overflow from creating extra scrollbar */
+  animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalScaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-white);
+  flex-shrink: 0;
+}
+
+.modal-header h2,
+.modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  color: var(--text-dark);
+}
+
+.modal-header h2 { font-size: 1.25rem; font-weight: 800; }
+.modal-header h3 { font-size: 1.05rem; font-weight: 800; }
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.modal-body {
+  padding: 2.5rem 2rem;
+  overflow-y: auto;          /* only vertical scroll if needed */
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.modal-actions,
+.modal-footer {
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  background: var(--bg-light);
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+/* ── Modal Close Button ── */
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin: -0.5rem -0.5rem -0.5rem 0;
+}
+
+.modal-close:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  transform: rotate(90deg);
+}
+
+.modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ── Modal Tabs (e.g., Job Details) ── */
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-light);
+  padding: 0 2rem;
+  background: var(--bg-white);
+  flex-shrink: 0;
+}
+
+.modal-tabs button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: color 0.2s, box-shadow 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.modal-tabs button:hover {
+  color: var(--text-dark);
+}
+
+.modal-tabs button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: var(--bg-light);
+}
+
+/* ── Modal Sizing ── */
+.modal-sm { max-width: 500px; }
+.modal-md { max-width: 700px; }
+.modal-lg { max-width: 1000px; }
+
+/* Specific modals that need more width */
+.job-details-modal { max-width: 1000px; }
+.trainee-profile-modal { max-width: 900px; }
+
+/* ── Trainee Profile Modal Inner Layout ── */
+.trainee-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.mapping-status-section {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid #e2e8f0;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.profile-info h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.profile-role {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+.profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.profile-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.trainee-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.detail-item {
+  background: #f8fafc;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.detail-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.detail-value {
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* ── Talent Search / Filters / Tables ── */
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.table-actions > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+}
+
+.warning-text {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.btn-clear-filter {
+  width: fit-content;
+}
+
+/* ── Recommendations Tab ── */
+.recommendations-tab .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.recommendations-tab .header-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ── Notify Modal ── */
+.notify-modal .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.notify-modal .form-group label {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: block;
+  color: #374151;
+}
+
+.notify-modal .form-control {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1.5px solid #d1d5db;
+  font-size: 1rem;
+}
+
+/* ── Icon Buttons (standard) ── */
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: #f0f4ff;
+  border-color: #93c5fd;
+  color: #2563eb;
+}
+
+/* Hover color variants */
+.btn-icon.btn-icon-view:hover { color: #2563eb; }
+.btn-icon.btn-icon-edit:hover { color: #7c3aed; }
+.btn-icon.btn-icon-delete:hover { color: #ef4444; background: #fef2f2; border-color: #fca5a5; }
+.btn-icon.btn-icon-match:hover { color: #059669; background: #ecfdf5; border-color: #6ee7b7; }
+.btn-icon.btn-icon-notify { color: #f59e0b; border-color: #fcd34d; background: #fffbeb; }
+.btn-icon.btn-icon-notify:hover { background: #fef3c7; border-color: #fbbf24; color: #d97706; }
+.btn-icon.btn-icon-map:hover { color: #2563eb; } /* talent search map button */
+.btn-icon.btn-danger { background: #ef4444; color: white; }
+.btn-icon.btn-danger:hover { background: #dc2626; }
+.btn-icon.btn-warning { background: #f59e0b; color: white; }
+.btn-icon.btn-warning:hover { background: #d97706; }
+.btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Status badges (recommendation status etc.) ── */
+.status-badge {
+  padding: 0.35rem 0.85rem;
+  border-radius: 30px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.status-mapped { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.status-unmapped { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.status-pending { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.status-accepted { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.status-rejected { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* ── Bucket tags (Talent Search) ── */
+.bucket-tag {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.bucket-tag.perfect_match { background: #d1fae5; color: #065f46; }
+.bucket-tag.skills_only { background: #dbeafe; color: #1e40af; }
+.bucket-tag.location_only { background: #fef3c7; color: #92400e; }
+.bucket-tag.nearby { background: #ede9fe; color: #5b21b6; }
+.bucket-tag.no_match { background: #f3f4f6; color: #6b7280; }
+
+/* ── Responsive tweaks ── */
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+  .modal-content {
+    max-height: none;
+    margin: 1rem 0;
+  }
+  .modal-header,
+  .modal-body,
+  .modal-actions,
+  .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .modal-actions,
+  .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modal-actions .btn,
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .form-row,
+  .interviewer-access-range {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ── Job Cards Grid ── */
 .jobs-grid {
@@ -784,10 +1191,13 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   width: 100%;
+  max-height: calc(100vh - 4rem);
   overflow: hidden;
   border: 1px solid var(--border-light);
   padding: 0 !important; /* Resetting any inline padding */
   animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes modalScaleUp {
@@ -803,6 +1213,19 @@
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-white);
 }
+
+.modal-header h2,
+.modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  color: var(--text-dark);
+  line-height: 1.25;
+}
+
+.modal-header h2 { font-size: 1.25rem; font-weight: 800; }
+.modal-header h3 { font-size: 1.05rem; font-weight: 800; }
 
 .modal-title {
   display: flex;
@@ -821,21 +1244,27 @@
   padding: 2.5rem 2rem;
   max-height: 70vh;
   overflow-y: auto;
+  min-height: 0;
 }
 
-.modal-actions {
+.modal-actions,
+.modal-footer {
   padding: 1.5rem 2rem;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 1rem;
   background: var(--bg-light);
   border-top: 1px solid var(--border-light);
+  margin-top: 0;
 }
 
 /* ── Modal Sizing ── */
 .modal-sm { max-width: 500px; }
 .modal-md { max-width: 700px; }
 .modal-lg { max-width: 1000px; }
+.job-details-modal,
+.trainee-profile-modal { max-width: min(1000px, 96vw); }
 
 .required {
   color: #e53e3e;
@@ -874,6 +1303,106 @@
 .modal-close svg {
   width: 20px;
   height: 20px;
+}
+
+.modal-content input[type="file"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-light);
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.notify-modal .modal-body {
+  padding-bottom: 1.25rem;
+}
+
+.notify-modal .form-group {
+  margin-bottom: 0;
+}
+
+.notify-modal input[type="number"] {
+  max-width: 180px;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.table-actions > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.btn-clear-filter {
+  width: fit-content;
+  align-self: end;
+}
+
+.warning-text {
+  color: #dc2626;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-left: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .modal-content {
+    max-height: none;
+    margin: 1rem 0;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-actions,
+  .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .modal-header {
+    gap: 1rem;
+  }
+
+  .modal-actions,
+  .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .modal-actions .btn,
+  .modal-footer .btn,
+  .modal-actions button,
+  .modal-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .search-job-selector {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .interviewer-access-range,
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Dropdown Menu Styling ── */
