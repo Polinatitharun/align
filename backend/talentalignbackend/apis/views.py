@@ -2637,22 +2637,25 @@ class CourseOwnerJobRecommendationsView(APIView):
         data = []
         for rec in recommendations:
             trainee_info = UserInfo.objects.filter(userId=rec.trainee_id).first()
-            # Get match details
             match = Match.objects.filter(job_ref_id=job_id, trainee_ref__userInfo__userId=rec.trainee_id).first()
             data.append({
                 'id': rec.id,
                 'trainee_id': rec.trainee_id,
                 'trainee_name': trainee_info.name if trainee_info else 'Unknown',
                 'trainee_location': trainee_info.location if trainee_info else '',
+                'trainee_employee_id': trainee_info.employeeId if trainee_info else rec.trainee_id,
+                'trainee_email': (f"{trainee_info.employeeId}@tcs.com" if trainee_info and trainee_info.employeeId else trainee_info.email if trainee_info else ''),
                 'status': rec.status,
                 'created_at': rec.created_at,
                 'bucket': match.bucket if match else None,
                 'total_percentage': match.total_percentage if match else None,
                 'skills_percentage': match.skills_percentage if match else None,
                 'location_percentage': match.location_percentage if match else None,
+                'source': 'Owner' if rec.status == 'Accepted' and not Recommendation.objects.filter(
+                    trainee_id=rec.trainee_id, job_id=job_id, status='Pending'
+                ).exclude(id=rec.id).exists() else 'HR'
             })
         return Response(data)
-
     def patch(self, request, job_id):   
         if request.user.role != 'course_owner':
             return Response({"error": "Access denied"}, status=403)
@@ -3281,3 +3284,133 @@ class HRSummaryPDFView(APIView):
         filename = f'hr_summary_{batch if batch else "all"}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+class CourseOwnerAddRecommendationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, job_id):
+        if request.user.role != 'course_owner':
+            return Response({"error": "Access denied"}, status=403)
+
+        job = get_object_or_404(Job, id=job_id)
+        if not request.user.owned_courses.filter(id=job.course_id).exists():
+            return Response({"error": "Not your course's job"}, status=403)
+
+        trainee_ids = request.data.get('trainee_ids', [])
+        if not trainee_ids:
+            return Response({"error": "No trainee IDs provided"}, status=400)
+
+        mapped_user_ids = set(UserInfo.objects.filter(isMapped=True).values_list('userId', flat=True))
+        locked_user_ids = set(InterviewLock.objects.filter(
+            job=job, 
+            status__in=['locked', 'selected']
+        ).values_list('trainee__userInfo__userId', flat=True))
+
+        created = 0
+        skipped = 0
+        errors = []
+
+        for trainee_user_id in trainee_ids:
+            trainee_user_id = str(trainee_user_id)
+
+            # Check if mapped
+            if trainee_user_id in mapped_user_ids:
+                errors.append(f"Trainee {trainee_user_id} is already mapped")
+                continue
+
+            # Check if locked/selected
+            if trainee_user_id in locked_user_ids:
+                errors.append(f"Trainee {trainee_user_id} is locked for interview")
+                continue
+
+            # Check if already recommended
+            existing = Recommendation.objects.filter(trainee_id=trainee_user_id, job_id=job_id).first()
+            if existing:
+                if existing.status == 'Rejected':
+                    # Re-activate rejected recommendation as Accepted
+                    existing.status = 'Accepted'
+                    existing.save()
+                    created += 1
+                elif existing.status == 'Pending':
+                    # Auto-accept pending recommendations
+                    existing.status = 'Accepted'
+                    existing.save()
+                    created += 1
+                else:
+                    # Already Accepted - skip
+                    skipped += 1
+            else:
+                # Create new recommendation
+                Recommendation.objects.create(
+                    trainee_id=trainee_user_id,
+                    job_id=job_id,
+                    status='Accepted'
+                )
+                created += 1
+
+        # Update job recommendation_status
+        if job.recommendation_status == 'not_requested':
+            job.recommendation_status = 'completed'
+            job.save()
+
+        return Response({
+            "message": f"Added {created} recommendations",
+            "created": created,
+            "skipped": skipped,
+            "errors": errors
+        })
+class CourseOwnerAvailableTraineesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        if request.user.role != 'course_owner':
+            return Response({"error": "Access denied"}, status=403)
+
+        job = get_object_or_404(Job, id=job_id)
+        if not request.user.owned_courses.filter(id=job.course_id).exists():
+            return Response({"error": "Not your course's job"}, status=403)
+
+        # Get IDs to EXCLUDE:
+        # 1. Already ACCEPTED or PENDING for this job (not rejected)
+        excluded_rec_ids = set(Recommendation.objects.filter(
+            job_id=job_id,
+            status__in=['Pending', 'Accepted']
+        ).values_list('trainee_id', flat=True))
+
+        # 2. Mapped to ANY project
+        mapped_ids = set(UserInfo.objects.filter(isMapped=True).values_list('userId', flat=True))
+
+        # 3. Locked or Selected for THIS job
+        locked_ids = set(InterviewLock.objects.filter(
+            job=job, 
+            status__in=['locked', 'selected']
+        ).values_list('trainee__userInfo__userId', flat=True))
+
+        excluded_ids = excluded_rec_ids | mapped_ids | locked_ids
+
+        # Get all trainees except excluded
+        all_trainees = UserInfo.objects.exclude(userId__in=excluded_ids).select_related('profile')
+
+        # Apply search filter
+        search = request.query_params.get('search', '').strip().lower()
+        if search:
+            all_trainees = all_trainees.filter(
+                django_models.Q(name__icontains=search) |
+                django_models.Q(employeeId__icontains=search) |
+                django_models.Q(email__icontains=search) |
+                django_models.Q(userId__icontains=search)
+            )
+
+        data = []
+        for trainee in all_trainees[:200]:
+            profile = getattr(trainee, 'profile', None)
+            data.append({
+                'userId': trainee.userId,
+                'name': trainee.name or 'Unknown',
+                'employeeId': trainee.employeeId or trainee.userId,
+                'email': trainee.email or (f"{trainee.employeeId}@tcs.com" if trainee.employeeId else f"{trainee.userId}@tcs.com"),
+                'location': trainee.location or '',
+                'averageScore': trainee.averageScore or 0,
+                'batch_name': profile.batch_name if profile else '',
+            })
+
+        return Response(data)

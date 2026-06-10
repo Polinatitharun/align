@@ -192,3 +192,19 @@
   background: #f9fafb;
   border-radius: 12px;
 }
+
+
+.btn-sm.btn-primary {
+  background: #2563eb;
+  color: white;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-weight: 600;
+  border: none;
+}
+.btn-sm.btn-primary:hover { background: #1d4ed8; }

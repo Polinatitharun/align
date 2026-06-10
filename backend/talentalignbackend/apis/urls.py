@@ -6,6 +6,8 @@ from .views import (
     CancelCandidateSelectionView,
     CourseListCreateView,
     CourseDetailView,
+    CourseOwnerAddRecommendationsView,
+    CourseOwnerAvailableTraineesView,
     NotificationListView,
     AuditLogListView,
     DashboardAnalyticsView,
@@ -178,4 +180,6 @@ urlpatterns = [
     path('course-owner/jobs/', CourseOwnerJobListView.as_view(), name='course-owner-jobs'),
     path('course-owner/jobs/<int:job_id>/recommendations/', CourseOwnerJobRecommendationsView.as_view(), name='course-owner-job-recommendations'),
     path('hr/recommendations/', HRJobRecommendationsView.as_view(), name='hr-recommendations'),
+    path('course-owner/jobs/<int:job_id>/add-recommendations/', CourseOwnerAddRecommendationsView.as_view(), name='course-owner-add-recommendations'),
+    path('course-owner/jobs/<int:job_id>/available-trainees/', CourseOwnerAvailableTraineesView.as_view(), name='course-owner-available-trainees'),
 ]

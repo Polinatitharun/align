@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Toaster, toast } from 'sonner';
 import api from '../api/axios';
 import {
@@ -16,6 +16,9 @@ import {
   Target,
   Mail,
   BarChart2,
+  Plus,
+  Search,
+  X,
 } from 'lucide-react';
 import Sidebar from './Sidebar';
 import './styles/CourseOwnerDashboard.css';
@@ -28,8 +31,13 @@ function CourseOwnerDashboard({ userData, onLogout }) {
   const [selectedRecIds, setSelectedRecIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
-  // Trainee profile modal
   const [viewingTrainee, setViewingTrainee] = useState(null);
+  const [showAddTraineesModal, setShowAddTraineesModal] = useState(false);
+  const [availableTrainees, setAvailableTrainees] = useState([]);
+  const [selectedTraineesToAdd, setSelectedTraineesToAdd] = useState([]);
+  const [addTraineeSearch, setAddTraineeSearch] = useState('');
+  const [addTraineeSelectAll, setAddTraineeSelectAll] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -72,7 +80,6 @@ function CourseOwnerDashboard({ userData, onLogout }) {
     }
   };
 
-  // Approve all pending
   const approveAll = () => {
     const updates = recommendations
       .filter(r => r.status === 'Pending')
@@ -84,7 +91,6 @@ function CourseOwnerDashboard({ userData, onLogout }) {
     handleUpdateStatus(updates);
   };
 
-  // Reject all pending
   const rejectAll = () => {
     const updates = recommendations
       .filter(r => r.status === 'Pending')
@@ -96,7 +102,6 @@ function CourseOwnerDashboard({ userData, onLogout }) {
     handleUpdateStatus(updates);
   };
 
-  // Approve selected
   const approveSelected = () => {
     if (selectedRecIds.length === 0) {
       toast.warning('No trainees selected');
@@ -106,7 +111,6 @@ function CourseOwnerDashboard({ userData, onLogout }) {
     handleUpdateStatus(updates);
   };
 
-  // Reject selected
   const rejectSelected = () => {
     if (selectedRecIds.length === 0) {
       toast.warning('No trainees selected');
@@ -116,13 +120,11 @@ function CourseOwnerDashboard({ userData, onLogout }) {
     handleUpdateStatus(updates);
   };
 
-  // Toggle individual status
   const toggleStatus = (recId, currentStatus) => {
     const newStatus = currentStatus === 'Accepted' ? 'Rejected' : 'Accepted';
     handleUpdateStatus([{ id: recId, status: newStatus }]);
   };
 
-  // Checkbox handling
   const handleSelectAllToggle = () => {
     if (selectAll) {
       setSelectedRecIds([]);
@@ -141,23 +143,92 @@ function CourseOwnerDashboard({ userData, onLogout }) {
       setSelectAll(false);
     } else {
       setSelectedRecIds(prev => [...prev, idStr]);
-      // Check if all are now selected
       if (selectedRecIds.length + 1 === recommendations.length) {
         setSelectAll(true);
       }
     }
   };
 
-  // View trainee profile
   const viewTraineeProfile = async (traineeId) => {
     try {
-      const res = await api.get(`/api/profiles/?userId=${traineeId}`); // adjust endpoint if needed
-      // Actually we need to get by userId. The endpoint is /api/profiles/<userId>/
       const profileRes = await api.get(`/api/profiles/${traineeId}/`);
       setViewingTrainee(profileRes.data);
     } catch (err) {
       toast.error('Could not load trainee profile');
     }
+  };
+
+  const fetchAvailableTrainees = async (searchTerm = '') => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/course-owner/jobs/${selectedJob.id}/available-trainees/?search=${encodeURIComponent(searchTerm)}`);
+      setAvailableTrainees(res.data);
+      setSelectedTraineesToAdd([]);
+      setAddTraineeSelectAll(false);
+    } catch (err) {
+      toast.error('Failed to load available trainees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenAddTrainees = () => {
+    setShowAddTraineesModal(true);
+    setAddTraineeSearch('');
+    fetchAvailableTrainees('');
+  };
+
+  const handleAddSelectAll = () => {
+    if (addTraineeSelectAll) {
+      setSelectedTraineesToAdd([]);
+      setAddTraineeSelectAll(false);
+    } else {
+      setSelectedTraineesToAdd(availableTrainees.map(t => t.userId));
+      setAddTraineeSelectAll(true);
+    }
+  };
+
+  const handleAddCheckbox = (userId) => {
+    if (selectedTraineesToAdd.includes(userId)) {
+      setSelectedTraineesToAdd(prev => prev.filter(id => id !== userId));
+      setAddTraineeSelectAll(false);
+    } else {
+      setSelectedTraineesToAdd(prev => [...prev, userId]);
+      if (selectedTraineesToAdd.length + 1 === availableTrainees.length) {
+        setAddTraineeSelectAll(true);
+      }
+    }
+  };
+
+  const handleAddSelectedTrainees = async () => {
+    if (selectedTraineesToAdd.length === 0) {
+      toast.warning('No trainees selected');
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await api.post(`/course-owner/jobs/${selectedJob.id}/add-recommendations/`, {
+        trainee_ids: selectedTraineesToAdd
+      });
+      toast.success(`Added ${res.data.created} trainees`);
+      if (res.data.errors && res.data.errors.length > 0) {
+        res.data.errors.forEach(err => toast.warning(err));
+      }
+      setShowAddTraineesModal(false);
+      fetchRecommendations(selectedJob.id);
+    } catch (err) {
+      toast.error('Failed to add trainees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchChange = (value) => {
+    setAddTraineeSearch(value);
+    if (searchTimeout) clearTimeout(searchTimeout);
+    setSearchTimeout(setTimeout(() => {
+      fetchAvailableTrainees(value);
+    }, 400));
   };
 
   useEffect(() => {
@@ -249,7 +320,6 @@ function CourseOwnerDashboard({ userData, onLogout }) {
 
               <h2>{selectedJob.project_name} – Recommendations</h2>
 
-              {/* Bulk actions */}
               <div className="bulk-actions-row">
                 <div className="select-all-checkbox">
                   <input
@@ -274,6 +344,9 @@ function CourseOwnerDashboard({ userData, onLogout }) {
                   <button className="btn btn-sm btn-danger" onClick={rejectAll}>
                     <ThumbsDown size={14} /> Reject All
                   </button>
+                  <button className="btn btn-sm btn-primary" onClick={handleOpenAddTrainees}>
+                    <Plus size={14} /> Add Trainees
+                  </button>
                   <button className="btn btn-sm btn-secondary" onClick={() => fetchRecommendations(selectedJob.id)}>
                     <RefreshCw size={14} /> Refresh
                   </button>
@@ -289,7 +362,8 @@ function CourseOwnerDashboard({ userData, onLogout }) {
                       <tr>
                         <th><input type="checkbox" checked={selectAll} onChange={handleSelectAllToggle} /></th>
                         <th>Trainee Name</th>
-                        <th>ID / Email</th>
+                        <th>Emp ID</th>
+                        <th>Email</th>
                         <th>Location</th>
                         <th>Bucket</th>
                         <th>Total %</th>
@@ -308,7 +382,8 @@ function CourseOwnerDashboard({ userData, onLogout }) {
                             />
                           </td>
                           <td>{rec.trainee_name || 'Unknown'}</td>
-                          <td>{rec.trainee_id}</td>
+                          <td>{rec.trainee_employee_id || rec.trainee_id}</td>
+                          <td>{rec.trainee_email || '-'}</td>
                           <td>{rec.trainee_location || '-'}</td>
                           <td>
                             {rec.bucket ? (
@@ -354,18 +429,18 @@ function CourseOwnerDashboard({ userData, onLogout }) {
         </div>
       </div>
 
-      {/* Trainee Profile Modal (simple) */}
+      {/* Trainee Profile Modal */}
       {viewingTrainee && (
         <div className="modal-overlay" onClick={() => setViewingTrainee(null)}>
           <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title"><User size={20} /><h2>{viewingTrainee.userInfo?.name || 'Trainee'}</h2></div>
-              <button className="modal-close" onClick={() => setViewingTrainee(null)}><XCircle size={20} /></button>
+              <button className="modal-close" onClick={() => setViewingTrainee(null)}><X size={20} /></button>
             </div>
             <div className="modal-body">
               <div className="trainee-quick-info">
                 <p><MapPin size={14} /> <strong>Location:</strong> {viewingTrainee.userInfo?.location || '-'}</p>
-                <p><Mail size={14} /> <strong>Email:</strong> {viewingTrainee.userInfo?.email || '-'}</p>
+                <p><Mail size={14} /> <strong>Email:</strong> {viewingTrainee.userInfo?.email || `${viewingTrainee.userInfo?.employeeId}@tcs.com` || '-'}</p>
                 <p><Target size={14} /> <strong>Average Score:</strong> {viewingTrainee.userInfo?.averageScore || '-'}%</p>
                 <p><BarChart2 size={14} /> <strong>Batch:</strong> {viewingTrainee.batch_name || '-'}</p>
               </div>
@@ -382,6 +457,89 @@ function CourseOwnerDashboard({ userData, onLogout }) {
             </div>
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setViewingTrainee(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Trainees Modal */}
+      {showAddTraineesModal && (
+        <div className="modal-overlay" onClick={() => setShowAddTraineesModal(false)}>
+          <div className="modal-content modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title"><Plus size={20} /><h2>Add Trainees to {selectedJob?.project_name}</h2></div>
+              <button className="modal-close" onClick={() => setShowAddTraineesModal(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="search-filter">
+                <div className="search-box">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search by name, employee ID, or email..."
+                    value={addTraineeSearch}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="table-actions">
+                <div>
+                  <input type="checkbox" checked={addTraineeSelectAll} onChange={handleAddSelectAll} />
+                  <span>Select All ({availableTrainees.length})</span>
+                </div>
+              </div>
+              <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Select</th>
+                      <th>Name</th>
+                      <th>Emp ID</th>
+                      <th>Email</th>
+                      <th>Location</th>
+                      <th>Score</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableTrainees.map(trainee => (
+                      <tr key={trainee.userId}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedTraineesToAdd.includes(trainee.userId)}
+                            onChange={() => handleAddCheckbox(trainee.userId)}
+                          />
+                        </td>
+                        <td>{trainee.name}</td>
+                        <td>{trainee.employeeId || trainee.userId}</td>
+                        <td>{trainee.email}</td>
+                        <td>{trainee.location || '-'}</td>
+                        <td>{trainee.averageScore || '-'}%</td>
+                        <td>
+                          <button
+                            className="btn-icon btn-icon-view"
+                            onClick={() => viewTraineeProfile(trainee.userId)}
+                            title="View Profile"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {availableTrainees.length === 0 && (
+                      <tr><td colSpan="7" className="no-data">No available trainees found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowAddTraineesModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleAddSelectedTrainees} disabled={selectedTraineesToAdd.length === 0}>
+                Add Selected ({selectedTraineesToAdd.length})
+              </button>
             </div>
           </div>
         </div>
