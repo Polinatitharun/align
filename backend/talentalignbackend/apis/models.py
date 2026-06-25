@@ -124,7 +124,9 @@ class UserInfo(models.Model):
     projectName = models.CharField(max_length=255, null=True, blank=True, default=None)
     email = models.EmailField(null=True, blank=True)
     course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='trainee_infos')
-
+    preferred_location_1 = models.CharField(max_length=255, null=True, blank=True)
+    preferred_location_2 = models.CharField(max_length=255, null=True, blank=True)
+    preferred_location_3 = models.CharField(max_length=255, null=True, blank=True)
 
 class ProfileRecord(models.Model):
     id = models.BigAutoField(primary_key=True)

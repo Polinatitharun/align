@@ -7,6 +7,8 @@ Matching Engine for Talent Align – semantic embeddings + parallel execution.
 - Trainee skill embeddings are cached across the run.
 - Thread pool processes trainees in parallel.
 - Geocoding uses Nominatim with Django cache + hardcoded fallback.
+- City name normalization handles spelling variations (Bangalore/Bengaluru).
+- Preferred locations (up to 3) are checked first, then current location.
 - LLM is imported for other modules (not used in matching).
 """
 
@@ -24,7 +26,7 @@ from .models import Job, ProfileRecord, Match, Notification
 # ---------- LLM Setup (for views that use it) ----------
 try:
     from langchain_community.llms import Ollama
-    llm = Ollama(model="llama3")          # Keep llama3 for text generation
+    llm = Ollama(model="llama3")
 except ImportError:
     llm = None
     logging.warning("LangChain not installed. AI features will be limited.")
@@ -36,22 +38,17 @@ def clean(text):
 logger = logging.getLogger(__name__)
 
 # ---------- Local embedding service configuration ----------
-# FIXED: Changed from /api/embeddings to /api/embed (correct Ollama endpoint)
 EMBEDDING_SERVICE_URL = os.environ.get(
     'EMBEDDING_SERVICE_URL',
-    'http://localhost:11434/api/embed'  # Changed from 'embeddings' to 'embed'
+    'http://localhost:11434/api/embed'
 )
-# FIXED: Changed model from llama3 to nomic-embed-text
-EMBEDDING_MODEL = "nomic-embed-text:latest"  # Using the embedding model
-EMBEDDING_TIMEOUT = 30  # This should be fine now with the proper model
+EMBEDDING_MODEL = "nomic-embed-text:latest"
+EMBEDDING_TIMEOUT = 30
 
 _embedding_session = requests.Session()
 
 # ----------- Caches for embeddings -----------
-# Keyed by lower‑cased skill name -> numpy array
 _skill_embedding_cache = {}
-
-# Keyed by trainee.id -> dict {skill_name: numpy array}
 _trainee_embedding_cache = {}
 
 
@@ -60,7 +57,6 @@ def _parse_embedding_response(data):
     if not isinstance(data, dict):
         raise ValueError('Unexpected embedding response format')
 
-    # Ollama /api/embed returns {'embeddings': [[...]]} or {'embedding': [...]}
     if 'embeddings' in data and isinstance(data['embeddings'], list) and data['embeddings']:
         return data['embeddings'][0]
     
@@ -80,12 +76,11 @@ def get_embedding(text):
     if not text:
         return None
 
-    # Clean and truncate text if needed (nomic-embed-text supports up to 8192 tokens)
-    text = text.strip()[:8000]  # Safe limit
+    text = text.strip()[:8000]
     
     payload = {
         'model': EMBEDDING_MODEL,
-        'input': text,  # Ollama uses 'input' for embeddings, not 'prompt'
+        'input': text,
     }
 
     try:
@@ -139,6 +134,7 @@ def get_trainee_skill_embeddings(trainee):
         _trainee_embedding_cache[trainee.id] = emb
     return _trainee_embedding_cache[trainee.id]
 
+
 # ---------- Haversine Distance ----------
 def haversine(lon1, lat1, lon2, lat2):
     """Calculate distance between two points in km using haversine formula."""
@@ -150,6 +146,89 @@ def haversine(lon1, lat1, lon2, lat2):
     r = 6371  # Earth's radius in km
     return c * r
 
+
+# ---------- City Name Normalization ----------
+# Map common variations to canonical names for accurate matching
+CITY_ALIASES = {
+    'bangalore': 'bengaluru',
+    'bengaluru': 'bengaluru',
+    'bengalore': 'bengaluru',
+    'blr': 'bengaluru',
+    'mumbai': 'mumbai',
+    'bombay': 'mumbai',
+    'delhi': 'delhi',
+    'new delhi': 'delhi',
+    'dilli': 'delhi',
+    'chennai': 'chennai',
+    'madras': 'chennai',
+    'hyderabad': 'hyderabad',
+    'hyd': 'hyderabad',
+    'secunderabad': 'hyderabad',
+    'pune': 'pune',
+    'poona': 'pune',
+    'kolkata': 'kolkata',
+    'calcutta': 'kolkata',
+    'ahmedabad': 'ahmedabad',
+    'amdavad': 'ahmedabad',
+    'lucknow': 'lucknow',
+    'lakhnau': 'lucknow',
+    'nagpur': 'nagpur',
+    'kochi': 'kochi',
+    'cochin': 'kochi',
+    'trivandrum': 'thiruvananthapuram',
+    'thiruvananthapuram': 'thiruvananthapuram',
+    'tvm': 'thiruvananthapuram',
+    'jaipur': 'jaipur',
+    'indore': 'indore',
+    'bhopal': 'bhopal',
+    'visakhapatnam': 'visakhapatnam',
+    'vizag': 'visakhapatnam',
+    'waltair': 'visakhapatnam',
+    'vskp': 'visakhapatnam',
+    'bhubaneswar': 'bhubaneswar',
+    'bbsr': 'bhubaneswar',
+    'chandigarh': 'chandigarh',
+    'guwahati': 'guwahati',
+    'mysore': 'mysuru',
+    'mysuru': 'mysuru',
+    'mangalore': 'mangaluru',
+    'mangaluru': 'mangaluru',
+    'gurgaon': 'gurugram',
+    'gurugram': 'gurugram',
+    'noida': 'noida',
+    'greater noida': 'noida',
+    'ghaziabad': 'ghaziabad',
+    'faridabad': 'faridabad',
+    'surat': 'surat',
+    'vadodara': 'vadodara',
+    'baroda': 'vadodara',
+    'rajkot': 'rajkot',
+    'nashik': 'nashik',
+    'nasik': 'nashik',
+    'aurangabad': 'aurangabad',
+    'sambhajinagar': 'aurangabad',
+    'coimbatore': 'coimbatore',
+    'kovai': 'coimbatore',
+    'madurai': 'madurai',
+    'tiruchirappalli': 'tiruchirappalli',
+    'trichy': 'tiruchirappalli',
+    'salem': 'salem',
+    'tirunelveli': 'tirunelveli',
+    'pondicherry': 'puducherry',
+    'puducherry': 'puducherry',
+    'pondy': 'puducherry',
+}
+
+
+def normalize_city_name(city_name):
+    """Convert city name to canonical form for matching."""
+    if not city_name:
+        return None
+    cleaned = city_name.strip().lower()
+    cleaned = ' '.join(cleaned.split())
+    return CITY_ALIASES.get(cleaned, cleaned)
+
+
 # ---------- Real Geocoding with Caching ----------
 def geocode_city(city_name):
     """
@@ -159,16 +238,17 @@ def geocode_city(city_name):
     if not city_name:
         return None, None
 
-    city_key = city_name.lower().strip()
+    city_key = normalize_city_name(city_name)
+    if not city_key:
+        return None, None
+    
     cache_key = f"geocode_{city_key}"
 
-    # Try Django cache first
     cached = cache.get(cache_key)
     if cached:
-        logger.debug(f"Cache hit for {city_name}")
+        logger.debug(f"Cache hit for {city_name} -> ({cached[0]}, {cached[1]})")
         return cached
 
-    # Nominatim request
     headers = {'User-Agent': 'TalentAlign/1.0 (tharunpolinati@gmail.com)'}
     url = "https://nominatim.openstreetmap.org/search"
     params = {
@@ -179,15 +259,14 @@ def geocode_city(city_name):
     }
 
     try:
-        # Nominatim requires a delay between requests; we already have a sleep in the main loop
+        time.sleep(1.1)  # Be polite to Nominatim
         response = requests.get(url, params=params, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
             if data:
                 lat = float(data[0]['lat'])
                 lon = float(data[0]['lon'])
-                cache.set(cache_key, (lat, lon), 60 * 60 * 24 * 30)  # 30 days
-                time.sleep(1.1)   # be polite
+                cache.set(cache_key, (lat, lon), 60 * 60 * 24 * 30)
                 logger.debug(f"Geocoded {city_name} -> ({lat}, {lon})")
                 return lat, lon
             else:
@@ -197,25 +276,52 @@ def geocode_city(city_name):
     except Exception as e:
         logger.exception(f"Geocoding exception for {city_name}: {e}")
 
-    # Fallback coordinates for major Indian cities
+    # Hardcoded fallback coordinates for major Indian cities
     fallback_coords = {
+        'bengaluru': (12.9716, 77.5946),
         'mumbai': (19.0760, 72.8777),
         'delhi': (28.6139, 77.2090),
-        'bangalore': (12.9716, 77.5946),
-        'hyderabad': (17.3850, 78.4867),
         'chennai': (13.0827, 80.2707),
+        'hyderabad': (17.3850, 78.4867),
         'pune': (18.5204, 73.8567),
         'ahmedabad': (23.0225, 72.5714),
         'kolkata': (22.5726, 88.3639),
         'nagpur': (21.1458, 79.0882),
         'lucknow': (26.8467, 80.9462),
         'kochi': (9.9312, 76.2673),
+        'thiruvananthapuram': (8.5241, 76.9366),
+        'jaipur': (26.9124, 75.7873),
+        'indore': (22.7196, 75.8577),
+        'bhopal': (23.2599, 77.4126),
+        'visakhapatnam': (17.6868, 83.2185),
+        'bhubaneswar': (20.2961, 85.8245),
+        'chandigarh': (30.7333, 76.7794),
+        'guwahati': (26.1445, 91.7362),
+        'mysuru': (12.2958, 76.6394),
+        'mangaluru': (12.9141, 74.8560),
+        'gurugram': (28.4595, 77.0266),
+        'noida': (28.5355, 77.3910),
+        'ghaziabad': (28.6692, 77.4538),
+        'faridabad': (28.4089, 77.3178),
+        'surat': (21.1702, 72.8311),
+        'vadodara': (22.3072, 73.1812),
+        'rajkot': (22.3039, 70.8022),
+        'nashik': (19.9975, 73.7898),
+        'aurangabad': (19.8762, 75.3433),
+        'coimbatore': (11.0168, 76.9558),
+        'madurai': (9.9252, 78.1198),
+        'tiruchirappalli': (10.7905, 78.7047),
+        'salem': (11.6643, 78.1460),
+        'tirunelveli': (8.7139, 77.7567),
+        'puducherry': (11.9416, 79.8083),
     }
+    
     coords = fallback_coords.get(city_key, (None, None))
     if coords[0]:
-        cache.set(cache_key, coords, 60 * 60 * 24 * 7)   # cache fallback for 7 days
+        cache.set(cache_key, coords, 60 * 60 * 24 * 7)
         logger.info(f"Using fallback coordinates for {city_name}")
     return coords
+
 
 # ---------- Location Percentage Calculation ----------
 def calculate_location_percentage(distance_km):
@@ -230,6 +336,7 @@ def calculate_location_percentage(distance_km):
         return max(0, 50 - (distance_km - 500) / 300 * 50)
     else:
         return 0.0
+
 
 # ---------- Semantic Skill Matching ----------
 def compute_skills_match(job_embeddings, trainee_embeddings):
@@ -246,7 +353,6 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
     job_skill_names = list(job_embeddings.keys())
     trainee_skill_names = list(trainee_embeddings.keys())
 
-    # Check if we have valid embeddings
     valid_job_embeds = [v for v in job_embeddings.values() if is_valid_embedding(v)]
     valid_trainee_embeds = [v for v in trainee_embeddings.values() if is_valid_embedding(v)]
     
@@ -254,7 +360,6 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
     has_valid_trainee_embeddings = len(valid_trainee_embeds) == len(trainee_embeddings)
 
     if not (has_valid_job_embeddings and has_valid_trainee_embeddings):
-        # Fallback to exact skill string matching when embeddings are unavailable
         lower_job_skills = {skill.lower().strip() for skill in job_skill_names}
         matched_skills = [skill for skill in trainee_skill_names if skill.lower().strip() in lower_job_skills]
         if len(job_skill_names) > 0:
@@ -285,11 +390,18 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
     percentage = min(percentage, 100.0)
     return percentage, matched_trainee_skills
 
+
 # ---------- Trainee Processing Function (for thread pool) ----------
 def process_trainee(args):
     """
     args = (trainee, job_locations, job_embeddings)
     Returns a result dict.
+    
+    Location matching priority:
+    1. Preferred locations (exact match via city normalization)
+    2. Preferred locations (proximity via Haversine)
+    3. Current location (exact match via city normalization)
+    4. Current location (proximity via Haversine)
     """
     trainee, job_locations, job_embeddings = args
     trainee_location = trainee.userInfo.location if trainee.userInfo else None
@@ -298,22 +410,50 @@ def process_trainee(args):
     # Skills
     skills_perc, matched_skills = compute_skills_match(job_embeddings, trainee_embeddings)
 
-    # Location
-    trainee_coords = geocode_city(trainee_location) if trainee_location else (None, None)
+    # Collect all preferred locations
+    preferred_locations = []
+    if trainee.userInfo:
+        for loc_attr in ['preferred_location_1', 'preferred_location_2', 'preferred_location_3']:
+            loc_val = getattr(trainee.userInfo, loc_attr, None)
+            if loc_val and str(loc_val).strip():
+                preferred_locations.append(str(loc_val).strip())
+
+    # Add current location as last fallback
+    if trainee_location and trainee_location.strip():
+        preferred_locations.append(trainee_location.strip())
+
     best_distance = 9999.0
     best_location = None
     best_location_percentage = 0.0
 
-    if trainee_coords[0] is not None:
-        for loc in job_locations:
-            job_coords = geocode_city(loc)
+    for job_loc in job_locations:
+        job_loc_clean = normalize_city_name(job_loc)
+        job_coords = geocode_city(job_loc)
+
+        for pref_loc in preferred_locations:
+            pref_loc_clean = normalize_city_name(pref_loc)
+            
+            # Exact match check (case-insensitive, normalized)
+            if job_loc_clean and pref_loc_clean and job_loc_clean == pref_loc_clean:
+                best_location_percentage = 100.0
+                best_location = job_loc
+                best_distance = 0.0
+                break
+            
+            # Proximity check
             if job_coords[0] is not None:
-                dist = haversine(job_coords[1], job_coords[0], trainee_coords[1], trainee_coords[0])
-                loc_perc = calculate_location_percentage(dist)
-                if dist < best_distance:
-                    best_distance = dist
-                    best_location = loc
-                    best_location_percentage = loc_perc
+                pref_coords = geocode_city(pref_loc)
+                if pref_coords[0] is not None:
+                    dist = haversine(job_coords[1], job_coords[0], pref_coords[1], pref_coords[0])
+                    loc_perc = calculate_location_percentage(dist)
+                    if dist < best_distance or (dist == best_distance and loc_perc > best_location_percentage):
+                        best_distance = dist
+                        best_location = job_loc
+                        best_location_percentage = loc_perc
+
+        # If exact match found, skip remaining job locations
+        if best_location_percentage == 100.0:
+            break
 
     experience_perc = float(min(max(trainee.dpi or 0, 0), 100)) if getattr(trainee, 'dpi', None) is not None else 50.0
     availability_perc = 0.0 if trainee.userInfo and trainee.userInfo.isMapped else 100.0
@@ -349,6 +489,7 @@ def process_trainee(args):
         'matched_location': best_location,
     }
 
+
 # ---------- Main Matching Engine ----------
 def run_matching_logic(job_id=None):
     """
@@ -376,7 +517,7 @@ def run_matching_logic(job_id=None):
     for job in jobs:
         logger.info(f"Processing job: {job.project_name} (Batch: {job.batch_name or 'None'})")
 
-        # Filter trainees by batch
+        # Filter trainees by course and batch
         trainees = ProfileRecord.objects.select_related('userInfo', 'userInfo__course').prefetch_related('strengths')
         if job.course_id:
             trainees = trainees.filter(userInfo__course_id=job.course_id)
@@ -415,7 +556,6 @@ def run_matching_logic(job_id=None):
         trainee_args = [(trainee, job_locations, job_embeddings) for trainee in trainees]
 
         results = []
-        # Parallel execution – use half of CPU cores to avoid overload
         max_workers = max(1, (os.cpu_count() or 4) // 2)
         logger.info(f"  Processing {len(trainee_args)} trainees with {max_workers} workers...")
         
@@ -433,7 +573,7 @@ def run_matching_logic(job_id=None):
                     trainee = future_to_trainee[future]
                     logger.exception(f"Error processing trainee {trainee.id}: {e}")
 
-        # Write results sequentially to avoid DB conflicts
+        # Write results sequentially
         matches_created = 0
         sorted_results = sorted(results, key=lambda item: item['total_percentage'], reverse=True)
         recommendation_limit = max(0, job.available_openings)
@@ -471,29 +611,30 @@ def run_matching_logic(job_id=None):
 
         logger.info(f"  ✓ Job '{job.project_name}': {matches_created} matches created/updated")
 
-        # Update job's match count
         job.matches = Match.objects.filter(job_ref=job).count()
         job.save(update_fields=['matches'])
         logger.info(f"  Job '{job.project_name}' now has {job.matches} total matches.")
 
-        if job.course and job.course.owner:
-            recommended_count = Match.objects.filter(job_ref=job, is_recommended=True).count()
-            if recommended_count:
-                Notification.objects.create(
-                    recipient=job.course.owner,
-                    notification_type='matches_found',
-                    title=f"{job.course.name} JD candidates ready",
-                    message=(
-                        f"{job.course.name} JD has {job.openings} openings. "
-                        f"Top {recommended_count} matching candidates have been identified and are ready for review."
-                    ),
-                    payload={'job_id': job.id, 'course_id': job.course_id, 'recommended_count': recommended_count},
-                )
+        # Notify course owners
+        if job.course:
+            for owner in job.course.owners.all():
+                recommended_count = Match.objects.filter(job_ref=job, is_recommended=True).count()
+                if recommended_count:
+                    Notification.objects.create(
+                        recipient=owner,
+                        notification_type='matches_found',
+                        title=f"{job.course.name} JD candidates ready",
+                        message=(
+                            f"{job.course.name} JD has {job.openings} openings. "
+                            f"Top {recommended_count} matching candidates have been identified and are ready for review."
+                        ),
+                        payload={'job_id': job.id, 'course_id': job.course_id, 'recommended_count': recommended_count},
+                    )
 
     logger.info("✓ Matching engine finished successfully.")
     return True
 
-# Optional: Clear cache function for debugging
+
 def clear_embedding_cache():
     """Clear all embedding caches."""
     global _skill_embedding_cache, _trainee_embedding_cache

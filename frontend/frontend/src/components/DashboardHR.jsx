@@ -52,7 +52,9 @@ import {
   Database,
   Megaphone,
   ThumbsUp,
+  MapPinOff,
 } from 'lucide-react';
+
 import {
   BarChart as ReBarChart,
   Bar,
@@ -134,6 +136,8 @@ function DashboardHR({ userData, onLogout }) {
   const [mappedTrainees, setMappedTrainees] = useState([]);
   const [rejectedTrainees, setRejectedTrainees] = useState([]);
 
+
+  const [showPrefLocModal, setShowPrefLocModal] = useState(false);
   const getJobTechSkills = (job) => {
     if (!job) return [];
     if (Array.isArray(job.techSkills) && job.techSkills.length) {
@@ -1008,22 +1012,22 @@ function DashboardHR({ userData, onLogout }) {
         ]));
         data = rows; filename = 'interview_feedback.xlsx'; sheetName = 'Feedback';
       } else if (type === 'recommendations') {
-          const rows = [['Trainee Name', 'Employee ID', 'Email', 'Job Title', 'Demand ID', 'Status']];
-          recommendations.forEach(rec => {
-            rows.push([
-              rec.trainee_name || rec.trainee_id,
-              rec.trainee_employee_id || rec.trainee_id,
-              rec.trainee_email || (rec.trainee_employee_id ? `${rec.trainee_employee_id}@tcs.com` : rec.trainee_id),
-              rec.job_title,
-              rec.demand_id || '',
-              rec.status,
-            ]);
-          });
-          data = rows;
-          filename = `recommendations_${selectedRecJobId || 'all'}.xlsx`;
-          sheetName = 'Recommendations';
-        }
-            
+        const rows = [['Trainee Name', 'Employee ID', 'Email', 'Job Title', 'Demand ID', 'Status']];
+        recommendations.forEach(rec => {
+          rows.push([
+            rec.trainee_name || rec.trainee_id,
+            rec.trainee_employee_id || rec.trainee_id,
+            rec.trainee_email || (rec.trainee_employee_id ? `${rec.trainee_employee_id}@tcs.com` : rec.trainee_id),
+            rec.job_title,
+            rec.demand_id || '',
+            rec.status,
+          ]);
+        });
+        data = rows;
+        filename = `recommendations_${selectedRecJobId || 'all'}.xlsx`;
+        sheetName = 'Recommendations';
+      }
+
       if (!data || data.length === 0) { toast.error('No data to download'); return; }
       const excelBlob = await createPasswordProtectedExcel(data, sheetName, downloadPassword);
       const downloadUrl = window.URL.createObjectURL(excelBlob);
@@ -1090,7 +1094,7 @@ function DashboardHR({ userData, onLogout }) {
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedTraineeIds.length} trainee(s)`);
-      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.project_name, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
+      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedTraineeIds.length} trainees`, job: selectedJob.project_name, time: new Date().toLocaleString() }, ...prev.slice(0, 4)]);
       setShowLockModal(false);
       setSelectedTraineeIds([]);
       setLockInterviewDatetime('');
@@ -1099,10 +1103,10 @@ function DashboardHR({ userData, onLogout }) {
       await refreshCurrentView();
       if (selectedJob) fetchJobMatches(selectedJob.id);
       if (selectedJobForSearch && selectedJobForSearch.id === selectedJob.id) handleJobSelectForSearch(selectedJob.id);
-    } catch (err) { 
-      toast.error('Failed to lock trainees'); 
-    } finally { 
-      setLoading(false); 
+    } catch (err) {
+      toast.error('Failed to lock trainees');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1163,8 +1167,8 @@ function DashboardHR({ userData, onLogout }) {
       } finally {
         setJobMatchesLoading(false);
       }
-    } else { 
-      setSearchJobMatches(null); 
+    } else {
+      setSearchJobMatches(null);
     }
   };
 
@@ -1217,7 +1221,7 @@ function DashboardHR({ userData, onLogout }) {
         assigned_to: assignedToId,
       });
       toast.success(`Locked ${selectedSearchTraineeIds.length} trainee(s)`);
-      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedSearchTraineeIds.length} trainees`, job: selectedJobForSearch.title, time: new Date().toLocaleString() }, ...prev.slice(0,4)]);
+      setRecentActivity(prev => [{ type: 'Locked', trainee: `${selectedSearchTraineeIds.length} trainees`, job: selectedJobForSearch.title, time: new Date().toLocaleString() }, ...prev.slice(0, 4)]);
       setShowLockModal(false);
       setSelectedSearchTraineeIds([]);
       setSelectAll(false);
@@ -1225,10 +1229,10 @@ function DashboardHR({ userData, onLogout }) {
       setLockComments('');
       setAssignedToId('');
       await handleJobSelectForSearch(selectedJobForSearch.id);
-    } catch (err) { 
-      toast.error('Failed to lock trainees'); 
-    } finally { 
-      setLoading(false); 
+    } catch (err) {
+      toast.error('Failed to lock trainees');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1306,13 +1310,13 @@ function DashboardHR({ userData, onLogout }) {
   const fetchRecentActivity = async () => {
     try {
       const locksRes = await api.get(`/interview-locks/${getBatchParam()}`);
-      const locks = locksRes.data.slice(0,5).map(lock => ({
+      const locks = locksRes.data.slice(0, 5).map(lock => ({
         type: lock.status === 'selected' ? 'Selected' : lock.status === 'rejected' ? 'Rejected' : 'Locked',
         trainee: lock.trainee_name,
         job: lock.job_title,
         time: new Date(lock.created_at).toLocaleString(),
       }));
-      setRecentActivity(prev => { return [...locks, ...prev].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,5); });
+      setRecentActivity(prev => { return [...locks, ...prev].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5); });
     } catch (err) { console.error('Failed to fetch recent activity', err); }
   };
 
@@ -1323,50 +1327,50 @@ function DashboardHR({ userData, onLogout }) {
     setShowNotifyModal(true);
   };
 
- const executeNotify = async () => {
-  try {
-    setLoading(true);
-    const requestedCount = Math.max(1, Math.min(50, Number(notifyCount) || 10));
-    // Fetch total matches for the job
-    const matchRes = await api.get(`/matches/${notifyJobId}/${getBatchParam()}`);
-    const totalMatches = matchRes.data.total_matches || 0;
+  const executeNotify = async () => {
+    try {
+      setLoading(true);
+      const requestedCount = Math.max(1, Math.min(50, Number(notifyCount) || 10));
+      // Fetch total matches for the job
+      const matchRes = await api.get(`/matches/${notifyJobId}/${getBatchParam()}`);
+      const totalMatches = matchRes.data.total_matches || 0;
 
-    if (totalMatches === 0) {
-      toast.error('No trainees available to recommend for this job.');
-      setShowNotifyModal(false);
-      setLoading(false);   // important: reset loading state before returning
-      return;
-    }
-
-    const countToSend = requestedCount;
-    if (countToSend > totalMatches) {
-      // Ask for confirmation – browser confirm dialog
-      const confirmed = window.confirm(
-        `Only ${totalMatches} trainees are available. Would you like to send recommendations for these ${totalMatches}?`
-      );
-      if (!confirmed) {
-        setLoading(false);
+      if (totalMatches === 0) {
+        toast.error('No trainees available to recommend for this job.');
+        setShowNotifyModal(false);
+        setLoading(false);   // important: reset loading state before returning
         return;
       }
-      // Send the actual available count
-      await api.post(`/jobs/${notifyJobId}/notify-owners/`, { count: totalMatches });
-    } else {
-      await api.post(`/jobs/${notifyJobId}/notify-owners/`, { count: countToSend });
-    }
 
-    toast.success('Course owners notified');
-    setShowNotifyModal(false);
-    fetchJobs();               // refresh job statuses
-    // Also refresh recommendations tab if it's currently active
-    if (activeTab === 'recommendations') {
-      fetchRecommendations();
+      const countToSend = requestedCount;
+      if (countToSend > totalMatches) {
+        // Ask for confirmation – browser confirm dialog
+        const confirmed = window.confirm(
+          `Only ${totalMatches} trainees are available. Would you like to send recommendations for these ${totalMatches}?`
+        );
+        if (!confirmed) {
+          setLoading(false);
+          return;
+        }
+        // Send the actual available count
+        await api.post(`/jobs/${notifyJobId}/notify-owners/`, { count: totalMatches });
+      } else {
+        await api.post(`/jobs/${notifyJobId}/notify-owners/`, { count: countToSend });
+      }
+
+      toast.success('Course owners notified');
+      setShowNotifyModal(false);
+      fetchJobs();               // refresh job statuses
+      // Also refresh recommendations tab if it's currently active
+      if (activeTab === 'recommendations') {
+        fetchRecommendations();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to notify');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    toast.error(err.response?.data?.error || 'Failed to notify');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   // ==================== Fetch recommendations for HR ====================
   const fetchRecommendations = async () => {
     try {
@@ -1584,7 +1588,7 @@ function DashboardHR({ userData, onLogout }) {
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/json' }));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `talent_align_backup_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.json`;
+      a.download = `talent_align_backup_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
       document.body.appendChild(a);
       a.click();
       URL.revokeObjectURL(url);
@@ -1698,7 +1702,7 @@ function DashboardHR({ userData, onLogout }) {
     return { tech: toSortedArray(techMap), soft: toSortedArray(softMap) };
   };
 
-    const renderDashboard = () => (
+  const renderDashboard = () => (
     <div className="dashboard-content">
       {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
       {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
@@ -1962,7 +1966,7 @@ function DashboardHR({ userData, onLogout }) {
                 {!selectedTrainee.isMapped && (
                   <div className="projects-section"><div className="projects-header"><h3 className="section-title"><Briefcase size={18} /> Project Matches {traineeMatches && <span className="project-count">({traineeMatches.total_matches} matches)</span>}</h3></div>
                     {traineeMatches ? (
-                      <>{traineeMatches.total_matches === 0 ? (<div className="no-matches open-pool-message"><Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p><div className="open-pool-info"><p><strong>Open Pool</strong></p><button className="btn btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button></div></div>) : (<>{traineeMatches.perfect_match?.length > 0 && (<div className="bucket-section bucket-perfect"><h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3><div className="projects-grid">{traineeMatches.perfect_match.map((match) => { const job = jobs.find(j => j.id === match.job_id); const isFull = job && getRemainingOpenings(job) <= 0; if (isFull) return null; return (<div key={match.match_id} className="project-match-card"><div className="match-card-header"><div className="project-title"><h4>{match.job_title}</h4><div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div></div><div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div></div><div className="match-details"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span><span><Calendar size={14} /> Posted: {match.posted_date}</span></div><div className="project-actions"><button className="map-to-project-btn" onClick={() => { const job = jobs.find(j => j.id === match.job_id); if (job) { if (getRemainingOpenings(job) <= 0) { toast.error('No openings'); return; } handleMapToProject(selectedTrainee, job); } }} disabled={isFull}><Link size={16} /> {isFull ? 'Full' : 'Map'}</button></div></div>);})}</div></div>)}</>)}</>
+                      <>{traineeMatches.total_matches === 0 ? (<div className="no-matches open-pool-message"><Users2 size={48} /><h3>No Job Matches Found</h3><p>This trainee has no matches.</p><div className="open-pool-info"><p><strong>Open Pool</strong></p><button className="btn btn-primary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); setActiveTab('createJob'); }}><Plus size={18} /> Create New Job</button></div></div>) : (<>{traineeMatches.perfect_match?.length > 0 && (<div className="bucket-section bucket-perfect"><h3 className="bucket-title">Perfect Match ({traineeMatches.perfect_match.length})</h3><div className="projects-grid">{traineeMatches.perfect_match.map((match) => { const job = jobs.find(j => j.id === match.job_id); const isFull = job && getRemainingOpenings(job) <= 0; if (isFull) return null; return (<div key={match.match_id} className="project-match-card"><div className="match-card-header"><div className="project-title"><h4>{match.job_title}</h4><div className="project-meta"><span><Building size={14} /> Job ID: #{match.job_id}</span><span><MapPin size={14} /> {Array.isArray(match.job_location) ? match.job_location.join(', ') : match.job_location}</span></div></div><div className={`match-score ${match.total_percentage >= 80 ? 'high' : match.total_percentage >= 50 ? 'medium' : 'low'}`}><Target size={14} /> {match.total_percentage.toFixed(1)}%</div></div><div className="match-details"><span>Skills: {match.skills_percentage.toFixed(1)}%</span><span>Location: {match.location_percentage.toFixed(1)}%</span><span><Calendar size={14} /> Posted: {match.posted_date}</span></div><div className="project-actions"><button className="map-to-project-btn" onClick={() => { const job = jobs.find(j => j.id === match.job_id); if (job) { if (getRemainingOpenings(job) <= 0) { toast.error('No openings'); return; } handleMapToProject(selectedTrainee, job); } }} disabled={isFull}><Link size={16} /> {isFull ? 'Full' : 'Map'}</button></div></div>); })}</div></div>)}</>)}</>
                     ) : (<div className="no-matches-data"><Users size={48} /><h3>No match data</h3><p>Click to fetch matches.</p><button className="btn-primary" onClick={() => fetchTraineeMatches(selectedTrainee.userId || selectedTrainee.id)}><Search size={18} /> Find Matches</button></div>)}
                   </div>
                 )}
@@ -2014,7 +2018,7 @@ function DashboardHR({ userData, onLogout }) {
               <th>Interview Date</th>
               <th>Feedback</th>
               <th>Actions</th>
-             </tr>
+            </tr>
           </thead>
           <tbody>
             {selectedCandidates.map((c, idx) => (
@@ -2037,8 +2041,8 @@ function DashboardHR({ userData, onLogout }) {
                     }} title="View Profile">
                       <User size={16} />
                     </button>
-                    <button 
-                      className="btn-icon btn-danger" 
+                    <button
+                      className="btn-icon btn-danger"
                       onClick={() => {
                         if (c.lock_id) {
                           handleCancelSelected(c.lock_id);
@@ -2048,13 +2052,13 @@ function DashboardHR({ userData, onLogout }) {
                             handleUnmapFromProject(trainee);
                           }
                         }
-                      }} 
+                      }}
                       title="Cancel Selection (Make available for other projects)"
                     >
                       <X size={16} />
                     </button>
                   </div>
-                 </td>
+                </td>
               </tr>
             ))}
             {selectedCandidates.length === 0 && (
@@ -2094,7 +2098,7 @@ function DashboardHR({ userData, onLogout }) {
               <th>Interview Date</th>
               <th>Feedback</th>
               <th>Actions</th>
-             </tr>
+            </tr>
           </thead>
           <tbody>
             {rejectedLocks.map(lock => (
@@ -2107,7 +2111,7 @@ function DashboardHR({ userData, onLogout }) {
                   {lock.feedback ? (
                     <button className="btn-icon" onClick={() => setViewingFeedback(lock.feedback)}><Eye size={16} /></button>
                   ) : '-'}
-                 </td>
+                </td>
                 <td>
                   <div className="action-buttons">
                     <button className="btn-icon btn-icon-view" onClick={() => {
@@ -2116,15 +2120,15 @@ function DashboardHR({ userData, onLogout }) {
                     }} title="View Profile">
                       <User size={16} />
                     </button>
-                    <button 
-                      className="btn-icon btn-warning" 
-                      onClick={() => handleCancelSelected(lock.id)} 
+                    <button
+                      className="btn-icon btn-warning"
+                      onClick={() => handleCancelSelected(lock.id)}
                       title="Cancel Rejection (Make candidate available again)"
                     >
                       <X size={16} />
                     </button>
                   </div>
-                 </td>
+                </td>
               </tr>
             ))}
             {rejectedLocks.length === 0 && (
@@ -2205,7 +2209,7 @@ function DashboardHR({ userData, onLogout }) {
       <div className="modal-overlay" onClick={() => setShowLockModal(false)}>
         <div className="modal-content modal-sm" onClick={e => e.stopPropagation()}>
           <div className="modal-header"><h3><Lock size={20} /> Lock for Interview</h3><button className="modal-close" onClick={() => setShowLockModal(false)}><X /></button></div>
-          <div className="modal-body"><div className="form-group"><label>Interview Date & Time *</label><input type="datetime-local" className="form-control" value={lockInterviewDatetime} onChange={(e) => setLockInterviewDatetime(e.target.value)} min={new Date().toISOString().slice(0,16)} required /></div><div className="form-group"><label>Assign to Interviewer *</label><select className="form-control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} required><option value="">Select Interviewer</option>{interviewers.map(usr => <option key={usr.id} value={usr.id}>{usr.username}</option>)}</select></div><div className="form-group"><label>Comments (optional)</label><textarea className="form-control" rows="3" value={lockComments} onChange={(e) => setLockComments(e.target.value)} placeholder="Add notes..." /></div><p>Selected trainees: {selectedTraineeIds.length}</p></div>
+          <div className="modal-body"><div className="form-group"><label>Interview Date & Time *</label><input type="datetime-local" className="form-control" value={lockInterviewDatetime} onChange={(e) => setLockInterviewDatetime(e.target.value)} min={new Date().toISOString().slice(0, 16)} required /></div><div className="form-group"><label>Assign to Interviewer *</label><select className="form-control" value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} required><option value="">Select Interviewer</option>{interviewers.map(usr => <option key={usr.id} value={usr.id}>{usr.username}</option>)}</select></div><div className="form-group"><label>Comments (optional)</label><textarea className="form-control" rows="3" value={lockComments} onChange={(e) => setLockComments(e.target.value)} placeholder="Add notes..." /></div><p>Selected trainees: {selectedTraineeIds.length}</p></div>
           <div className="modal-actions"><button className="btn-secondary" onClick={() => setShowLockModal(false)}>Cancel</button><button className="btn-primary" onClick={handleLockForInterview} disabled={!lockInterviewDatetime || !assignedToId || loading}>{loading ? 'Locking...' : 'Lock for Interview'}</button></div>
         </div>
       </div>
@@ -2231,7 +2235,7 @@ function DashboardHR({ userData, onLogout }) {
           </div>
         </div>
         <div className="search-job-selector"><label>Select Job:</label><select className="form-control" value={selectedJobForSearch?.id || ''} onChange={(e) => handleJobSelectForSearch(e.target.value)} style={{ maxWidth: '400px' }}><option value="">-- Choose a job --</option>{jobs.filter(job => job.status === 'active' && getRemainingOpenings(job) > 0).map(job => (<option key={job.id} value={job.id}>{job.project_name} (Openings: {getRemainingOpenings(job)})</option>))}</select></div>
-        {selectedJobForSearch && (<><div className="filters-panel"><div className="filter-group"><label>Bucket</label><select className="filter-select" value={searchFilters.bucket} onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}><option value="">All Buckets</option><option value="PERFECT_MATCH">Perfect Match</option><option value="SKILLS_ONLY">Skills Only</option><option value="LOCATION_ONLY">Location Only</option><option value="NEARBY">Proximity</option><option value="NO_MATCH">No Match</option></select></div><div className="filter-group"><label>Location</label><input type="text" className="form-control" placeholder="Filter by location" value={searchFilters.location} onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })} /></div><div className="filter-group"><label>Min Total %</label><input type="number" className="form-control" min="0" max="100" value={searchFilters.minTotal} onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })} /></div><div className="filter-group"><label>Skill Keyword</label><input type="text" className="form-control" placeholder="e.g., React" value={searchFilters.skillKeyword} onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })} /></div><div className="filter-group align-end"><button className="btn btn-secondary btn-clear-filter" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}><X size={18} /> Clear</button></div></div><div className="table-actions"><div><input type="checkbox" checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(getMatchTraineeUserId(m)))} onChange={handleSelectAllSearch} disabled={!jobHasOpenings} /> Select All ({filtered.length} matches){!jobHasOpenings && <span className="warning-text">(No openings left)</span>}</div><div className="action-buttons"><button className="btn btn-primary" onClick={() => { setSelectedTraineeIds(selectedSearchTraineeIds); setSelectedJob(selectedJobForSearch); fetchInterviewers(); setShowLockModal(true); }} disabled={selectedSearchTraineeIds.length === 0 || !jobHasOpenings}><Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})</button><button className="btn btn-secondary" onClick={() => requestDownload('search')} disabled={filtered.length === 0}><Download size={18} /> Download Filtered</button></div></div>{jobMatchesLoading ? (<div className="loading-overlay"><div className="loading-spinner"></div></div>) : (<div className="table-container"><table className="data-table"><thead><tr><th>Select</th><th>Trainee Name</th><th>Location</th><th>Bucket</th><th>Matched Location</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th></tr></thead><tbody>{filtered.map((match) => { const disabled = !jobHasOpenings; const traineeUserId = getMatchTraineeUserId(match); return (<tr key={traineeUserId || match.id}><td><input type="checkbox" checked={selectedSearchTraineeIds.includes(traineeUserId)} onChange={(e) => { if (e.target.checked) { setSelectedSearchTraineeIds([...selectedSearchTraineeIds, traineeUserId]); } else { setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(pid => pid !== traineeUserId)); setSelectAll(false); } }} disabled={disabled || !traineeUserId} /></td><td><span className="font-medium">{match.trainee_name}</span></td><td>{match.trainee_location}</td><td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket === 'NEARBY' ? 'Proximity' : match.bucket?.replace('_', ' ')}</span></td><td>{match.matched_location || '—'}</td><td>{Number(match.skills_percentage || 0).toFixed(1)}%</td><td>{Number(match.location_percentage || 0).toFixed(1)}%</td><td><strong>{Number(match.total_percentage || 0).toFixed(1)}%</strong></td><td>{(() => { const skills = normalizeMatchedSkills(match.matched_skills); return skills.length > 0 ? skills.join(', ') : '-'; })()}</td><td><div className="action-buttons"><button className="btn-icon btn-icon-view" onClick={() => handleViewTraineeProfileFromJob(match)} title="View Profile"><User size={16} /></button><button className="btn-icon btn-icon-map" onClick={() => { if (!jobHasOpenings) { toast.error('No openings left'); return; } handleMapToProject(match, selectedJobForSearch); }} disabled={!jobHasOpenings || !traineeUserId} title="Map to Project"><Link size={16} /></button></div></td></tr>);})}{filtered.length === 0 && (<tr><td colSpan="10" className="no-data">No matches match your filters</td></tr>)}</tbody></table></div>)}</>)}
+        {selectedJobForSearch && (<><div className="filters-panel"><div className="filter-group"><label>Bucket</label><select className="filter-select" value={searchFilters.bucket} onChange={(e) => setSearchFilters({ ...searchFilters, bucket: e.target.value })}><option value="">All Buckets</option><option value="PERFECT_MATCH">Perfect Match</option><option value="SKILLS_ONLY">Skills Only</option><option value="LOCATION_ONLY">Location Only</option><option value="NEARBY">Proximity</option><option value="NO_MATCH">No Match</option></select></div><div className="filter-group"><label>Location</label><input type="text" className="form-control" placeholder="Filter by location" value={searchFilters.location} onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })} /></div><div className="filter-group"><label>Min Total %</label><input type="number" className="form-control" min="0" max="100" value={searchFilters.minTotal} onChange={(e) => setSearchFilters({ ...searchFilters, minTotal: parseInt(e.target.value) || 0 })} /></div><div className="filter-group"><label>Skill Keyword</label><input type="text" className="form-control" placeholder="e.g., React" value={searchFilters.skillKeyword} onChange={(e) => setSearchFilters({ ...searchFilters, skillKeyword: e.target.value })} /></div><div className="filter-group align-end"><button className="btn btn-secondary btn-clear-filter" onClick={() => setSearchFilters({ bucket: '', location: '', minTotal: 0, skillKeyword: '' })}><X size={18} /> Clear</button></div></div><div className="table-actions"><div><input type="checkbox" checked={selectAll && filtered.length > 0 && filtered.every(m => selectedSearchTraineeIds.includes(getMatchTraineeUserId(m)))} onChange={handleSelectAllSearch} disabled={!jobHasOpenings} /> Select All ({filtered.length} matches){!jobHasOpenings && <span className="warning-text">(No openings left)</span>}</div><div className="action-buttons"><button className="btn btn-primary" onClick={() => { setSelectedTraineeIds(selectedSearchTraineeIds); setSelectedJob(selectedJobForSearch); fetchInterviewers(); setShowLockModal(true); }} disabled={selectedSearchTraineeIds.length === 0 || !jobHasOpenings}><Lock size={18} /> Lock Selected ({selectedSearchTraineeIds.length})</button><button className="btn btn-secondary" onClick={() => requestDownload('search')} disabled={filtered.length === 0}><Download size={18} /> Download Filtered</button></div></div>{jobMatchesLoading ? (<div className="loading-overlay"><div className="loading-spinner"></div></div>) : (<div className="table-container"><table className="data-table"><thead><tr><th>Select</th><th>Trainee Name</th><th>Location</th><th>Bucket</th><th>Matched Location</th><th>Skills %</th><th>Location %</th><th>Total %</th><th>Matched Skills</th><th>Actions</th></tr></thead><tbody>{filtered.map((match) => { const disabled = !jobHasOpenings; const traineeUserId = getMatchTraineeUserId(match); return (<tr key={traineeUserId || match.id}><td><input type="checkbox" checked={selectedSearchTraineeIds.includes(traineeUserId)} onChange={(e) => { if (e.target.checked) { setSelectedSearchTraineeIds([...selectedSearchTraineeIds, traineeUserId]); } else { setSelectedSearchTraineeIds(selectedSearchTraineeIds.filter(pid => pid !== traineeUserId)); setSelectAll(false); } }} disabled={disabled || !traineeUserId} /></td><td><span className="font-medium">{match.trainee_name}</span></td><td>{match.trainee_location}</td><td><span className={`bucket-tag ${match.bucket?.toLowerCase()}`}>{match.bucket === 'NEARBY' ? 'Proximity' : match.bucket?.replace('_', ' ')}</span></td><td>{match.matched_location || '—'}</td><td>{Number(match.skills_percentage || 0).toFixed(1)}%</td><td>{Number(match.location_percentage || 0).toFixed(1)}%</td><td><strong>{Number(match.total_percentage || 0).toFixed(1)}%</strong></td><td>{(() => { const skills = normalizeMatchedSkills(match.matched_skills); return skills.length > 0 ? skills.join(', ') : '-'; })()}</td><td><div className="action-buttons"><button className="btn-icon btn-icon-view" onClick={() => handleViewTraineeProfileFromJob(match)} title="View Profile"><User size={16} /></button><button className="btn-icon btn-icon-map" onClick={() => { if (!jobHasOpenings) { toast.error('No openings left'); return; } handleMapToProject(match, selectedJobForSearch); }} disabled={!jobHasOpenings || !traineeUserId} title="Map to Project"><Link size={16} /></button></div></td></tr>); })}{filtered.length === 0 && (<tr><td colSpan="10" className="no-data">No matches match your filters</td></tr>)}</tbody></table></div>)}</>)}
       </div>
     );
   };
@@ -2424,6 +2428,158 @@ function DashboardHR({ userData, onLogout }) {
     );
   };
 
+
+  const handlePrefLocUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post('/users/upload-preferred-locations/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.updated > 0) {
+        toast.success(`Updated ${res.data.updated} trainees`);
+      }
+      if (res.data.errors?.length > 0) {
+        if (res.data.errors.length === 1) {
+          toast.warning(res.data.errors[0]);
+        } else {
+          setErrorDetails(res.data.errors.map((err, idx) => ({
+            row: idx + 2,
+            message: err
+          })));
+          setShowErrorDetailsModal(true);
+        }
+      }
+      setShowPrefLocModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Upload failed');
+    } finally {
+      setLoading(false);
+      event.target.value = '';
+    }
+  };
+
+  const downloadPrefLocTemplate = () => {
+    // Create a simple Excel template using XlsxPopulate (you already have it imported)
+    XlsxPopulate.fromBlankAsync().then(workbook => {
+      const sheet = workbook.sheet(0);
+      sheet.name("Preferred Locations");
+
+      // Headers
+      sheet.cell(1, 1).value("Employee ID");
+      sheet.cell(1, 2).value("Preferred Location 1");
+      sheet.cell(1, 3).value("Preferred Location 2");
+      sheet.cell(1, 4).value("Preferred Location 3");
+
+      // Style headers
+      const headerRange = sheet.range(1, 1, 1, 4);
+      headerRange.style('bold', true);
+      headerRange.style('fill', '2563eb');
+      headerRange.style('fontColor', 'ffffff');
+
+      // Sample data
+      sheet.cell(2, 1).value("EMP001");
+      sheet.cell(2, 2).value("Bangalore");
+      sheet.cell(2, 3).value("Chennai");
+      sheet.cell(2, 4).value("Hyderabad");
+
+      sheet.cell(3, 1).value("EMP002");
+      sheet.cell(3, 2).value("Mumbai");
+      sheet.cell(3, 3).value("");
+      sheet.cell(3, 4).value("");
+
+      // Set column widths
+      sheet.column(1).width(15);
+      sheet.column(2).width(20);
+      sheet.column(3).width(20);
+      sheet.column(4).width(20);
+
+      return workbook.outputAsync();
+    }).then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'preferred_locations_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Template downloaded');
+    }).catch(() => {
+      toast.error('Download failed');
+    });
+  };
+
+  const renderPrefLocModal = () => {
+    if (!showPrefLocModal) return null;
+    return (
+      <div className="modal-overlay" onClick={() => setShowPrefLocModal(false)}>
+        <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <div className="modal-title">
+              <MapPin size={24} />
+              <h2>Upload Preferred Locations</h2>
+            </div>
+            <button className="modal-close" onClick={() => setShowPrefLocModal(false)}>
+              <X size={24} />
+            </button>
+          </div>
+          <div className="modal-body">
+            <div className="upload-instructions">
+              <p>1. Download the template below.</p>
+              <p>2. Fill in Employee ID and up to 3 preferred locations per trainee.</p>
+              <p>3. Leave location cells empty if not applicable.</p>
+              <p>4. Upload the completed file to update trainee preferences.</p>
+              <p style={{ marginTop: '0.75rem', color: '#f59e0b' }}>
+                ⚠ Trainees must already exist in the system. This only updates their location preferences.
+              </p>
+            </div>
+
+            <div className="template-info" style={{
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1.5rem'
+            }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 600 }}>Template Columns:</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.5rem', fontSize: '0.85rem' }}>
+                <strong>Employee ID:</strong> <span>Required - Must match existing trainee</span>
+                <strong>Preferred Location 1:</strong> <span>Optional - First choice city</span>
+                <strong>Preferred Location 2:</strong> <span>Optional - Second choice city</span>
+                <strong>Preferred Location 3:</strong> <span>Optional - Third choice city</span>
+              </div>
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={downloadPrefLocTemplate}
+              disabled={loading}
+            >
+              <Download size={18} /> Download Template
+            </button>
+            <label
+              className="btn btn-success"
+              style={{ cursor: 'pointer' }}
+            >
+              <Upload size={18} /> Select & Upload Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                style={{ display: 'none' }}
+                onChange={handlePrefLocUpload}
+                disabled={loading}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+    );
+  };
   const renderErrorDetailsModal = () => {
     if (!showErrorDetailsModal || !errorDetails) return null;
     return (
@@ -2474,8 +2630,11 @@ function DashboardHR({ userData, onLogout }) {
     <>
       <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleExcelUpload} />
       <input type="file" id="wordUpload" accept=".doc,.docx" style={{ display: 'none' }} onChange={handleWordUpload} />
+      <input type="file" id="prefLocUpload" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handlePrefLocUpload} />
     </>
   );
+
+
 
   const handleExcelUpload = async (event) => {
     const file = event.target.files[0]; if (!file) return;
@@ -2545,6 +2704,15 @@ function DashboardHR({ userData, onLogout }) {
               </button>
               <button className="btn btn-primary" onClick={() => setShowWordTemplate(true)} disabled={loading}>
                 <File size={18} /> Import Word
+              </button>
+
+              <button
+                className="btn btn-warning"
+                onClick={() => setShowPrefLocModal(true)}
+                disabled={loading}
+                title="Upload Preferred Locations"
+              >
+                <MapPinOff size={18} /> Upload Locations
               </button>
             </div>
             <button className="btn btn-primary btn-cta" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }} disabled={loading}>
@@ -2698,82 +2866,82 @@ function DashboardHR({ userData, onLogout }) {
 
   // New renderRecommendations
   const renderRecommendations = () => (
-  <div className="recommendations-tab">
-    <div className="section-header">
-      <div className="header-title">
-        <h2><ThumbsUp size={24} /> Recommendations from Course Owners</h2>
-        <p className="subtitle">Review recommendations before mapping or locking</p>
+    <div className="recommendations-tab">
+      <div className="section-header">
+        <div className="header-title">
+          <h2><ThumbsUp size={24} /> Recommendations from Course Owners</h2>
+          <p className="subtitle">Review recommendations before mapping or locking</p>
+        </div>
+        <div className="header-actions">
+          <select
+            className="filter-select"
+            value={selectedRecJobId}
+            onChange={(e) => setSelectedRecJobId(e.target.value)}
+          >
+            <option value="">All Jobs</option>
+            {jobs
+              .filter(j => j.recommendation_status !== 'not_requested')
+              .map(job => <option key={job.id} value={job.id}>{job.project_name} ({job.demand_id})</option>)}
+          </select>
+          <select
+            className="filter-select"
+            value={recStatusFilter}
+            onChange={(e) => setRecStatusFilter(e.target.value)}
+          >
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <button className="btn btn-secondary" onClick={() => requestDownload('recommendations')} disabled={recommendations.length === 0}>
+            <Download size={18} /> Download
+          </button>
+        </div>
       </div>
-      <div className="header-actions">
-        <select
-          className="filter-select"
-          value={selectedRecJobId}
-          onChange={(e) => setSelectedRecJobId(e.target.value)}
-        >
-          <option value="">All Jobs</option>
-          {jobs
-            .filter(j => j.recommendation_status !== 'not_requested')
-            .map(job => <option key={job.id} value={job.id}>{job.project_name} ({job.demand_id})</option>)}
-        </select>
-        <select
-          className="filter-select"
-          value={recStatusFilter}
-          onChange={(e) => setRecStatusFilter(e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option value="Pending">Pending</option>
-          <option value="Accepted">Accepted</option>
-          <option value="Rejected">Rejected</option>
-        </select>
-        <button className="btn btn-secondary" onClick={() => requestDownload('recommendations')} disabled={recommendations.length === 0}>
-          <Download size={18} /> Download
-        </button>
-      </div>
-    </div>
-    <div className="table-container">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Trainee Name</th>
-            <th>Employee ID</th>
-            <th>Email</th>
-            <th>Job Title</th>
-            <th>Demand ID</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {recommendations.map(rec => (
-            <tr key={rec.id}>
-              <td>{rec.trainee_name || '—'}</td>
-              <td>{rec.trainee_employee_id || rec.trainee_id}</td>
-              <td>{rec.trainee_email || `${rec.trainee_employee_id || rec.trainee_id}@tcs.com`}</td>
-              <td>{rec.job_title}</td>
-              <td>{rec.demand_id || '—'}</td>
-              <td>
-                <span className={`status-badge status-${rec.status.toLowerCase()}`}>
-                  {rec.status}
-                </span>
-              </td>
-              <td>
-                <div className="action-buttons">
-                  <button className="btn-icon btn-icon-view" onClick={() => {
-                    const trainee = findTraineeByUserId(rec.trainee_id);
-                    if (trainee) handleViewTraineeProfile(trainee);
-                  }}><Eye size={16} /></button>
-                </div>
-              </td>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Trainee Name</th>
+              <th>Employee ID</th>
+              <th>Email</th>
+              <th>Job Title</th>
+              <th>Demand ID</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
-          ))}
-          {recommendations.length === 0 && (
-            <tr><td colSpan="7" className="no-data">No recommendations found</td></tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {recommendations.map(rec => (
+              <tr key={rec.id}>
+                <td>{rec.trainee_name || '—'}</td>
+                <td>{rec.trainee_employee_id || rec.trainee_id}</td>
+                <td>{rec.trainee_email || `${rec.trainee_employee_id || rec.trainee_id}@tcs.com`}</td>
+                <td>{rec.job_title}</td>
+                <td>{rec.demand_id || '—'}</td>
+                <td>
+                  <span className={`status-badge status-${rec.status.toLowerCase()}`}>
+                    {rec.status}
+                  </span>
+                </td>
+                <td>
+                  <div className="action-buttons">
+                    <button className="btn-icon btn-icon-view" onClick={() => {
+                      const trainee = findTraineeByUserId(rec.trainee_id);
+                      if (trainee) handleViewTraineeProfile(trainee);
+                    }}><Eye size={16} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {recommendations.length === 0 && (
+              <tr><td colSpan="7" className="no-data">No recommendations found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-);
+  );
 
   // Notify Modal
   const renderNotifyModal = () => (
@@ -2855,7 +3023,7 @@ function DashboardHR({ userData, onLogout }) {
       <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
       <div className="dashboard-main">
         <div className="dashboard-header">
-          <h1><LayoutDashboard size={20} style={{marginRight:'0.5rem'}} />HR Dashboard</h1>
+          <h1><LayoutDashboard size={20} style={{ marginRight: '0.5rem' }} />HR Dashboard</h1>
           <div className="header-right">
             {renderBatchSelector()}
             <button className="btn-icon" onClick={refreshCurrentView} disabled={loading} title="Refresh">
@@ -2869,7 +3037,7 @@ function DashboardHR({ userData, onLogout }) {
               <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={(e) => setRestoreFile(e.target.files[0])} />
             </label>
             {restoreFile && <button className="btn btn-secondary" onClick={restoreBackup} disabled={loading}>Restore</button>}
-            {loading && <div style={{display:'flex',alignItems:'center',gap:'0.4rem',fontSize:'0.8rem',color:'#888'}}><div className="spinner" style={{width:16,height:16}} /><span>Processing...</span></div>}
+            {loading && <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#888' }}><div className="spinner" style={{ width: 16, height: 16 }} /><span>Processing...</span></div>}
           </div>
         </div>
         <div className="dashboard-content">
@@ -2893,6 +3061,7 @@ function DashboardHR({ userData, onLogout }) {
       {renderBulkMappingModal()}
       {renderErrorDetailsModal()}
       {renderNotifyModal()}
+      {renderPrefLocModal()}
     </div>
   );
 }

@@ -18,6 +18,7 @@ from .views import (
     LoginView,
     AddUserView,
     UploadAddExcelView,
+    UploadPreferredLocationsView,
     UserListView,
     UploadBulkDeleteUsersView,
     UploadBulkActivateUsersView,
@@ -182,4 +183,7 @@ urlpatterns = [
     path('hr/recommendations/', HRJobRecommendationsView.as_view(), name='hr-recommendations'),
     path('course-owner/jobs/<int:job_id>/add-recommendations/', CourseOwnerAddRecommendationsView.as_view(), name='course-owner-add-recommendations'),
     path('course-owner/jobs/<int:job_id>/available-trainees/', CourseOwnerAvailableTraineesView.as_view(), name='course-owner-available-trainees'),
+
+
+    path('users/upload-preferred-locations/', UploadPreferredLocationsView.as_view(), name='upload-preferred-locations'),
 ]

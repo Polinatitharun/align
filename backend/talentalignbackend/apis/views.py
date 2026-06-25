@@ -3414,3 +3414,80 @@ class CourseOwnerAvailableTraineesView(APIView):
             })
 
         return Response(data)
+
+
+class UploadPreferredLocationsView(APIView):
+    """Upload Excel to update trainees' preferred locations."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({"error": f"Invalid Excel file: {str(e)}"}, status=400)
+
+        # Normalize column names
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # Find columns (case-insensitive)
+        col_map = {}
+        for col in df.columns:
+            col_lower = col.lower()
+            if 'employee' in col_lower and 'id' in col_lower:
+                col_map['employee_id'] = col
+            elif 'location' in col_lower and '1' in col_lower:
+                col_map['loc1'] = col
+            elif 'location' in col_lower and '2' in col_lower:
+                col_map['loc2'] = col
+            elif 'location' in col_lower and '3' in col_lower:
+                col_map['loc3'] = col
+
+        if 'employee_id' not in col_map:
+            return Response({"error": "Missing 'Employee ID' column"}, status=400)
+
+        updated = 0
+        errors = []
+        for idx, row in df.iterrows():
+            try:
+                emp_id = str(row[col_map['employee_id']]).strip()
+                if not emp_id or pd.isna(row[col_map['employee_id']]):
+                    continue
+
+                user_info = UserInfo.objects.filter(employeeId=emp_id).first()
+                if not user_info:
+                    errors.append(f"Row {idx+2}: Employee {emp_id} not found")
+                    continue
+
+                # Update preferred locations (can be empty to clear)
+                user_info.preferred_location_1 = str(row.get(col_map.get('loc1', ''), '')).strip() or None if col_map.get('loc1') and not pd.isna(row.get(col_map.get('loc1', ''))) else user_info.preferred_location_1
+                user_info.preferred_location_2 = str(row.get(col_map.get('loc2', ''), '')).strip() or None if col_map.get('loc2') and not pd.isna(row.get(col_map.get('loc2', ''))) else user_info.preferred_location_2
+                user_info.preferred_location_3 = str(row.get(col_map.get('loc3', ''), '')).strip() or None if col_map.get('loc3') and not pd.isna(row.get(col_map.get('loc3', ''))) else user_info.preferred_location_3
+                
+                # Handle empty values properly
+                if col_map.get('loc1') and not pd.isna(row.get(col_map.get('loc1', ''))):
+                    val = str(row[col_map['loc1']]).strip()
+                    user_info.preferred_location_1 = val if val else None
+                if col_map.get('loc2') and not pd.isna(row.get(col_map.get('loc2', ''))):
+                    val = str(row[col_map['loc2']]).strip()
+                    user_info.preferred_location_2 = val if val else None
+                if col_map.get('loc3') and not pd.isna(row.get(col_map.get('loc3', ''))):
+                    val = str(row[col_map['loc3']]).strip()
+                    user_info.preferred_location_3 = val if val else None
+
+                user_info.save()
+                updated += 1
+            except Exception as e:
+                errors.append(f"Row {idx+2}: {str(e)}")
+
+        return Response({
+            "message": f"Updated {updated} trainees",
+            "updated": updated,
+            "errors": errors
+        }, status=200 if updated > 0 else 400)
