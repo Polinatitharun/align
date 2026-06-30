@@ -379,6 +379,28 @@ body.modal-open {
 
 /* ── Responsive tweaks ── */
 @media (max-width: 768px) {
+  .section-header,
+  .job-management .section-header {
+    padding: 1rem;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: stretch;
+    gap: 0.6rem;
+  }
+
+  .header-actions > * {
+    flex: 1 1 calc(50% - 0.3rem);
+  }
+
+  .header-actions .btn,
+  .header-actions .dropdown-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
   .modal-overlay {
     align-items: flex-start;
     padding: 1rem;
@@ -490,16 +512,45 @@ body.modal-open {
 }
 
 /* ── Job Profiles Header ── */
+.section-header,
 .job-management .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2.5rem;
-  padding: 1.5rem 2rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+  padding: 1.25rem 1.5rem;
   background: var(--bg-white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
+}
+
+.section-header .header-title,
+.job-management .section-header .header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.section-header .header-title h2,
+.job-management .section-header .header-title h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.section-header .subtitle,
+.job-management .section-header .subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
 .header-actions {
@@ -507,6 +558,24 @@ body.modal-open {
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.header-actions > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-actions .btn,
+.header-actions .dropdown-toggle {
+  min-height: 42px;
+}
+
+.header-actions .btn-icon {
+  width: 42px;
+  height: 42px;
 }
 
 .btn-cta {
