@@ -1942,3 +1942,7 @@ body.modal-open {
 }
 
 /* Course dropdown in create job form already uses form-group, no extra styling needed */
+.location-tag {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #059669 !important;
+}

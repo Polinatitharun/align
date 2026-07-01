@@ -8,7 +8,8 @@ Matching Engine for Talent Align – semantic embeddings + parallel execution.
 - Thread pool processes trainees in parallel.
 - Geocoding uses Nominatim with Django cache + hardcoded fallback.
 - City name normalization handles spelling variations (Bangalore/Bengaluru).
-- Preferred locations (up to 3) are checked first, then current location.
+- Preferred locations (up to 3) are used exclusively for location matching.
+- userInfo.location is NOT used as fallback.
 - LLM is imported for other modules (not used in matching).
 """
 
@@ -148,7 +149,6 @@ def haversine(lon1, lat1, lon2, lat2):
 
 
 # ---------- City Name Normalization ----------
-# Map common variations to canonical names for accurate matching
 CITY_ALIASES = {
     'bangalore': 'bengaluru',
     'bengaluru': 'bengaluru',
@@ -259,7 +259,7 @@ def geocode_city(city_name):
     }
 
     try:
-        time.sleep(1.1)  # Be polite to Nominatim
+        time.sleep(1.1)
         response = requests.get(url, params=params, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
@@ -276,7 +276,6 @@ def geocode_city(city_name):
     except Exception as e:
         logger.exception(f"Geocoding exception for {city_name}: {e}")
 
-    # Hardcoded fallback coordinates for major Indian cities
     fallback_coords = {
         'bengaluru': (12.9716, 77.5946),
         'mumbai': (19.0760, 72.8777),
@@ -343,9 +342,6 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
     """
     Compute skills match percentage using pre‑computed embeddings.
     If embeddings are unavailable, fall back to exact string matching.
-    job_embeddings: dict {skill_name: tensor}
-    trainee_embeddings: dict {skill_name: tensor}
-    Returns (percentage, list_of_matched_skills)
     """
     if not job_embeddings:
         return 0.0, []
@@ -392,70 +388,79 @@ def compute_skills_match(job_embeddings, trainee_embeddings):
 
 
 # ---------- Trainee Processing Function (for thread pool) ----------
+# ---------- Trainee Processing Function (for thread pool) ----------
 def process_trainee(args):
     """
     args = (trainee, job_locations, job_embeddings)
     Returns a result dict.
     
-    Location matching priority:
-    1. Preferred locations (exact match via city normalization)
-    2. Preferred locations (proximity via Haversine)
-    3. Current location (exact match via city normalization)
-    4. Current location (proximity via Haversine)
+    Location matching uses ONLY preferred locations (never userInfo.location):
+    1. Preferred Location 1 (exact match via city normalization)
+    2. Preferred Location 2 (exact match via city normalization)
+    3. Preferred Location 3 (exact match via city normalization)
+    4. Preferred Location 1 (proximity via Haversine)
+    5. Preferred Location 2 (proximity via Haversine)
+    6. Preferred Location 3 (proximity via Haversine)
+    
+    If no preferred locations are set, location_percentage = 0.
     """
     trainee, job_locations, job_embeddings = args
-    trainee_location = trainee.userInfo.location if trainee.userInfo else None
     trainee_embeddings = get_trainee_skill_embeddings(trainee)
 
     # Skills
     skills_perc, matched_skills = compute_skills_match(job_embeddings, trainee_embeddings)
 
-    # Collect all preferred locations
+    # Collect only preferred locations (NOT userInfo.location)
     preferred_locations = []
     if trainee.userInfo:
-        for loc_attr in ['preferred_location_1', 'preferred_location_2', 'preferred_location_3']:
-            loc_val = getattr(trainee.userInfo, loc_attr, None)
-            if loc_val and str(loc_val).strip():
-                preferred_locations.append(str(loc_val).strip())
-
-    # Add current location as last fallback
-    if trainee_location and trainee_location.strip():
-        preferred_locations.append(trainee_location.strip())
+        if trainee.userInfo.preferred_location_1 and str(trainee.userInfo.preferred_location_1).strip():
+            preferred_locations.append(str(trainee.userInfo.preferred_location_1).strip())
+        if trainee.userInfo.preferred_location_2 and str(trainee.userInfo.preferred_location_2).strip():
+            preferred_locations.append(str(trainee.userInfo.preferred_location_2).strip())
+        if trainee.userInfo.preferred_location_3 and str(trainee.userInfo.preferred_location_3).strip():
+            preferred_locations.append(str(trainee.userInfo.preferred_location_3).strip())
 
     best_distance = 9999.0
     best_location = None
     best_location_percentage = 0.0
 
-    for job_loc in job_locations:
-        job_loc_clean = normalize_city_name(job_loc)
-        job_coords = geocode_city(job_loc)
+    # Only calculate location match if preferred locations are set
+    if preferred_locations:
+        for job_loc in job_locations:
+            job_loc_clean = normalize_city_name(job_loc)
+            job_coords = geocode_city(job_loc)
 
-        for pref_loc in preferred_locations:
-            pref_loc_clean = normalize_city_name(pref_loc)
-            
-            # Exact match check (case-insensitive, normalized)
-            if job_loc_clean and pref_loc_clean and job_loc_clean == pref_loc_clean:
-                best_location_percentage = 100.0
-                best_location = job_loc
-                best_distance = 0.0
+            for pref_loc in preferred_locations:
+                pref_loc_clean = normalize_city_name(pref_loc)
+                
+                # Exact match check (case-insensitive, normalized)
+                if job_loc_clean and pref_loc_clean and job_loc_clean == pref_loc_clean:
+                    best_location_percentage = 100.0
+                    best_location = job_loc
+                    best_distance = 0.0
+                    break
+                
+                # Proximity check
+                if job_coords[0] is not None:
+                    pref_coords = geocode_city(pref_loc)
+                    if pref_coords[0] is not None:
+                        dist = haversine(job_coords[1], job_coords[0], pref_coords[1], pref_coords[0])
+                        loc_perc = calculate_location_percentage(dist)
+                        if dist < best_distance or (dist == best_distance and loc_perc > best_location_percentage):
+                            best_distance = dist
+                            best_location = job_loc
+                            best_location_percentage = loc_perc
+
+            # If exact match found, skip remaining job locations
+            if best_location_percentage == 100.0:
                 break
-            
-            # Proximity check
-            if job_coords[0] is not None:
-                pref_coords = geocode_city(pref_loc)
-                if pref_coords[0] is not None:
-                    dist = haversine(job_coords[1], job_coords[0], pref_coords[1], pref_coords[0])
-                    loc_perc = calculate_location_percentage(dist)
-                    if dist < best_distance or (dist == best_distance and loc_perc > best_location_percentage):
-                        best_distance = dist
-                        best_location = job_loc
-                        best_location_percentage = loc_perc
 
-        # If exact match found, skip remaining job locations
-        if best_location_percentage == 100.0:
-            break
+    # DPI is on a 0-5 scale, convert to percentage
+    # 0 → 0%, 1 → 20%, 2 → 40%, 3 → 60%, 4 → 80%, 5 → 100%
+    dpi_value = trainee.dpi if trainee.dpi is not None else 0
+    dpi_value = max(0, min(5, float(dpi_value)))  # Clamp to 0-5
+    experience_perc = (dpi_value / 5.0) * 100  # Convert to percentage
 
-    experience_perc = float(min(max(trainee.dpi or 0, 0), 100)) if getattr(trainee, 'dpi', None) is not None else 50.0
     availability_perc = 0.0 if trainee.userInfo and trainee.userInfo.isMapped else 100.0
     total_perc = (
         (skills_perc * 0.60) +
@@ -488,8 +493,6 @@ def process_trainee(args):
         'distance': round(best_distance, 2),
         'matched_location': best_location,
     }
-
-
 # ---------- Main Matching Engine ----------
 def run_matching_logic(job_id=None):
     """
@@ -507,7 +510,6 @@ def run_matching_logic(job_id=None):
         logger.info("No active jobs to match.")
         return False
 
-    # Test embedding service before starting
     test_embedding = get_embedding("test")
     if test_embedding is None:
         logger.warning("Embedding service is not responding. Falling back to exact skill matching.")
@@ -517,7 +519,6 @@ def run_matching_logic(job_id=None):
     for job in jobs:
         logger.info(f"Processing job: {job.project_name} (Batch: {job.batch_name or 'None'})")
 
-        # Filter trainees by course and batch
         trainees = ProfileRecord.objects.select_related('userInfo', 'userInfo__course').prefetch_related('strengths')
         if job.course_id:
             trainees = trainees.filter(userInfo__course_id=job.course_id)
@@ -530,7 +531,6 @@ def run_matching_logic(job_id=None):
             logger.info(f"  No trainees found in this batch.")
             continue
 
-        # Parse job locations and skills
         job_locations = [loc.strip() for loc in job.location.split(',') if loc.strip()] if job.location else []
         job_tech_skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()] if job.skills else []
 
@@ -538,7 +538,6 @@ def run_matching_logic(job_id=None):
             logger.warning(f"  Job has no skills defined. Skipping.")
             continue
 
-        # Pre‑compute job embeddings ONCE
         logger.info(f"  Computing embeddings for {len(job_tech_skills)} skills...")
         job_embeddings = {}
         for skill in job_tech_skills:
@@ -552,7 +551,6 @@ def run_matching_logic(job_id=None):
             job_embeddings = {skill: None for skill in job_tech_skills}
             logger.warning(f"  No valid embeddings for job skills. Using exact skill fallback.")
 
-        # Build argument list for threads
         trainee_args = [(trainee, job_locations, job_embeddings) for trainee in trainees]
 
         results = []
@@ -573,13 +571,15 @@ def run_matching_logic(job_id=None):
                     trainee = future_to_trainee[future]
                     logger.exception(f"Error processing trainee {trainee.id}: {e}")
 
-        # Write results sequentially
         matches_created = 0
         sorted_results = sorted(results, key=lambda item: item['total_percentage'], reverse=True)
         recommendation_limit = max(0, job.available_openings)
         for rank, res in enumerate(sorted_results, 1):
             trainee = res['trainee']
-            trainee_location = trainee.userInfo.location if trainee.userInfo else ''
+            # Use first preferred location as trainee_location in match record
+            trainee_display_location = ''
+            if trainee.userInfo:
+                trainee_display_location = trainee.userInfo.preferred_location_1 or ''
             try:
                 with transaction.atomic():
                     match, created = Match.objects.update_or_create(
@@ -587,7 +587,7 @@ def run_matching_logic(job_id=None):
                         trainee_ref=trainee,
                         defaults={
                             'trainee_name': trainee.userInfo.name if trainee.userInfo else '',
-                            'trainee_location': trainee_location,
+                            'trainee_location': trainee_display_location,
                             'trainee_id': trainee.userInfo.userId if trainee.userInfo else '',
                             'job_id': job.id,
                             'job_title': job.project_name,
@@ -615,7 +615,6 @@ def run_matching_logic(job_id=None):
         job.save(update_fields=['matches'])
         logger.info(f"  Job '{job.project_name}' now has {job.matches} total matches.")
 
-        # Notify course owners
         if job.course:
             for owner in job.course.owners.all():
                 recommended_count = Match.objects.filter(job_ref=job, is_recommended=True).count()
