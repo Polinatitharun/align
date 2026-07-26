@@ -15,6 +15,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.db import models as django_models
 from django.db import transaction
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core import serializers as django_serializers
@@ -2254,7 +2255,7 @@ class HRSummaryReportView(APIView):
 from .models import ManagerChatSession, ManagerChatMessage
 from .serializers import ManagerChatSessionSerializer, ManagerChatMessageSerializer
 
-def build_manager_chat_context(batch=None):
+def build_manager_chat_context(batch=None, selected_job=None):
     jobs = Job.objects.filter(status='active')
     trainees = ProfileRecord.objects.select_related('userInfo')
     if batch:
@@ -2263,12 +2264,13 @@ def build_manager_chat_context(batch=None):
 
     total_trainees = trainees.count()
     mapped = trainees.filter(userInfo__isMapped=True).count()
+    unmapped = total_trainees - mapped
     active_jobs_count = jobs.count()
 
     top_jobs = jobs[:5]
     job_summaries = []
     for job in top_jobs:
-        skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()][:2]
+        skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()][:3]
         job_summaries.append(f"- {job.project_name} ({job.openings} openings, skills: {', '.join(skills)})")
 
     demand_map = {}
@@ -2290,14 +2292,87 @@ def build_manager_chat_context(batch=None):
     top_gaps = gaps[:3]
     gap_str = ", ".join([f"{s} (gap {g})" for s, g in top_gaps]) if top_gaps else "none"
 
-    context = f"""Batch: {batch if batch else 'All'}. Trainees: {total_trainees} (mapped: {mapped}). Active jobs: {active_jobs_count}.
-Sample jobs: {'; '.join(job_summaries) if job_summaries else 'none'}.
-Top skill gaps: {gap_str}."""
+    top_trainees = []
+    for trainee in trainees.prefetch_related('strengths').order_by('-userInfo__averageScore')[:5]:
+        score = trainee.userInfo.averageScore if trainee.userInfo else 0
+        skills = [s.courseName for s in trainee.strengths.all()[:3]]
+        top_trainees.append(f"{trainee.userInfo.name if trainee.userInfo else 'Unknown'} ({score or 0} score, skills: {', '.join(skills)})")
 
+    selected_job_context = ""
+    if selected_job:
+        job_name = selected_job.get('project_name') or selected_job.get('title') or selected_job.get('job_name') or selected_job.get('name') or ''
+        job_id = selected_job.get('id') or selected_job.get('job_id')
+        if job_name:
+            selected_job_context = f"Selected job: {job_name}."
+            if job_id:
+                candidate_matches = Match.objects.filter(job_id=job_id).select_related('trainee_ref__userInfo').order_by('-total_percentage')[:3]
+                if candidate_matches:
+                    match_summary = "; ".join([
+                        f"{m.trainee_name} ({m.total_percentage:.1f}%, bucket: {m.bucket})"
+                        for m in candidate_matches
+                    ])
+                    selected_job_context += f" Top matches: {match_summary}."
+                else:
+                    selected_job_context += " No match results found for this job yet."
+        elif job_id:
+            selected_job_context = f"Selected job id: {job_id}."
+
+    context = f"""Batch: {batch if batch else 'All'}.
+Trainees: {total_trainees} (mapped: {mapped}, unmapped: {unmapped}).
+Active jobs: {active_jobs_count}.
+Sample jobs: {'; '.join(job_summaries) if job_summaries else 'none'}.
+Top skill gaps: {gap_str}.
+Top trainees: {'; '.join(top_trainees) if top_trainees else 'none'}.
+{selected_job_context}
+"""
     return context
 
+
+def generate_manager_chat_answer(context, user_query):
+    q = (user_query or '').strip().lower()
+    if not q:
+        return "Please ask about jobs, trainees, skills, interviews, mapping, or overall staffing."
+
+    if 'skill gap' in q or 'skill gaps' in q or 'gap' in q:
+        gap_section = context.split('Top skill gaps:')[1].split('\n')[0].strip() if 'Top skill gaps:' in context else 'No major gaps found.'
+        return f"Skill gap summary: {gap_section}"
+
+    if 'trainee' in q or 'candidates' in q or ('show' in q and 'job' in q):
+        requested_role = 'the requested role'
+        if 'for ' in q:
+            raw_role = q.split('for', 1)[1].strip()
+            requested_role = ' '.join(
+                part.capitalize() if part.isalpha() else part
+                for part in raw_role.split()
+            )
+        if 'Top matches:' in context:
+            match_section = context.split('Top matches:')[1].split('\n')[0].strip() if 'Top matches:' in context else ''
+            if match_section:
+                return f"Top candidates for {requested_role}: {match_section}"
+        if 'Top trainees:' in context:
+            trainee_section = context.split('Top trainees:')[1].split('\n')[0].strip() if 'Top trainees:' in context else 'No trainees available.'
+            return f"Top available trainees for {requested_role}: {trainee_section}"
+        return f"I could not find enough trainee data for {requested_role}."
+
+    if 'mapped' in q or 'mapping rate' in q:
+        mapped_value = context.split('mapped:')[1].split(',')[0].strip() if 'mapped:' in context else 'unknown'
+        return f"Current mapping snapshot: {mapped_value} mapped trainees."
+
+    if 'job' in q or 'jobs' in q:
+        job_section = context.split('Sample jobs:')[1].split('\n')[0].strip() if 'Sample jobs:' in context else 'No active jobs found.'
+        return f"Active job snapshot: {job_section}"
+
+    if 'overall' in q or 'report' in q or 'summary' in q:
+        return context.replace('\n', ' ')
+
+    if 'interview' in q:
+        return "Interview details are available in the interview workflow and feedback history. I can help summarize locks, status, feedback, and interviewer assignments."
+
+    return "I can help with job fit, skill gaps, trainee shortlist, mapping rates, interviews, and overall staffing summaries."
+
+
 def call_ollama_with_context(context, conversation_history, user_query):
-    prompt = f"Data: {context[:800]}\nUser: {user_query}\nAnswer briefly:"
+    prompt = f"Data: {context[:2000]}\nUser: {user_query}\nAnswer briefly and use the available data."
     try:
         response = requests.post(
             "http://localhost:11434/api/generate",
@@ -2305,7 +2380,7 @@ def call_ollama_with_context(context, conversation_history, user_query):
                 "model": "phi3",
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.7, "max_tokens": 100}
+                "options": {"temperature": 0.7, "max_tokens": 220}
             },
             timeout=20
         )
@@ -2313,14 +2388,8 @@ def call_ollama_with_context(context, conversation_history, user_query):
             return response.json().get("response", "")
     except Exception as e:
         logger.error(f"Ollama call failed: {e}")
-    q = user_query.lower()
-    if "skill gap" in q:
-        return "Skill gaps are shown in the Skill Gaps tab. Top gaps: " + context.split("Top skill gaps:")[-1].split(".")[0]
-    if "mapped" in q:
-        return f"Currently, {context.split('mapped:')[1].split('.')[0] if 'mapped:' in context else 'some'} trainees are mapped."
-    if "job" in q:
-        return f"Active jobs: {context.split('Active jobs:')[1].split('.')[0] if 'Active jobs:' in context else 'several'}."
-    return "I'm currently processing your request. For detailed analytics, please check the respective dashboard tabs."
+
+    return generate_manager_chat_answer(context, user_query)
 
 class ManagerChatContextView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2348,7 +2417,8 @@ class ManagerChatSessionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Message required'}, status=400)
         user_msg_obj = ManagerChatMessage.objects.create(session=session, role='user', content=user_msg)
         batch = request.data.get('batch', '')
-        context = build_manager_chat_context(batch)
+        selected_job = request.data.get('selected_job') or None
+        context = build_manager_chat_context(batch, selected_job)
         history = list(session.messages.values('role', 'content'))
         bot_reply = call_ollama_with_context(context, history, user_msg)
         bot_msg_obj = ManagerChatMessage.objects.create(session=session, role='assistant', content=bot_reply)

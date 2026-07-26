@@ -674,6 +674,7 @@ function DashboardManager({ userData, onLogout }) {
       const res = await api.post(`/manager/chat-sessions/${activeSessionId}/send_message/`, {
         message: userMsg,
         batch: selectedBatch,
+        selected_job: selectedJobForView || selectedJobForSearch || null,
       });
       setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.bot_reply.content }]);
     } catch (err) {
