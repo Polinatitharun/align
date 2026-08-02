@@ -398,6 +398,8 @@ class DashboardAnalyticsView(APIView):
             'perfect_match': matches.filter(bucket='PERFECT_MATCH').count(),
             'skill_only': matches.filter(bucket='SKILLS_ONLY').count(),
             'location_only': matches.filter(bucket='LOCATION_ONLY').count(),
+            'nearby': matches.filter(bucket='NEARBY').count(),  # ADD
+            'no_match': matches.filter(bucket='NO_MATCH').count(),  # optional
         }
 
         return Response({

@@ -1946,3 +1946,298 @@ body.modal-open {
   background: rgba(16, 185, 129, 0.1) !important;
   color: #059669 !important;
 }
+
+
+/* ── Design tokens extension ── */
+:root {
+  --stat-hover: rgba(0, 112, 192, 0.06);
+  --focus-ring: 0 0 0 3px rgba(0, 112, 192, 0.25);
+  --surface-muted: #f8fafc;
+  --density-gap: 0.75rem;
+  --panel-max-h: 320px;
+}
+
+/* ── Bento dashboard shell ── */
+.bento-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--density-gap);
+  min-height: 0;
+}
+
+.bento-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--density-gap);
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(240px, 1fr) minmax(240px, 1fr);
+  gap: var(--density-gap);
+  min-height: 0;
+}
+
+@media (max-width: 1100px) {
+  .bento-grid { grid-template-columns: 1fr; }
+}
+
+.bento-panel {
+  background: var(--bg-white, #fff);
+  border: 1px solid var(--border-light, #e0e6ed);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bento-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-light, #e0e6ed);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--surface-muted);
+}
+
+.bento-panel-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark, #1a1a1a);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bento-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+}
+
+/* ── Clickable stat card ── */
+.clickable-stat {
+  background: #fff;
+  border: 1px solid var(--border-light, #e0e6ed);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 72px;
+}
+
+.clickable-stat:hover {
+  background: var(--stat-hover);
+  border-color: var(--primary, #0070C0);
+  box-shadow: 0 4px 12px rgba(0, 112, 192, 0.08);
+}
+
+.clickable-stat:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--primary, #0070C0);
+}
+
+.clickable-stat .stat-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 112, 192, 0.1);
+  color: var(--primary, #0070C0);
+}
+
+.clickable-stat .stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #888);
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+
+.clickable-stat .stat-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-dark, #1a1a1a);
+  line-height: 1.1;
+}
+
+.clickable-stat .stat-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted, #888);
+  margin-top: 0.15rem;
+}
+
+.clickable-stat[data-tone="success"] .stat-icon { background: rgba(16,185,129,0.12); color: #059669; }
+.clickable-stat[data-tone="warning"] .stat-icon { background: rgba(245,158,11,0.12); color: #d97706; }
+.clickable-stat[data-tone="danger"]  .stat-icon { background: rgba(239,68,68,0.12);  color: #dc2626; }
+.clickable-stat[data-tone="info"]    .stat-icon { background: rgba(0,112,192,0.12);  color: #0070C0; }
+
+/* ── Drill-down modal ── */
+.drill-modal {
+  max-width: min(960px, 96vw);
+  width: 100%;
+  max-height: calc(100vh - 3rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.drill-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.drill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-light, #e0e6ed);
+  color: var(--text-dark, #1a1a1a);
+}
+
+.drill-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-light, #e0e6ed);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.drill-tab {
+  padding: 0.55rem 1rem;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.drill-tab:hover { color: var(--text-dark, #1a1a1a); }
+.drill-tab.active {
+  color: var(--primary, #0070C0);
+  border-bottom-color: var(--primary, #0070C0);
+}
+.drill-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.drill-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.drill-group-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 0.82rem;
+}
+
+.drill-group-row .bar-track {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.drill-group-row .bar-fill {
+  height: 100%;
+  background: var(--primary, #0070C0);
+  border-radius: 999px;
+}
+
+.drill-search {
+  margin-bottom: 0.75rem;
+}
+
+.drill-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border-light, #e0e6ed);
+  border-radius: 8px;
+}
+
+.drill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.drill-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-muted);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #888);
+  border-bottom: 1px solid var(--border-light, #e0e6ed);
+  z-index: 1;
+}
+
+.drill-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: middle;
+}
+
+.drill-table tr:hover td { background: rgba(0,112,192,0.03); }
+
+.drill-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .clickable-stat,
+  .bento-panel,
+  .modal-content {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .bento-stats { grid-template-columns: repeat(2, 1fr); }
+  .clickable-stat { min-height: 64px; padding: 0.65rem 0.75rem; }
+  .clickable-stat .stat-value { font-size: 1.15rem; }
+  .drill-group-row { grid-template-columns: 1fr; }
+}

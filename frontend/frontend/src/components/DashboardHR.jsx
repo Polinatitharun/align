@@ -11,6 +11,7 @@ import {
   TrendingUp, Clock, Info, MessageSquare, UploadCloud, ChevronDown,
   RefreshCw, Database, Megaphone, ThumbsUp,
 } from 'lucide-react';
+import { groupBy, ClickableStatCard, DrillDownModal } from './Drilldown';
 import {
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart as ReLineChart, Line,
@@ -63,6 +64,7 @@ function DashboardHR({ userData, onLogout }) {
   const [jobDetailsTab, setJobDetailsTab] = useState('overview');
   const [mappedTrainees, setMappedTrainees] = useState([]);
   const [rejectedTrainees, setRejectedTrainees] = useState([]);
+  const [drill, setDrill] = useState(null); // { type, ...payload }
   const [newJob, setNewJob] = useState({
     project_name: '', location: '', demand_id: '', skills: '', openings: 1,
     bg: '', isu_hsu: '', stream: '', role: '', spoc_name: '', spoc_emp_id: '',
@@ -119,6 +121,14 @@ function DashboardHR({ userData, onLogout }) {
   const [dsFilter, setDsFilter] = useState({ batch: '', location: '' });
   const [isNotifying, setIsNotifying] = useState(false);
 
+
+
+  const [workbookSheet, setWorkbookSheet] = useState('trainees'); // trainees | jobs | matches | pipeline
+const [workbookJobId, setWorkbookJobId] = useState('');
+const [workbookRows, setWorkbookRows] = useState([]);
+const [workbookCols, setWorkbookCols] = useState([]);
+const [workbookLoading, setWorkbookLoading] = useState(false);
+const [workbookFilter, setWorkbookFilter] = useState('');   
   // ==================== Helper Functions ====================
   const normalizeSkill = (s) => (s || '').toString().trim().toLowerCase();
   const getBatchParam = () => (selectedBatch ? `?batch=${encodeURIComponent(selectedBatch)}` : '');
@@ -176,6 +186,17 @@ function DashboardHR({ userData, onLogout }) {
 
   const getJobDepartment = (job) => job?.department || job?.bg || '—';
 
+
+  // Load saved batch once
+  useEffect(() => {
+    const saved = localStorage.getItem('hr_selected_batch');
+    if (saved) setSelectedBatch(saved);
+  }, []);
+
+  // Persist when batch changes
+  useEffect(() => {
+    localStorage.setItem('hr_selected_batch', selectedBatch || '');
+  }, [selectedBatch]);
   // ==================== API Calls ====================
   const jobAPI = {
     getAllJobs: async () => (await api.get(`/jobs/${getBatchParam()}`)).data,
@@ -220,6 +241,581 @@ function DashboardHR({ userData, onLogout }) {
     }
   };
 
+
+  const handleJobSelectForSearch = async (jobId) => {
+    if (!jobId) { setSelectedJobForSearch(null); setSearchJobMatches(null); return; }
+    const job = jobs.find(j => j.id === parseInt(jobId));
+    if (!job || getRemainingOpenings(job) <= 0 || job.status !== 'active') { toast.error('This job has no openings or is inactive'); setSelectedJobForSearch(null); setSearchJobMatches(null); return; }
+    setSelectedJobForSearch(job);
+    setJobMatchesLoading(true);
+    try { const res = await api.get(`/matches/${job.id}/${getBatchParam()}`); setSearchJobMatches(res.data); setSelectedSearchTraineeIds([]); setSelectAll(false); }
+    catch { toast.error('Failed to fetch matches'); } finally { setJobMatchesLoading(false); }
+  };
+
+
+  const buildActionQueue = () => {
+    const items = [];
+
+    // 1. Active jobs with openings but zero matches field
+    jobs
+      .filter((j) => j.status === 'active' && getRemainingOpenings(j) > 0 && Number(j.matches || 0) === 0)
+      .slice(0, 5)
+      .forEach((j) => {
+        items.push({
+          id: `nomatch-${j.id}`,
+          severity: 'high',
+          title: `No matches: ${j.project_name}`,
+          detail: `${getRemainingOpenings(j)} openings — run matching or fix skills`,
+          actionLabel: 'Open job',
+          onAction: () => {
+            setSelectedJob(j);
+            setActiveTab('jobs');
+          },
+        });
+      });
+
+    // 2. Active jobs with openings + matches, suggest search
+    jobs
+      .filter((j) => j.status === 'active' && getRemainingOpenings(j) > 0 && Number(j.matches || 0) > 0)
+      .slice(0, 5)
+      .forEach((j) => {
+        items.push({
+          id: `fill-${j.id}`,
+          severity: 'medium',
+          title: `Fill openings: ${j.project_name}`,
+          detail: `${getRemainingOpenings(j)} left · ${j.matches} matches`,
+          actionLabel: 'Talent search',
+          onAction: () => goTalentSearchForJob(j.id),
+
+        });
+      });
+
+    // 3. Stale interview locks
+    const now = Date.now();
+    interviewLocks
+      .filter((l) => l.status === 'locked' && l.interview_datetime && new Date(l.interview_datetime).getTime() < now)
+      .slice(0, 5)
+      .forEach((l) => {
+        items.push({
+          id: `stale-${l.id}`,
+          severity: 'high',
+          title: `Past interview: ${l.trainee_name || 'Candidate'}`,
+          detail: l.job_title || 'Job',
+          actionLabel: 'Locks',
+          onAction: () => setActiveTab('interviewLocks'),
+        });
+      });
+
+    // 4. Pending recommendations
+    const pendingRecs = (recommendations || []).filter((r) => r.status === 'Pending');
+    if (pendingRecs.length > 0) {
+      items.push({
+        id: 'pending-recs',
+        severity: 'medium',
+        title: `${pendingRecs.length} recommendations pending`,
+        detail: 'Course owners still reviewing',
+        actionLabel: 'Review',
+        onAction: () => {
+          setRecStatusFilter('Pending');
+          setActiveTab('recommendations');
+        },
+      });
+    }
+
+    // 5. Open pool
+    if (traineesWithNoMatches.length > 0) {
+      items.push({
+        id: 'open-pool',
+        severity: 'low',
+        title: `${traineesWithNoMatches.length} in open pool`,
+        detail: 'No job match — upskill or broaden JDs',
+        actionLabel: 'Open pool',
+        onAction: () => setActiveTab('openPool'),
+      });
+    }
+
+    // 6. Critical skill gaps
+    const critical = (dsAnalysis?.skillGaps || []).filter(
+      (s) => s.status === 'Critical' || s.status === 'Shortage'
+    );
+    if (critical.length > 0) {
+      items.push({
+        id: 'skill-gaps',
+        severity: 'high',
+        title: `${critical.length} critical skill gaps`,
+        detail: critical.slice(0, 3).map((s) => s.skill).join(', '),
+        actionLabel: 'Gaps',
+        onAction: openSkillGapDrill,
+      });
+    }
+
+    const order = { high: 0, medium: 1, low: 2 };
+    return items.sort((a, b) => order[a.severity] - order[b.severity]);
+  };
+
+
+  const goTalentSearchForJob = (jobId) => {
+    setActiveTab('talentSearch');
+    setTimeout(() => {
+      handleJobSelectForSearch(jobId);
+    }, 0);
+  };
+
+
+
+
+
+  const lockByTraineeId = () => {
+  const map = {};
+  (interviewLocks || []).forEach((l) => {
+    const tid = String(
+      l.trainee_id ||
+        l.trainee?.userInfo?.userId ||
+        l.trainee_user_id ||
+        ''
+    );
+    if (!tid) return;
+    // keep latest-ish
+    if (!map[tid] || new Date(l.updated_at || l.created_at || 0) > new Date(map[tid].updated_at || 0)) {
+      map[tid] = l;
+    }
+  });
+  return map;
+};
+
+const buildTraineeWorkbook = () => {
+  const locks = lockByTraineeId();
+  const cols = [
+    { key: 'name', label: 'Name' },
+    { key: 'userId', label: 'User ID' },
+    { key: 'email', label: 'Email' },
+    { key: 'batch_name', label: 'Batch' },
+    { key: 'location', label: 'Location' },
+    { key: 'preferredLocation1', label: 'Pref Loc 1' },
+    { key: 'preferredLocation2', label: 'Pref Loc 2' },
+    { key: 'preferredLocation3', label: 'Pref Loc 3' },
+    { key: 'score', label: 'Score' },
+    { key: 'skills', label: 'Skills' },
+    { key: 'isMapped', label: 'Mapped' },
+    { key: 'projectName', label: 'Project' },
+    { key: 'projectId', label: 'Project ID' },
+    { key: 'lockStatus', label: 'Lock Status' },
+    { key: 'lockJob', label: 'Lock Job' },
+    { key: 'interviewDatetime', label: 'Interview At' },
+  ];
+
+  const rows = (allTrainees || []).map((t) => {
+    const lock = locks[String(t.userId)] || null;
+    return {
+      name: t.name,
+      userId: t.userId,
+      email: t.email,
+      batch_name: t.batch_name || '',
+      location: t.location || '',
+      preferredLocation1: t.preferredLocation1 || '',
+      preferredLocation2: t.preferredLocation2 || '',
+      preferredLocation3: t.preferredLocation3 || '',
+      score: t.score,
+      skills: Array.isArray(t.skills) ? t.skills.join(', ') : '',
+      isMapped: t.isMapped ? 'Yes' : 'No',
+      projectName: t.projectName || '',
+      projectId: t.projectId || '',
+      lockStatus: lock?.status || '',
+      lockJob: lock?.job_title || lock?.job?.project_name || '',
+      interviewDatetime: lock?.interview_datetime || '',
+    };
+  });
+
+  return { cols, rows };
+};
+
+const buildJobWorkbook = () => {
+  const cols = [
+    { key: 'project_name', label: 'Project' },
+    { key: 'demand_id', label: 'Demand ID' },
+    { key: 'location', label: 'Location' },
+    { key: 'skills', label: 'Skills' },
+    { key: 'openings', label: 'Openings' },
+    { key: 'filled', label: 'Filled' },
+    { key: 'remaining', label: 'Remaining' },
+    { key: 'status', label: 'Status' },
+    { key: 'matches', label: 'Matches' },
+    { key: 'batch_name', label: 'Batch' },
+    { key: 'recommendation_status', label: 'Rec Status' },
+  ];
+
+  const rows = (jobs || []).map((j) => ({
+    project_name: j.project_name,
+    demand_id: j.demand_id || '',
+    location: j.location || '',
+    skills: j.skills || (j.techSkills || []).join(', '),
+    openings: j.openings,
+    filled: j.filled,
+    remaining: getRemainingOpenings(j),
+    status: j.status,
+    matches: j.matches ?? 0,
+    batch_name: j.batch_name || '',
+    recommendation_status: j.recommendation_status || '',
+  }));
+
+  return { cols, rows };
+};
+
+const buildPipelineWorkbook = () => {
+  const cols = [
+    { key: 'trainee_name', label: 'Trainee' },
+    { key: 'trainee_id', label: 'Trainee ID' },
+    { key: 'job_title', label: 'Job' },
+    { key: 'job_id', label: 'Job ID' },
+    { key: 'status', label: 'Status' },
+    { key: 'interview_datetime', label: 'Interview At' },
+    { key: 'assigned_to', label: 'Interviewer' },
+    { key: 'locked_by', label: 'Locked By' },
+    { key: 'comments', label: 'Comments' },
+    { key: 'updated_at', label: 'Updated' },
+  ];
+
+  const rows = (interviewLocks || []).map((l) => ({
+    trainee_name:
+      l.trainee_name ||
+      l.trainee?.userInfo?.name ||
+      '',
+    trainee_id:
+      l.trainee_id ||
+      l.trainee?.userInfo?.userId ||
+      '',
+    job_title: l.job_title || l.job?.project_name || '',
+    job_id: l.job_id || l.job?.id || '',
+    status: l.status || '',
+    interview_datetime: l.interview_datetime || '',
+    assigned_to:
+      l.assigned_to_name ||
+      l.assigned_to?.username ||
+      l.assigned_to ||
+      '',
+    locked_by:
+      l.locked_by_name ||
+      l.locked_by?.username ||
+      '',
+    comments: l.comments || '',
+    updated_at: l.updated_at || l.created_at || '',
+  }));
+
+  return { cols, rows };
+};
+
+const flattenMatchPayload = (payload) => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+
+  // Talent Search / matches API shape
+  const buckets = [
+    'perfect_match',
+    'PERFECT_MATCH',
+    'skills_only',
+    'SKILLS_ONLY',
+    'location_only',
+    'LOCATION_ONLY',
+    'nearby',
+    'NEARBY',
+    'no_match',
+    'NO_MATCH',
+    'matches',
+    'results',
+  ];
+
+  const out = [];
+  buckets.forEach((key) => {
+    const arr = payload[key];
+    if (Array.isArray(arr)) out.push(...arr);
+  });
+
+  // de-dupe by match id or trainee_id+job_id
+  const seen = new Set();
+  return out.filter((m) => {
+    const k = String(m.id ?? `${m.trainee_id}-${m.job_id}-${m.bucket}`);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
+
+const buildMatchWorkbookFromPayload = (payload) => {
+  const list = flattenMatchPayload(payload);
+
+  const cols = [
+    { key: 'trainee_name', label: 'Trainee' },
+    { key: 'trainee_id', label: 'Trainee ID' },
+    { key: 'trainee_location', label: 'Location' },
+    { key: 'bucket', label: 'Bucket' },
+    { key: 'skills_percentage', label: 'Skills %' },
+    { key: 'location_percentage', label: 'Location %' },
+    { key: 'total_percentage', label: 'Total %' },
+    { key: 'distance', label: 'Distance' },
+    { key: 'matched_skills', label: 'Matched Skills' },
+    { key: 'matched_location', label: 'Matched Loc' },
+    { key: 'is_recommended', label: 'Recommended' },
+    { key: 'rank', label: 'Rank' },
+    { key: 'job_title', label: 'Job' },
+  ];
+
+  const rows = list.map((m) => ({
+    trainee_name: m.trainee_name || '',
+    trainee_id: m.trainee_id || '',
+    trainee_location: m.trainee_location || '',
+    bucket: m.bucket || '',
+    skills_percentage:
+      m.skills_percentage != null ? Number(m.skills_percentage).toFixed(1) : '',
+    location_percentage:
+      m.location_percentage != null ? Number(m.location_percentage).toFixed(1) : '',
+    total_percentage:
+      m.total_percentage != null ? Number(m.total_percentage).toFixed(1) : '',
+    distance: m.distance != null ? Number(m.distance).toFixed(1) : '',
+    matched_skills: Array.isArray(m.matched_skills)
+      ? m.matched_skills.join(', ')
+      : m.matched_skills || '',
+    matched_location: m.matched_location || '',
+    is_recommended: m.is_recommended ? 'Yes' : 'No',
+    rank: m.rank ?? '',
+    job_title: m.job_title || '',
+  }));
+
+  // best first
+  rows.sort(
+    (a, b) =>
+      Number(b.total_percentage || 0) - Number(a.total_percentage || 0)
+  );
+
+  return { cols, rows };
+};
+
+const loadWorkbookSheet = async (sheet = workbookSheet, jobId = workbookJobId) => {
+  setWorkbookLoading(true);
+  setWorkbookFilter('');
+  try {
+    if (sheet === 'trainees') {
+      if (!allTrainees?.length) await fetchTrainees();
+      const { cols, rows } = buildTraineeWorkbook();
+      setWorkbookCols(cols);
+      setWorkbookRows(rows);
+    } else if (sheet === 'jobs') {
+      // ensure jobs loaded if you have fetchJobs
+      if (typeof fetchJobs === 'function' && !jobs?.length) await fetchJobs();
+      const { cols, rows } = buildJobWorkbook();
+      setWorkbookCols(cols);
+      setWorkbookRows(rows);
+    } else if (sheet === 'pipeline') {
+      if (typeof fetchInterviewLocks === 'function' && !interviewLocks?.length) {
+        await fetchInterviewLocks();
+      }
+      const { cols, rows } = buildPipelineWorkbook();
+      setWorkbookCols(cols);
+      setWorkbookRows(rows);
+    } else if (sheet === 'matches') {
+      if (!jobId) {
+        setWorkbookCols([]);
+        setWorkbookRows([]);
+        toast.info('Select a job to load matches');
+        return;
+      }
+      const job = jobs.find((j) => String(j.id) === String(jobId));
+      if (!job) {
+        toast.error('Job not found');
+        return;
+      }
+      const res = await api.get(`/matches/${job.id}/${getBatchParam()}`);
+      const { cols, rows } = buildMatchWorkbookFromPayload(res.data);
+      setWorkbookCols(cols);
+      setWorkbookRows(rows);
+    }
+  } catch (e) {
+    console.error(e);
+    toast.error('Failed to load workbook data');
+    setWorkbookCols([]);
+    setWorkbookRows([]);
+  } finally {
+    setWorkbookLoading(false);
+  }
+};
+
+const downloadWorkbookExcel = async () => {
+  if (!workbookRows.length) {
+    toast.error('Nothing to download');
+    return;
+  }
+  try {
+    const wb = await XlsxPopulate.fromBlankAsync();
+    const sheet = wb.sheet(0).name(workbookSheet || 'Sheet1');
+    const headers = workbookCols.map((c) => c.label);
+    headers.forEach((h, i) => {
+      sheet.cell(1, i + 1).value(h).style({ bold: true });
+    });
+    workbookRows.forEach((row, r) => {
+      workbookCols.forEach((c, i) => {
+        sheet.cell(r + 2, i + 1).value(row[c.key] ?? '');
+      });
+    });
+    const blob = await wb.outputAsync();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `workbook_${workbookSheet}_${selectedBatch || 'all'}_${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    toast.success('Downloaded');
+  } catch (e) {
+    console.error(e);
+    toast.error('Download failed');
+  }
+};
+
+const filteredWorkbookRows = () => {
+  const q = (workbookFilter || '').trim().toLowerCase();
+  if (!q) return workbookRows;
+  return workbookRows.filter((row) =>
+    workbookCols.some((c) =>
+      String(row[c.key] ?? '')
+        .toLowerCase()
+        .includes(q)
+    )
+  );
+};
+
+
+
+const renderWorkbook = () => {
+  const rows = filteredWorkbookRows();
+
+  return (
+    <div className="workbook-tab">
+      <div className="section-header" style={{ marginBottom: '0.75rem' }}>
+        <div className="header-title">
+          <h2>
+            <FileSpreadsheet size={22} /> Workbook
+          </h2>
+          <p className="subtitle">
+            Batch: {selectedBatch || 'All'} · Excel-style views · download current grid
+          </p>
+        </div>
+        <div className="header-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={() => loadWorkbookSheet(workbookSheet, workbookJobId)}
+            disabled={workbookLoading}
+          >
+            <RefreshCw size={16} className={workbookLoading ? 'spinning' : ''} /> Reload
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={downloadWorkbookExcel}
+            disabled={!workbookRows.length}
+          >
+            <Download size={16} /> Download Excel
+          </button>
+        </div>
+      </div>
+
+      {/* Sheet buttons */}
+      <div className="header-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap', gap: 8 }}>
+        {[
+          { id: 'trainees', label: 'Trainees' },
+          { id: 'jobs', label: 'Jobs' },
+          { id: 'matches', label: 'Matches by job' },
+          { id: 'pipeline', label: 'Interview pipeline' },
+        ].map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`btn ${workbookSheet === s.id ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => {
+              setWorkbookSheet(s.id);
+              loadWorkbookSheet(s.id, workbookJobId);
+            }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Job dropdown for matches */}
+      {workbookSheet === 'matches' && (
+        <div className="form-row" style={{ marginBottom: '0.75rem', alignItems: 'center', gap: 12 }}>
+          <label style={{ fontWeight: 600 }}>Job</label>
+          <select
+            className="form-control"
+            style={{ maxWidth: 420 }}
+            value={workbookJobId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setWorkbookJobId(id);
+              if (id) loadWorkbookSheet('matches', id);
+            }}
+          >
+            <option value="">Select job…</option>
+            {(jobs || [])
+              .filter((j) => j.status === 'active')
+              .map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.project_name} ({getRemainingOpenings(j)} open)
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+
+      <div className="bento-panel">
+        <div className="bento-panel-header">
+          <h3>
+            {workbookSheet} · {rows.length} rows
+          </h3>
+          <input
+            className="form-control"
+            style={{ maxWidth: 260 }}
+            placeholder="Filter…"
+            value={workbookFilter}
+            onChange={(e) => setWorkbookFilter(e.target.value)}
+          />
+        </div>
+        <div className="bento-panel-body" style={{ overflow: 'auto', maxHeight: '65vh' }}>
+          {workbookLoading ? (
+            <p className="no-data">Loading…</p>
+          ) : !workbookCols.length ? (
+            <p className="no-data">
+              {workbookSheet === 'matches'
+                ? 'Select a job to load match rows.'
+                : 'Click a sheet button to load data.'}
+            </p>
+          ) : (
+            <table className="data-table" style={{ minWidth: '100%' }}>
+              <thead>
+                <tr>
+                  {workbookCols.map((c) => (
+                    <th key={c.key}>{c.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={idx}>
+                    {workbookCols.map((c) => (
+                      <td key={c.key}>{row[c.key] ?? ''}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
   const fetchFullTraineeListForBatches = async () => {
     if (unfilteredTrainees.length > 0) return;
     try {
@@ -231,6 +827,269 @@ function DashboardHR({ userData, onLogout }) {
       setAvailableBatches(batches);
     } catch (err) { console.error('Failed to fetch full trainee list for batches', err); }
   };
+
+
+
+
+
+  const openMappedDrill = () => {
+    const rows = allTrainees.filter((t) => t.isMapped);
+    const byProject = groupBy(rows, (t) => t.projectName || 'Unknown project');
+    const byLocation = groupBy(rows, (t) => t.location || 'unknown');
+    setDrill({
+      type: 'mapped',
+      title: 'Mapped Trainees',
+      chips: [
+        { label: 'mapped', value: rows.length },
+        { label: 'projects', value: byProject.length },
+        { label: 'locations', value: byLocation.length },
+      ],
+      tabs: [
+        {
+          id: 'by-project',
+          label: 'By Project',
+          type: 'groups',
+          groups: byProject.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'by-location',
+          label: 'By Location',
+          type: 'groups',
+          groups: byLocation.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'list',
+          label: 'Full List',
+          type: 'list',
+          searchKeys: ['name', 'email', 'projectName', 'location'],
+          columns: [
+            { key: 'name', label: 'Name', sortable: true },
+            { key: 'projectName', label: 'Project', sortable: true },
+            { key: 'location', label: 'Location', sortable: true },
+            { key: 'score', label: 'Score', sortable: true },
+            {
+              key: 'actions',
+              label: 'Actions',
+              render: (t) => (
+                <div className="drill-actions">
+                  <button
+                    type="button"
+                    className="btn-icon btn-icon-view"
+                    title="View profile"
+                    onClick={() => handleViewTraineeProfile(t)}
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-icon btn-danger"
+                    title="Unmap"
+                    onClick={() => handleUnmapFromProject(t)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ),
+            },
+          ],
+          rows,
+        },
+      ],
+    });
+  };
+
+  const openUnmappedDrill = () => {
+    const rows = allTrainees.filter((t) => !t.isMapped);
+    const byLocation = groupBy(rows, (t) => t.location || 'unknown');
+    const byBatch = groupBy(rows, (t) => t.batch_name || '—');
+    setDrill({
+      type: 'unmapped',
+      title: 'Unmapped Trainees',
+      chips: [
+        { label: 'available', value: rows.length },
+        { label: 'locations', value: byLocation.length },
+      ],
+      tabs: [
+        {
+          id: 'by-location',
+          label: 'By Location',
+          type: 'groups',
+          groups: byLocation.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'by-batch',
+          label: 'By Batch',
+          type: 'groups',
+          groups: byBatch.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'list',
+          label: 'Full List',
+          type: 'list',
+          searchKeys: ['name', 'email', 'location', 'batch_name'],
+          columns: [
+            { key: 'name', label: 'Name', sortable: true },
+            { key: 'location', label: 'Location', sortable: true },
+            { key: 'batch_name', label: 'Batch', sortable: true },
+            { key: 'score', label: 'Score', sortable: true },
+            {
+              key: 'actions',
+              label: 'Actions',
+              render: (t) => (
+                <button
+                  type="button"
+                  className="btn-icon btn-icon-view"
+                  onClick={() => handleViewTraineeProfile(t)}
+                >
+                  <Eye size={14} />
+                </button>
+              ),
+            },
+          ],
+          rows,
+        },
+      ],
+    });
+  };
+
+  /** Proximity: needs match data. Prefer dashboardAnalytics / cached matches.
+   *  Fallback: derive from trainee preferred locs + job locations when match
+   *  detail is not in memory. A small backend aggregate would help (see note). */
+  const openProximityDrill = async () => {
+    // If you already have a flat list of NEARBY matches in state, use it.
+    // Otherwise fetch lightly or use dsAnalysis / dashboardAnalytics if present.
+    let nearbyRows = [];
+    // Example shape expected:
+    // { trainee_name, trainee_location, job_title, job_location, distance, total_percentage, trainee_id, job_id }
+
+    // Optional: if matches are not loaded, you can leave empty and show a note,
+    // or trigger a lightweight endpoint (see backend note below).
+
+    const byRoute = groupBy(
+      nearbyRows,
+      (m) => `${m.trainee_location || '?'} → ${m.job_location || '?'}`
+    );
+
+    setDrill({
+      type: 'proximity',
+      title: 'Proximity Matches',
+      chips: [
+        { label: 'matches', value: nearbyRows.length },
+        { label: 'routes', value: byRoute.length },
+      ],
+      tabs: [
+        {
+          id: 'by-route',
+          label: 'By Route',
+          type: 'groups',
+          groups: byRoute.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'list',
+          label: 'Full List',
+          type: 'list',
+          searchKeys: ['trainee_name', 'trainee_location', 'job_title', 'job_location'],
+          columns: [
+            { key: 'trainee_name', label: 'Trainee', sortable: true },
+            { key: 'trainee_location', label: 'From', sortable: true },
+            { key: 'job_location', label: 'To', sortable: true },
+            { key: 'distance', label: 'Distance', sortable: true },
+            {
+              key: 'total_percentage',
+              label: 'Match %',
+              sortable: true,
+              render: (m) => `${Number(m.total_percentage || 0).toFixed(1)}%`,
+            },
+            {
+              key: 'actions',
+              label: 'Actions',
+              render: (m) => {
+                const trainee = findTraineeByUserId(m.trainee_id);
+                return (
+                  <div className="drill-actions">
+                    {trainee && (
+                      <button
+                        type="button"
+                        className="btn-icon btn-icon-view"
+                        onClick={() => handleViewTraineeProfile(trainee)}
+                      >
+                        <Eye size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              },
+            },
+          ],
+          rows: nearbyRows,
+        },
+      ],
+    });
+  };
+
+  const openSkillGapDrill = () => {
+    const gaps = dsAnalysis?.skillGaps || [];
+    const critical = gaps.filter((s) => s.status === 'Critical' || s.status === 'Shortage');
+    setDrill({
+      type: 'skill-gap',
+      title: 'Skill Gap Analysis',
+      chips: [
+        { label: 'skills analyzed', value: gaps.length },
+        { label: 'critical / shortage', value: critical.length },
+      ],
+      tabs: [
+        {
+          id: 'status',
+          label: 'By Status',
+          type: 'groups',
+          groups: groupBy(gaps, (s) => s.status).map((g) => ({
+            key: g.key,
+            count: g.count,
+          })),
+        },
+        {
+          id: 'list',
+          label: 'Full List',
+          type: 'list',
+          searchKeys: ['skill', 'status'],
+          columns: [
+            { key: 'skill', label: 'Skill', sortable: true },
+            { key: 'demand', label: 'Demand', sortable: true },
+            { key: 'supply', label: 'Supply', sortable: true },
+            {
+              key: 'gap',
+              label: 'Gap',
+              sortable: true,
+              render: (s) => (
+                <span style={{ color: s.gap > 0 ? '#dc2626' : '#10b981', fontWeight: 700 }}>
+                  {s.gap > 0 ? `-${s.gap}` : `+${Math.abs(s.gap)}`}
+                </span>
+              ),
+            },
+            {
+              key: 'fillRate',
+              label: 'Fill %',
+              sortable: true,
+              render: (s) => `${s.fillRate}%`,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              sortable: true,
+              render: (s) => (
+                <span className={`status-badge status-${String(s.status).toLowerCase()}`}>
+                  {s.status}
+                </span>
+              ),
+            },
+          ],
+          rows: gaps,
+        },
+      ],
+    });
+  };
+
+
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -551,15 +1410,6 @@ function DashboardHR({ userData, onLogout }) {
 
   const handleUnlockInterview = async (lock) => { if (!window.confirm('Unlock this candidate?')) return; try { setLoading(true); await api.post(`/interview-locks/${lock.id}/unlock/`, { reopen: true }); toast.success('Candidate unlocked'); await Promise.all([fetchInterviewLocks(), fetchJobs()]); } catch { toast.error('Failed to unlock'); } finally { setLoading(false); } };
 
-  const handleJobSelectForSearch = async (jobId) => {
-    if (!jobId) { setSelectedJobForSearch(null); setSearchJobMatches(null); return; }
-    const job = jobs.find(j => j.id === parseInt(jobId));
-    if (!job || getRemainingOpenings(job) <= 0 || job.status !== 'active') { toast.error('This job has no openings or is inactive'); setSelectedJobForSearch(null); setSearchJobMatches(null); return; }
-    setSelectedJobForSearch(job);
-    setJobMatchesLoading(true);
-    try { const res = await api.get(`/matches/${job.id}/${getBatchParam()}`); setSearchJobMatches(res.data); setSelectedSearchTraineeIds([]); setSelectAll(false); }
-    catch { toast.error('Failed to fetch matches'); } finally { setJobMatchesLoading(false); }
-  };
 
   const filteredSearchMatches = () => {
     if (!searchJobMatches) return [];
@@ -834,7 +1684,18 @@ function DashboardHR({ userData, onLogout }) {
   useEffect(() => { if (activeTab === 'recommendations') fetchRecommendations(); }, [activeTab, selectedRecJobId, recStatusFilter, selectedBatch]);
   useEffect(() => { if (activeTab === 'demandSupply') fetchDemandSupplyAnalysis(); }, [activeTab, dsFilter, selectedBatch]);
   useEffect(() => { let interval; if (autoRefresh && activeTab === 'talentSearch' && selectedJobForSearch) interval = setInterval(() => handleJobSelectForSearch(selectedJobForSearch.id), 30000); return () => { if (interval) clearInterval(interval); }; }, [autoRefresh, activeTab, selectedJobForSearch, selectedBatch]);
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return;
 
+    fetchJobs?.();
+    fetchTrainees?.();
+    fetchInterviewLocks?.();
+    fetchLockStats?.();
+    fetchDashboardAnalytics?.();
+    fetchDemandSupplyAnalysis?.();
+    // optional / heavier — throttle if needed:
+    // fetchRecommendations?.();
+  }, [activeTab, selectedBatch]);
   const computeSkillTrends = (jobs) => {
     const techMap = new Map(), softMap = new Map();
     for (const job of jobs || []) {
@@ -848,55 +1709,499 @@ function DashboardHR({ userData, onLogout }) {
   };
   // ==================== RENDER FUNCTIONS ====================
 
-  const renderDashboard = () => (
-    <div className="dashboard-content">
-      {loading && <div className="loading-overlay"><div className="loading-spinner"></div><p>Loading...</p></div>}
-      {error && <div className="error-message"><AlertCircle size={20} /><span>{error}</span></div>}
-      <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon"><Users /></div><div className="stat-content"><h3>Total Trainees</h3><div className="stat-value">{stats.totalTrainees}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><BriefcaseBusiness /></div><div className="stat-content"><h3>Total Jobs</h3><div className="stat-value">{stats.totalJobs}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><CheckCircle /></div><div className="stat-content"><h3>Mapped</h3><div className="stat-value">{stats.mappedTrainees}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><AlertCircle /></div><div className="stat-content"><h3>Unmapped</h3><div className="stat-value">{stats.unmappedTrainees}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><Target /></div><div className="stat-content"><h3>Active Jobs</h3><div className="stat-value">{stats.activeJobs}</div></div></div>
-        <div className="stat-card"><div className="stat-icon"><Briefcase /></div><div className="stat-content"><h3>Fill Rate</h3><div className="stat-value">{stats.fillRate}%</div></div></div>
-      </div>
-      {lockStats && (
-        <div className="stats-grid small margin-top-1">
-          <div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div>
-          <div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div>
-          <div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div>
-        </div>
-      )}
-      <div className="analytics-section">
-        <h2 className="section-title"><Activity size={24} /> Matching Analytics</h2>
-        <div className="analytics-grid">
-          <div className="analytics-card"><div className="stat-icon"><Target size={20} /></div><h3>Total Matches</h3><div className="analytics-value">{totalMatchesCount}</div></div>
-          <div className="analytics-card"><div className="stat-icon"><Zap size={20} /></div><h3>Avg Match %</h3><div className="analytics-value">{avgMatchPercent}%</div></div>
-          <div className="analytics-card"><div className="stat-icon"><Star size={20} /></div><h3>Perfect Matches</h3><div className="analytics-value">{bucketDistribution.PERFECT_MATCH}</div></div>
-          <div className="analytics-card"><div className="stat-icon"><Award size={20} /></div><h3>Skills Only</h3><div className="analytics-value">{bucketDistribution.SKILLS_ONLY}</div></div>
-          <div className="analytics-card"><div className="stat-icon"><MapPin size={20} /></div><h3>Location Only</h3><div className="analytics-value">{bucketDistribution.LOCATION_ONLY}</div></div>
-          <div className="analytics-card"><div className="stat-icon"><TrendingUp size={20} /></div><h3>Proximity</h3><div className="analytics-value">{bucketDistribution.NEARBY}</div></div>
-        </div>
-        {dashboardAnalytics && (
-          <div className="chart-grid">
-            <div className="analytics-card chart-card"><h3>Candidate Status Distribution</h3>
-              <ResponsiveContainer width="100%" height={260}><RePieChart><Pie data={dashboardAnalytics.candidate_status_distribution || []} dataKey="value" nameKey="name" outerRadius={85} label>{(dashboardAnalytics.candidate_status_distribution || []).map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}</Pie><Tooltip /></RePieChart></ResponsiveContainer>
-            </div>
-            <div className="analytics-card chart-card"><h3>Top Skills Demand</h3>
-              <ResponsiveContainer width="100%" height={260}><ReBarChart data={dashboardAnalytics.top_skills_demand || []}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#2563eb" /></ReBarChart></ResponsiveContainer>
-            </div>
-          </div>
-        )}
-        <h2 className="section-title">Top Skills in Demand</h2>
-        <div className="skills-section">
-          <div className="content-card"><div className="card-header"><h3><Target size={20} /> Technical Skills</h3></div>
-            <div className="hr-skills-list">{skillTrends.tech.map((skill) => (<div key={`tech-${skill.name}`} className="skill-item"><div className="skill-header"><span className="skill-name">{skill.name}</span><div className="skill-stats"><span className="skill-jobs">{skill.jobs} jobs</span><span className="skill-demand">{skill.demand}%</span></div></div><div className="skill-bar"><div className="skill-fill" style={{ width: `${skill.demand}%`, background: '#3b82f6' }} /></div></div>))}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const renderDashboard = () => {
+    const nearbyCount =
+      bucketDistribution?.NEARBY ??
+      dashboardAnalytics?.match_breakdown?.nearby ??
+      0;
 
+    const perfectCount =
+      bucketDistribution?.PERFECT_MATCH ??
+      dashboardAnalytics?.match_breakdown?.perfect_match ??
+      0;
+
+    const skillGapCount =
+      dsAnalysis?.skillGaps?.filter((s) => Number(s.gap) > 0).length ?? null;
+
+    const lockedCount = lockStats?.total_locked ?? 0;
+    const selectedCount = lockStats?.total_selected ?? 0;
+    const rejectedCount = lockStats?.total_rejected ?? 0;
+
+    const matchBreakdownData = [
+      { name: 'Perfect', value: perfectCount },
+      {
+        name: 'Skills',
+        value:
+          dashboardAnalytics?.match_breakdown?.skill_only ??
+          bucketDistribution?.SKILLS_ONLY ??
+          0,
+      },
+      {
+        name: 'Location',
+        value:
+          dashboardAnalytics?.match_breakdown?.location_only ??
+          bucketDistribution?.LOCATION_ONLY ??
+          0,
+      },
+      { name: 'Proximity', value: nearbyCount },
+    ].filter((d) => d.value > 0);
+
+    const topSkillGaps = (dsAnalysis?.skillGaps || []).slice(0, 8);
+    const locationDemand = (dashboardAnalytics?.location_demand || []).slice(0, 8);
+
+    const queue = buildActionQueue();
+
+    const health = {
+      fill: stats.fillRate,
+      unmapped: stats.unmappedTrainees,
+      locked: lockStats?.total_locked ?? 0,
+      pendingRec: (recommendations || []).filter((r) => r.status === 'Pending').length,
+      criticalGaps: (dsAnalysis?.skillGaps || []).filter(
+        (s) => s.status === 'Critical' || s.status === 'Shortage'
+      ).length,
+    };
+
+    return (
+      <div className="bento-dashboard">
+        {/* ── Header ── */}
+        <div className="section-header" style={{ marginBottom: '0.75rem' }}>
+          <div className="header-title">
+            <h2>
+              <LayoutDashboard size={22} /> Operations Overview
+            </h2>
+            <p className="subtitle">
+              Click any metric to explore. Batch: {selectedBatch || 'All'}
+            </p>
+          </div>
+          <div className="header-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={refreshCurrentView}
+              disabled={loading}
+            >
+              <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Refresh
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!dsAnalysis) fetchDemandSupplyAnalysis();
+                setActiveTab('demandSupply');
+              }}
+            >
+              <TrendingUp size={16} /> Full Demand-Supply
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => setActiveTab('talentSearch')}
+            >
+              <Search size={16} /> Talent Search
+            </button>
+          </div>
+        </div>
+
+        {/* ── Clickable KPI row ── */}
+        <div className="bento-stats">
+          <ClickableStatCard
+            label="Total Trainees"
+            value={stats.totalTrainees}
+            sub={`${stats.mappedTrainees} mapped`}
+            icon={Users}
+            tone="info"
+            onClick={() => setActiveTab('trainees')}
+          />
+          <ClickableStatCard
+            label="Mapped"
+            value={stats.mappedTrainees}
+            sub={`${stats.fillRate}% of openings`}
+            icon={CheckCircle}
+            tone="success"
+            onClick={openMappedDrill}
+          />
+          <ClickableStatCard
+            label="Unmapped"
+            value={stats.unmappedTrainees}
+            sub="Ready to assign"
+            icon={Users}
+            tone="warning"
+            onClick={openUnmappedDrill}
+          />
+          <ClickableStatCard
+            label="Active Jobs"
+            value={stats.activeJobs}
+            sub={`${stats.totalOpenings - stats.filledPositions} openings left`}
+            icon={Briefcase}
+            tone="info"
+            onClick={() => setActiveTab('jobs')}
+          />
+          <ClickableStatCard
+            label="Fill Rate"
+            value={`${stats.fillRate}%`}
+            sub={`${stats.filledPositions}/${stats.totalOpenings}`}
+            icon={Target}
+            tone={
+              stats.fillRate >= 70
+                ? 'success'
+                : stats.fillRate >= 40
+                  ? 'warning'
+                  : 'danger'
+            }
+            onClick={openMappedDrill}
+          />
+          <ClickableStatCard
+            label="Perfect Match"
+            value={perfectCount}
+            sub="Skills + location"
+            icon={Star}
+            tone="success"
+            onClick={() => setActiveTab('talentSearch')}
+          />
+          <ClickableStatCard
+            label="Proximity"
+            value={nearbyCount}
+            sub="Nearby locations"
+            icon={MapPin}
+            tone="info"
+            onClick={openProximityDrill}
+          />
+          <ClickableStatCard
+            label="Skill Gaps"
+            value={skillGapCount != null ? skillGapCount : '—'}
+            sub="Critical shortages"
+            icon={AlertCircle}
+            tone="danger"
+            onClick={() => {
+              if (!dsAnalysis) {
+                fetchDemandSupplyAnalysis();
+                toast.info('Loading skill gaps… click again in a moment');
+              } else {
+                openSkillGapDrill();
+              }
+            }}
+          />
+          <ClickableStatCard
+            label="Interview Locks"
+            value={lockedCount}
+            sub={`${selectedCount} selected · ${rejectedCount} rejected`}
+            icon={Lock}
+            tone="info"
+            onClick={() => setActiveTab('interviewLocks')}
+          />
+          <ClickableStatCard
+            label="Open Pool"
+            value={traineesWithNoMatches.length}
+            sub="No job match"
+            icon={XCircle}
+            tone="warning"
+            onClick={() => setActiveTab('openPool')}
+          />
+        </div>
+
+        {/* ── Health strip ── */}
+        <p
+          className="text-muted"
+          style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.75rem' }}
+        >
+          Fill {health.fill}% · Unmapped {health.unmapped} · Locks {health.locked}
+          {health.pendingRec > 0 ? ` · ${health.pendingRec} recs pending` : ''}
+          {health.criticalGaps > 0
+            ? ` · ${health.criticalGaps} critical skills`
+            : ''}
+        </p>
+
+        {/* ── Action queue ── */}
+        <div className="bento-panel" style={{ marginBottom: '0.75rem' }}>
+          <div className="bento-panel-header">
+            <h3>
+              <Zap size={16} /> Action queue ({queue.length})
+            </h3>
+          </div>
+          <div className="bento-panel-body">
+            {queue.length === 0 ? (
+              <p style={{ margin: 0, fontWeight: 600, color: '#059669' }}>
+                No urgent actions — pipeline looks healthy.
+              </p>
+            ) : (
+              <div className="drill-group-list">
+                {queue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="drill-group-row"
+                    style={{ gridTemplateColumns: '1fr auto' }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700 }}>
+                        <span
+                          className={`badge badge-${item.severity === 'high'
+                              ? 'danger'
+                              : item.severity === 'medium'
+                                ? 'warning'
+                                : 'neutral'
+                            }`}
+                          style={{ marginRight: 8 }}
+                        >
+                          {item.severity}
+                        </span>
+                        {item.title}
+                      </div>
+                      <div
+                        className="text-muted"
+                        style={{ fontSize: '0.8rem', marginTop: 2 }}
+                      >
+                        {item.detail}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={item.onAction}
+                    >
+                      {item.actionLabel}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Bento panels ── */}
+        <div className="bento-grid" style={{ marginTop: '0.75rem' }}>
+          {/* Match mix */}
+          <div className="bento-panel">
+            <div className="bento-panel-header">
+              <h3>
+                <BarChart2 size={16} /> Match mix
+              </h3>
+              <button
+                className="btn-ghost btn-sm"
+                onClick={() => setActiveTab('talentSearch')}
+              >
+                Open search
+              </button>
+            </div>
+            <div className="bento-panel-body">
+              {matchBreakdownData.length === 0 ? (
+                <p className="no-data" style={{ padding: '1rem' }}>
+                  No match data yet. Run matching on jobs.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <ReBarChart
+                    data={matchBreakdownData}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#0070C0" radius={[4, 4, 0, 0]} />
+                  </ReBarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Top skill gaps */}
+          <div className="bento-panel">
+            <div className="bento-panel-header">
+              <h3>
+                <AlertCircle size={16} /> Top skill gaps
+              </h3>
+              <button
+                className="btn-ghost btn-sm"
+                onClick={() => {
+                  if (!dsAnalysis) fetchDemandSupplyAnalysis();
+                  else openSkillGapDrill();
+                }}
+              >
+                Drill down
+              </button>
+            </div>
+            <div className="bento-panel-body">
+              {topSkillGaps.length === 0 ? (
+                <p className="no-data" style={{ padding: '1rem' }}>
+                  No gap data. Click “Drill down” or open Demand-Supply.
+                </p>
+              ) : (
+                <div className="drill-group-list">
+                  {topSkillGaps.map((s) => (
+                    <div key={s.skill} className="drill-group-row">
+                      <span style={{ fontWeight: 600 }}>{s.skill}</span>
+                      <div className="bar-track">
+                        <div
+                          className="bar-fill"
+                          style={{
+                            width: `${Math.min(100, Math.abs(s.gapPercent || 0))}%`,
+                            background: s.gap > 0 ? '#ef4444' : '#10b981',
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: s.gap > 0 ? '#dc2626' : '#059669',
+                        }}
+                      >
+                        {s.gap > 0 ? `-${s.gap}` : `+${Math.abs(s.gap)}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Location demand */}
+          <div className="bento-panel">
+            <div className="bento-panel-header">
+              <h3>
+                <MapPin size={16} /> Location demand
+              </h3>
+            </div>
+            <div className="bento-panel-body">
+              {locationDemand.length === 0 ? (
+                <p className="no-data" style={{ padding: '1rem' }}>
+                  No location analytics yet.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <ReBarChart
+                    data={locationDemand}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 40 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10 }}
+                      angle={-25}
+                      textAnchor="end"
+                      height={50}
+                    />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#5F68C3" radius={[4, 4, 0, 0]} />
+                  </ReBarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Recent activity */}
+          <div className="bento-panel">
+            <div className="bento-panel-header">
+              <h3>
+                <Activity size={16} /> Recent activity
+              </h3>
+            </div>
+            <div className="bento-panel-body">
+              {recentActivity.length === 0 ? (
+                <p className="no-data" style={{ padding: '1rem' }}>
+                  No recent actions yet.
+                </p>
+              ) : (
+                <ul className="activity-list" style={{ margin: 0 }}>
+                  {recentActivity.slice(0, 8).map((a, i) => (
+                    <li
+                      key={i}
+                      className="activity-item"
+                      style={{
+                        gridTemplateColumns: '90px 1fr auto',
+                        gap: '0.75rem',
+                        padding: '0.65rem 0.5rem',
+                      }}
+                    >
+                      <span
+                        className={`activity-type ${String(a.type || '')
+                            .toLowerCase()
+                            .includes('map')
+                            ? 'match'
+                            : 'lock'
+                          }`}
+                      >
+                        {a.type}
+                      </span>
+                      <span
+                        className="activity-detail"
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        {a.trainee} → {a.job}
+                      </span>
+                      <span
+                        className="activity-time"
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        {a.time}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Quick ops ── */}
+        <div
+          className="section-header"
+          style={{
+            marginTop: '0.75rem',
+            marginBottom: 0,
+            padding: '0.85rem 1rem',
+          }}
+        >
+          <div className="header-title">
+            <h2 style={{ fontSize: '0.95rem' }}>
+              <Zap size={18} /> Quick operations
+            </h2>
+          </div>
+          <div className="header-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowExcelTemplate(true)}
+            >
+              <FileSpreadsheet size={14} /> Job Excel
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowWordTemplate(true)}
+            >
+              <File size={14} /> Job Word
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowBulkMappingModal(true)}
+            >
+              <Link size={14} /> Bulk map
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowBulkLockModal(true)}
+            >
+              <Lock size={14} /> Bulk lock
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowPrefLocModal(true)}
+            >
+              <MapPin size={14} /> Pref. locations
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setActiveTab('recommendations')}
+            >
+              <ThumbsUp size={14} /> Recommendations
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setActiveTab('audit')}
+            >
+              <Shield size={14} /> Audit
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
   const renderJobManagement = () => (
     <div className="job-management">
       <div className="section-header">
@@ -1067,7 +2372,7 @@ function DashboardHR({ userData, onLogout }) {
       toast.error('Trainee not found');
     }
   };
- const renderTalentSearch = () => {
+  const renderTalentSearch = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
       const trainee = findTraineeByUserId(getMatchTraineeUserId(m));
@@ -1168,7 +2473,7 @@ function DashboardHR({ userData, onLogout }) {
                         trainee.preferredLocation2,
                         trainee.preferredLocation3
                       ].filter(Boolean) : [];
-                      
+
                       return (
                         <tr key={traineeUserId || match.id}>
                           <td>
@@ -1788,6 +3093,7 @@ function DashboardHR({ userData, onLogout }) {
     { id: 'rejected', label: 'Rejected', icon: <XCircle size={20} /> },
     { id: 'demandSupply', label: 'Demand-Supply', icon: <TrendingUp size={20} /> },
     { id: 'recommendations', label: 'Recommendations', icon: <ThumbsUp size={20} /> },
+    { id: 'workbook', label: 'Workbook', icon: <FileSpreadsheet size={20} /> },
   ];
 
   const renderContent = () => {
@@ -1804,6 +3110,7 @@ function DashboardHR({ userData, onLogout }) {
       case 'rejected': return renderRejected();
       case 'demandSupply': return renderDemandSupplyAnalysis();
       case 'recommendations': return renderRecommendations();
+      case 'workbook':  return renderWorkbook();
       default: return renderDashboard();
     }
   };
@@ -1850,6 +3157,15 @@ function DashboardHR({ userData, onLogout }) {
       {renderErrorDetailsModal()}
       {renderNotifyModal()}
       {renderPrefLocModal()}
+      {drill && (
+        <DrillDownModal
+          open={!!drill}
+          onClose={() => setDrill(null)}
+          title={drill.title}
+          chips={drill.chips}
+          tabs={drill.tabs}
+        />
+      )}
     </div>
   );
 }
