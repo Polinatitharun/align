@@ -2241,3 +2241,166 @@ body.modal-open {
   .clickable-stat .stat-value { font-size: 1.15rem; }
   .drill-group-row { grid-template-columns: 1fr; }
 }
+
+/* ── Health Strip ── */
+.health-strip {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.health-score {
+  --score: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.health-score span {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--score, #10b981);
+}
+
+.health-score small {
+  font-size: 0.68rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.health-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* ── Action Pill ── */
+.action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 30px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.action-pill:hover {
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Pipeline Funnel ── */
+.pipeline-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.funnel-stage {
+  display: grid;
+  grid-template-columns: 70px 1fr 40px;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.funnel-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: right;
+}
+
+.funnel-bar {
+  height: 14px;
+  background: #eef2f7;
+  border-radius: 30px;
+  overflow: hidden;
+}
+
+.funnel-fill {
+  height: 100%;
+  border-radius: 30px;
+  transition: width 0.8s ease;
+}
+
+.funnel-count {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #111827;
+  text-align: center;
+}
+
+/* ── Batch Mini Table ── */
+.batch-mini-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.batch-row {
+  display: grid;
+  grid-template-columns: 90px 60px 70px 1fr 40px;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.batch-name { font-weight: 700; color: #111827; }
+.batch-nums { color: #6b7280; }
+.batch-mapped { color: #059669; font-weight: 600; }
+.batch-rate { font-weight: 700; color: #111827; text-align: right; }
+
+@media (max-width: 768px) {
+  .health-strip { flex-direction: column; align-items: flex-start; }
+  .funnel-stage { grid-template-columns: 60px 1fr 40px; }
+  .batch-row { grid-template-columns: 70px 50px 60px 1fr 40px; font-size: 0.7rem; }
+}
+
+/* Analytics Toggle */
+.analytics-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.analytics-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.analytics-toggle:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.analytics-toggle.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}

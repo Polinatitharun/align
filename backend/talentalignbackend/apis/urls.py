@@ -76,6 +76,7 @@ from .views import (
     CourseOwnerJobListView,
     CourseOwnerJobRecommendationsView,
     HRJobRecommendationsView,
+    GenerateReportView,
 )
 
 router = DefaultRouter()
@@ -186,4 +187,7 @@ urlpatterns = [
 
 
     path('users/upload-preferred-locations/', UploadPreferredLocationsView.as_view(), name='upload-preferred-locations'),
+
+
+    path('reports/generate/', GenerateReportView.as_view(), name='generate-report'),
 ]

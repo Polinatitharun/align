@@ -3563,3 +3563,22 @@ class UploadPreferredLocationsView(APIView):
             "updated": updated,
             "errors": errors
         }, status=200 if updated > 0 else 400)
+
+
+from .report_agent import ReportGenerator
+
+class GenerateReportView(APIView):
+    """Generate AI-powered narrative report."""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+        
+        batch = request.query_params.get('batch', '')
+        report_type = request.query_params.get('type', 'full')  # full | summary | pipeline
+        
+        generator = ReportGenerator(batch_name=batch if batch else None)
+        report = generator.generate_full_report()
+        
+        return Response(report)

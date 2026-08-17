@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
 import XlsxPopulate from 'xlsx-populate';
+import {useMemo, useCallback} from 'react';
 import {
   LayoutDashboard, Briefcase, Users, BarChart2, FileText, LogOut,
   CheckCircle, MapPin, Calendar, Edit, Trash2, Eye, Search, X, User, Mail,
@@ -19,6 +20,7 @@ import {
 import Sidebar from './Sidebar';
 import api from '../api/axios';
 import './styles/HrDashboard.css';
+import ReportViewer from './ReportViewer';
 
 function DashboardHR({ userData, onLogout }) {
   // ==================== Core State ====================
@@ -1709,493 +1711,530 @@ const renderWorkbook = () => {
   };
   // ==================== RENDER FUNCTIONS ====================
 
-  const renderDashboard = () => {
-    const nearbyCount =
-      bucketDistribution?.NEARBY ??
-      dashboardAnalytics?.match_breakdown?.nearby ??
-      0;
+// Add state for dashboard view toggle
+const [dashView, setDashView] = useState('overview'); // overview | pipeline | skills | location | batch
 
-    const perfectCount =
-      bucketDistribution?.PERFECT_MATCH ??
-      dashboardAnalytics?.match_breakdown?.perfect_match ??
-      0;
+// Helper to calculate metrics with explanations
+const metricExplanations = {
+  fillRate: 'Mapped trainees ÷ Total openings × 100. Shows how many open positions have been assigned.',
+  pipelineHealth: 'Average of (Fill Rate × 40%) + (Match Coverage × 30%) + (Selection Rate × 30%). Match Coverage = Total Matches ÷ Total Trainees. Selection Rate = Selected ÷ Locked.',
+  matchCoverage: 'Total Matches ÷ Total Trainees × 100. Shows what % of trainees have at least one job match.',
+  selectionRate: 'Selected candidates ÷ Locked interviews × 100. Shows interview conversion rate.',
+  mappingRate: 'Mapped trainees ÷ Total trainees × 100. Shows overall workforce utilization.',
+  skillGap: 'Demand (from job openings) - Supply (from trainee strengths). Negative = surplus, Positive = shortage.',
+  locationMatch: 'Based on preferred locations. Exact match = 100%. Proximity uses Haversine distance converted to percentage.',
+  totalMatchScore: 'Weighted formula: Skills (60%) + Location (20%) + Experience/DPI (10%) + Availability (10%).',
+};
 
-    const skillGapCount =
-      dsAnalysis?.skillGaps?.filter((s) => Number(s.gap) > 0).length ?? null;
-
+const renderDashboard = () => {
+    const nearbyCount = bucketDistribution?.NEARBY ?? dashboardAnalytics?.match_breakdown?.nearby ?? 0;
+    const perfectCount = bucketDistribution?.PERFECT_MATCH ?? dashboardAnalytics?.match_breakdown?.perfect_match ?? 0;
     const lockedCount = lockStats?.total_locked ?? 0;
     const selectedCount = lockStats?.total_selected ?? 0;
     const rejectedCount = lockStats?.total_rejected ?? 0;
-
-    const matchBreakdownData = [
-      { name: 'Perfect', value: perfectCount },
-      {
-        name: 'Skills',
-        value:
-          dashboardAnalytics?.match_breakdown?.skill_only ??
-          bucketDistribution?.SKILLS_ONLY ??
-          0,
-      },
-      {
-        name: 'Location',
-        value:
-          dashboardAnalytics?.match_breakdown?.location_only ??
-          bucketDistribution?.LOCATION_ONLY ??
-          0,
-      },
-      { name: 'Proximity', value: nearbyCount },
-    ].filter((d) => d.value > 0);
-
-    const topSkillGaps = (dsAnalysis?.skillGaps || []).slice(0, 8);
-    const locationDemand = (dashboardAnalytics?.location_demand || []).slice(0, 8);
-
+    const openingsLeft = stats.totalOpenings - stats.filledPositions;
     const queue = buildActionQueue();
 
-    const health = {
-      fill: stats.fillRate,
-      unmapped: stats.unmappedTrainees,
-      locked: lockStats?.total_locked ?? 0,
-      pendingRec: (recommendations || []).filter((r) => r.status === 'Pending').length,
-      criticalGaps: (dsAnalysis?.skillGaps || []).filter(
-        (s) => s.status === 'Critical' || s.status === 'Shortage'
-      ).length,
-    };
+    // ── METRIC CALCULATIONS ──
+    const matchCoverage = stats.totalTrainees > 0 
+      ? Math.round((totalMatchesCount / stats.totalTrainees) * 100) 
+      : 0;
+    
+    const selectionRate = lockedCount > 0 
+      ? Math.round((selectedCount / lockedCount) * 100) 
+      : 0;
+    
+    const pipelineHealth = Math.round(
+      (stats.fillRate * 0.4) +
+      (Math.min(100, matchCoverage) * 0.3) +
+      (Math.min(100, selectionRate) * 0.3)
+    );
+
+    const mappingRate = stats.totalTrainees > 0 
+      ? Math.round((stats.mappedTrainees / stats.totalTrainees) * 100) 
+      : 0;
+
+    // Pipeline stages
+    const pipelineData = [
+      { stage: 'Total Trainees', value: stats.totalTrainees, color: '#3b82f6', tooltip: `All ${stats.totalTrainees} trainees in system` },
+      { stage: 'Total Matches', value: totalMatchesCount, color: '#8b5cf6', tooltip: `${totalMatchesCount} matches generated (${matchCoverage}% coverage)` },
+      { stage: 'Interview Locked', value: lockedCount, color: '#f59e0b', tooltip: `${lockedCount} locked for interview` },
+      { stage: 'Selected', value: selectedCount, color: '#10b981', tooltip: `${selectedCount} selected (${selectionRate}% conversion)` },
+      { stage: 'Mapped to Project', value: stats.mappedTrainees, color: '#059669', tooltip: `${stats.mappedTrainees} mapped (${mappingRate}% mapping rate)` },
+    ];
+
+    // Skill gaps
+    const topGaps = (dsAnalysis?.skillGaps || []).slice(0, 5);
+    const criticalGaps = (dsAnalysis?.skillGaps || []).filter(s => s.status === 'Critical' || s.status === 'Shortage');
+
+    // Location analysis
+    const locationData = (dashboardAnalytics?.location_demand || []).slice(0, 6);
+    const locationSupply = {};
+    allTrainees.forEach(t => {
+      const loc = t.preferredLocation1 || t.location || 'unknown';
+      locationSupply[loc] = (locationSupply[loc] || 0) + 1;
+    });
+
+    // Batch comparison
+    const batchGroups = groupBy(allTrainees, (t) => t.batch_name || 'Unknown');
+    const batchStats = batchGroups.map((g) => ({
+      batch: g.key,
+      total: g.count,
+      mapped: g.rows.filter((t) => t.isMapped).length,
+      unmapped: g.rows.filter((t) => !t.isMapped).length,
+      fillRate: g.count > 0 ? Math.round((g.rows.filter((t) => t.isMapped).length / g.count) * 100) : 0,
+    })).slice(0, 5);
+
+    // Course data
+    const courseData = (dsAnalysis?.courseAnalysis || []).slice(0, 8);
 
     return (
       <div className="bento-dashboard">
         {/* ── Header ── */}
-        <div className="section-header" style={{ marginBottom: '0.75rem' }}>
+        <div className="section-header" style={{ marginBottom: '0.5rem' }}>
           <div className="header-title">
-            <h2>
-              <LayoutDashboard size={22} /> Operations Overview
-            </h2>
-            <p className="subtitle">
-              Click any metric to explore. Batch: {selectedBatch || 'All'}
-            </p>
+            <h2><LayoutDashboard size={22} /> Operations Dashboard</h2>
+            <p className="subtitle">Batch: {selectedBatch || 'All'} · Hover any metric for explanation</p>
           </div>
           <div className="header-actions">
-            <button
-              className="btn btn-secondary"
-              onClick={refreshCurrentView}
-              disabled={loading}
-            >
+            <button className="btn btn-secondary" onClick={refreshCurrentView} disabled={loading}>
               <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Refresh
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                if (!dsAnalysis) fetchDemandSupplyAnalysis();
-                setActiveTab('demandSupply');
-              }}
-            >
-              <TrendingUp size={16} /> Full Demand-Supply
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={() => setActiveTab('talentSearch')}
-            >
-              <Search size={16} /> Talent Search
             </button>
           </div>
         </div>
 
-        {/* ── Clickable KPI row ── */}
-        <div className="bento-stats">
+        {/* ── VIEW TOGGLE ── */}
+        <div className="analytics-toggle-row" style={{ marginBottom: '0.5rem' }}>
+          <button className={`analytics-toggle ${dashView === 'overview' ? 'active' : ''}`} onClick={() => setDashView('overview')}>
+            <LayoutDashboard size={14} /> Overview
+          </button>
+          <button className={`analytics-toggle ${dashView === 'pipeline' ? 'active' : ''}`} onClick={() => setDashView('pipeline')}>
+            <TrendingUp size={14} /> Pipeline
+          </button>
+          <button className={`analytics-toggle ${dashView === 'skills' ? 'active' : ''}`} onClick={() => setDashView('skills')}>
+            <AlertCircle size={14} /> Skills
+          </button>
+          <button className={`analytics-toggle ${dashView === 'location' ? 'active' : ''}`} onClick={() => setDashView('location')}>
+            <MapPin size={14} /> Location
+          </button>
+          <button className={`analytics-toggle ${dashView === 'batch' ? 'active' : ''}`} onClick={() => setDashView('batch')}>
+            <Layers size={14} /> Batch
+          </button>
+        </div>
+
+        {/* ── KPI ROW (Always visible) ── */}
+        <div className="bento-stats" style={{ marginBottom: '0.5rem' }}>
           <ClickableStatCard
-            label="Total Trainees"
-            value={stats.totalTrainees}
-            sub={`${stats.mappedTrainees} mapped`}
-            icon={Users}
-            tone="info"
+            label="Total Trainees" value={stats.totalTrainees}
+            sub={`${availableBatches.length} batches`} icon={Users} tone="info"
             onClick={() => setActiveTab('trainees')}
           />
           <ClickableStatCard
-            label="Mapped"
-            value={stats.mappedTrainees}
-            sub={`${stats.fillRate}% of openings`}
-            icon={CheckCircle}
-            tone="success"
+            label="Mapped" value={stats.mappedTrainees}
+            sub={`${mappingRate}% mapping rate`} icon={CheckCircle} tone="success"
             onClick={openMappedDrill}
           />
           <ClickableStatCard
-            label="Unmapped"
-            value={stats.unmappedTrainees}
-            sub="Ready to assign"
-            icon={Users}
-            tone="warning"
-            onClick={openUnmappedDrill}
-          />
-          <ClickableStatCard
-            label="Active Jobs"
-            value={stats.activeJobs}
-            sub={`${stats.totalOpenings - stats.filledPositions} openings left`}
-            icon={Briefcase}
-            tone="info"
-            onClick={() => setActiveTab('jobs')}
-          />
-          <ClickableStatCard
-            label="Fill Rate"
-            value={`${stats.fillRate}%`}
-            sub={`${stats.filledPositions}/${stats.totalOpenings}`}
-            icon={Target}
-            tone={
-              stats.fillRate >= 70
-                ? 'success'
-                : stats.fillRate >= 40
-                  ? 'warning'
-                  : 'danger'
-            }
+            label="Fill Rate" value={`${stats.fillRate}%`}
+            sub={`${stats.filledPositions}/${stats.totalOpenings} filled`} icon={Target}
+            tone={stats.fillRate >= 70 ? 'success' : stats.fillRate >= 40 ? 'warning' : 'danger'}
             onClick={openMappedDrill}
+            title={metricExplanations.fillRate}
           />
           <ClickableStatCard
-            label="Perfect Match"
-            value={perfectCount}
-            sub="Skills + location"
-            icon={Star}
-            tone="success"
-            onClick={() => setActiveTab('talentSearch')}
+            label="Pipeline Health" value={`${pipelineHealth}%`}
+            sub="Composite score" icon={Zap}
+            tone={pipelineHealth >= 70 ? 'success' : pipelineHealth >= 40 ? 'warning' : 'danger'}
+            title={metricExplanations.pipelineHealth}
           />
           <ClickableStatCard
-            label="Proximity"
-            value={nearbyCount}
-            sub="Nearby locations"
-            icon={MapPin}
-            tone="info"
-            onClick={openProximityDrill}
+            label="Match Coverage" value={`${matchCoverage}%`}
+            sub={`${totalMatchesCount} matches`} icon={Star}
+            tone={matchCoverage >= 60 ? 'success' : 'warning'}
+            title={metricExplanations.matchCoverage}
           />
           <ClickableStatCard
-            label="Skill Gaps"
-            value={skillGapCount != null ? skillGapCount : '—'}
-            sub="Critical shortages"
-            icon={AlertCircle}
-            tone="danger"
-            onClick={() => {
-              if (!dsAnalysis) {
-                fetchDemandSupplyAnalysis();
-                toast.info('Loading skill gaps… click again in a moment');
-              } else {
-                openSkillGapDrill();
-              }
-            }}
-          />
-          <ClickableStatCard
-            label="Interview Locks"
-            value={lockedCount}
-            sub={`${selectedCount} selected · ${rejectedCount} rejected`}
-            icon={Lock}
-            tone="info"
-            onClick={() => setActiveTab('interviewLocks')}
-          />
-          <ClickableStatCard
-            label="Open Pool"
-            value={traineesWithNoMatches.length}
-            sub="No job match"
-            icon={XCircle}
-            tone="warning"
-            onClick={() => setActiveTab('openPool')}
+            label="Selection Rate" value={`${selectionRate}%`}
+            sub={`${selectedCount}/${lockedCount}`} icon={CheckCircle}
+            tone={selectionRate >= 50 ? 'success' : 'warning'}
+            title={metricExplanations.selectionRate}
           />
         </div>
 
-        {/* ── Health strip ── */}
-        <p
-          className="text-muted"
-          style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.75rem' }}
-        >
-          Fill {health.fill}% · Unmapped {health.unmapped} · Locks {health.locked}
-          {health.pendingRec > 0 ? ` · ${health.pendingRec} recs pending` : ''}
-          {health.criticalGaps > 0
-            ? ` · ${health.criticalGaps} critical skills`
-            : ''}
-        </p>
-
-        {/* ── Action queue ── */}
-        <div className="bento-panel" style={{ marginBottom: '0.75rem' }}>
-          <div className="bento-panel-header">
-            <h3>
-              <Zap size={16} /> Action queue ({queue.length})
-            </h3>
+        {/* ── HEALTH STRIP ── */}
+        <div className="health-strip" style={{ marginBottom: '0.5rem' }}>
+          <div className="health-score">
+            <span style={{ color: pipelineHealth >= 70 ? '#10b981' : pipelineHealth >= 40 ? '#f59e0b' : '#ef4444' }}>
+              {pipelineHealth}%
+            </span>
+            <small>Pipeline Health</small>
           </div>
-          <div className="bento-panel-body">
-            {queue.length === 0 ? (
-              <p style={{ margin: 0, fontWeight: 600, color: '#059669' }}>
-                No urgent actions — pipeline looks healthy.
-              </p>
-            ) : (
-              <div className="drill-group-list">
-                {queue.map((item) => (
-                  <div
-                    key={item.id}
-                    className="drill-group-row"
-                    style={{ gridTemplateColumns: '1fr auto' }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700 }}>
-                        <span
-                          className={`badge badge-${item.severity === 'high'
-                              ? 'danger'
-                              : item.severity === 'medium'
-                                ? 'warning'
-                                : 'neutral'
-                            }`}
-                          style={{ marginRight: 8 }}
-                        >
-                          {item.severity}
-                        </span>
-                        {item.title}
-                      </div>
-                      <div
-                        className="text-muted"
-                        style={{ fontSize: '0.8rem', marginTop: 2 }}
-                      >
-                        {item.detail}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={item.onAction}
-                    >
-                      {item.actionLabel}
-                    </button>
-                  </div>
-                ))}
-              </div>
+          <div className="health-metrics">
+            <span title="Trainees locked for interview">🔒 {lockedCount} locked</span>
+            <span title="Candidates selected after interview">✅ {selectedCount} selected</span>
+            <span title="Candidates rejected after interview">❌ {rejectedCount} rejected</span>
+            <span title="Trainees with no job match (Open Pool)">🏊 {traineesWithNoMatches.length} open pool</span>
+            {criticalGaps.length > 0 && (
+              <span title="Skills with critical shortage (demand exceeds supply by >50%)">
+                ⚠️ {criticalGaps.length} critical gaps
+              </span>
             )}
           </div>
         </div>
 
-        {/* ── Bento panels ── */}
-        <div className="bento-grid" style={{ marginTop: '0.75rem' }}>
-          {/* Match mix */}
-          <div className="bento-panel">
+        {/* ── ACTION QUEUE (always visible) ── */}
+        {queue.length > 0 && (
+          <div className="bento-panel" style={{ marginBottom: '0.5rem' }}>
             <div className="bento-panel-header">
-              <h3>
-                <BarChart2 size={16} /> Match mix
-              </h3>
-              <button
-                className="btn-ghost btn-sm"
-                onClick={() => setActiveTab('talentSearch')}
-              >
-                Open search
-              </button>
+              <h3><Zap size={16} /> Action Queue ({queue.length})</h3>
+              <span className="text-muted" style={{ fontSize: '0.7rem' }}>Smart suggestions based on current data</span>
             </div>
-            <div className="bento-panel-body">
-              {matchBreakdownData.length === 0 ? (
-                <p className="no-data" style={{ padding: '1rem' }}>
-                  No match data yet. Run matching on jobs.
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <ReBarChart
-                    data={matchBreakdownData}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#0070C0" radius={[4, 4, 0, 0]} />
-                  </ReBarChart>
-                </ResponsiveContainer>
-              )}
+            <div className="bento-panel-body" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {queue.map((item) => (
+                <div key={item.id} className="action-pill" onClick={item.onAction} style={{ cursor: 'pointer' }} role="button" tabIndex={0}>
+                  <span className={`badge badge-${item.severity === 'high' ? 'danger' : item.severity === 'medium' ? 'warning' : 'neutral'}`}>
+                    {item.severity}
+                  </span>
+                  <span>{item.title}</span>
+                </div>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Top skill gaps */}
-          <div className="bento-panel">
-            <div className="bento-panel-header">
-              <h3>
-                <AlertCircle size={16} /> Top skill gaps
-              </h3>
-              <button
-                className="btn-ghost btn-sm"
-                onClick={() => {
-                  if (!dsAnalysis) fetchDemandSupplyAnalysis();
-                  else openSkillGapDrill();
-                }}
-              >
-                Drill down
-              </button>
-            </div>
-            <div className="bento-panel-body">
-              {topSkillGaps.length === 0 ? (
-                <p className="no-data" style={{ padding: '1rem' }}>
-                  No gap data. Click “Drill down” or open Demand-Supply.
-                </p>
-              ) : (
-                <div className="drill-group-list">
-                  {topSkillGaps.map((s) => (
-                    <div key={s.skill} className="drill-group-row">
-                      <span style={{ fontWeight: 600 }}>{s.skill}</span>
-                      <div className="bar-track">
-                        <div
-                          className="bar-fill"
-                          style={{
-                            width: `${Math.min(100, Math.abs(s.gapPercent || 0))}%`,
-                            background: s.gap > 0 ? '#ef4444' : '#10b981',
-                          }}
-                        />
+        {/* ── DYNAMIC CONTENT BY TOGGLE ── */}
+        {dashView === 'overview' && (
+          <div className="bento-grid" style={{ marginTop: '0.5rem' }}>
+            {/* Pipeline Summary */}
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><TrendingUp size={16} /> Pipeline Funnel</h3>
+                <button className="btn-ghost btn-sm" onClick={() => setDashView('pipeline')}>Expand</button>
+              </div>
+              <div className="bento-panel-body">
+                <div className="pipeline-funnel">
+                  {pipelineData.map((stage) => (
+                    <div key={stage.stage} className="funnel-stage" title={stage.tooltip}>
+                      <div className="funnel-label">{stage.stage}</div>
+                      <div className="funnel-bar">
+                        <div className="funnel-fill" style={{ width: `${(stage.value / Math.max(1, stats.totalTrainees)) * 100}%`, background: stage.color }} />
                       </div>
-                      <span
-                        style={{
-                          fontWeight: 700,
-                          color: s.gap > 0 ? '#dc2626' : '#059669',
-                        }}
-                      >
-                        {s.gap > 0 ? `-${s.gap}` : `+${Math.abs(s.gap)}`}
-                      </span>
+                      <div className="funnel-count">{stage.value}</div>
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* Top Skill Gaps */}
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><AlertCircle size={16} /> Top Skill Gaps</h3>
+                <button className="btn-ghost btn-sm" onClick={() => setDashView('skills')}>Expand</button>
+              </div>
+              <div className="bento-panel-body">
+                {topGaps.length === 0 ? (
+                  <p className="no-data">No gap data yet.</p>
+                ) : (
+                  <div className="drill-group-list">
+                    {topGaps.map((s) => (
+                      <div key={s.skill} className="drill-group-row" title={`Demand: ${s.demand} | Supply: ${s.supply} | Gap: ${s.gap}`}>
+                        <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{s.skill}</span>
+                        <div className="bar-track">
+                          <div className="bar-fill" style={{ width: `${Math.min(100, Math.abs(s.gapPercent || 0))}%`, background: s.gap > 0 ? '#ef4444' : '#10b981' }} />
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.78rem', color: s.gap > 0 ? '#dc2626' : '#059669' }}>
+                          {s.gap > 0 ? `-${s.gap}` : `+${Math.abs(s.gap)}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Location Demand */}
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><MapPin size={16} /> Location Demand</h3>
+                <button className="btn-ghost btn-sm" onClick={() => setDashView('location')}>Expand</button>
+              </div>
+              <div className="bento-panel-body">
+                {locationData.length === 0 ? (
+                  <p className="no-data">No location data yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <ReBarChart data={locationData} margin={{ top: 8, right: 8, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={40} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#5F68C3" radius={[4, 4, 0, 0]} />
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Batch Performance */}
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><Layers size={16} /> Batch Performance</h3>
+                <button className="btn-ghost btn-sm" onClick={() => setDashView('batch')}>Expand</button>
+              </div>
+              <div className="bento-panel-body">
+                {batchStats.length === 0 ? (
+                  <p className="no-data">No batch data.</p>
+                ) : (
+                  <div className="batch-mini-table">
+                    {batchStats.map((b) => (
+                      <div key={b.batch} className="batch-row" title={`${b.batch}: ${b.total} trainees, ${b.mapped} mapped (${b.fillRate}%)`}>
+                        <span className="batch-name">{b.batch}</span>
+                        <span className="batch-nums">{b.total} t</span>
+                        <span className="batch-mapped">{b.mapped} m</span>
+                        <div className="mini-progress" style={{ width: '80px' }}>
+                          <div className="mini-fill" style={{ width: `${b.fillRate}%`, background: b.fillRate >= 60 ? '#10b981' : b.fillRate >= 30 ? '#f59e0b' : '#ef4444' }} />
+                        </div>
+                        <span className="batch-rate">{b.fillRate}%</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Location demand */}
-          <div className="bento-panel">
-            <div className="bento-panel-header">
-              <h3>
-                <MapPin size={16} /> Location demand
-              </h3>
+        {dashView === 'pipeline' && (
+          <div className="bento-grid" style={{ marginTop: '0.5rem' }}>
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><TrendingUp size={16} /> Full Pipeline Details</h3>
+              </div>
+              <div className="bento-panel-body">
+                <div className="pipeline-funnel">
+                  {pipelineData.map((stage) => (
+                    <div key={stage.stage} className="funnel-stage" title={stage.tooltip}>
+                      <div className="funnel-label">{stage.stage}</div>
+                      <div className="funnel-bar">
+                        <div className="funnel-fill" style={{ width: `${(stage.value / Math.max(1, stats.totalTrainees)) * 100}%`, background: stage.color }} />
+                      </div>
+                      <div className="funnel-count">{stage.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="metric-note" style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                  <strong>How to read:</strong> Each bar shows the % of total trainees at that pipeline stage.
+                  <br />• Match Coverage: {matchCoverage}% of trainees have at least one job match
+                  <br />• Selection Rate: {selectionRate}% of locked interviews result in selection
+                  <br />• Mapping Rate: {mappingRate}% of all trainees are assigned to a project
+                </div>
+              </div>
             </div>
-            <div className="bento-panel-body">
-              {locationDemand.length === 0 ? (
-                <p className="no-data" style={{ padding: '1rem' }}>
-                  No location analytics yet.
-                </p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <ReBarChart
-                    data={locationDemand}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 40 }}
-                  >
+
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><CheckCircle size={16} /> Conversion Rates</h3>
+              </div>
+              <div className="bento-panel-body">
+                <div className="drill-group-list">
+                  <div className="drill-group-row" title="Trainees → Matches">
+                    <span>Trainees → Matches</span>
+                    <div className="bar-track"><div className="bar-fill" style={{ width: `${matchCoverage}%`, background: '#3b82f6' }} /></div>
+                    <span>{matchCoverage}%</span>
+                  </div>
+                  <div className="drill-group-row" title="Matches → Locked">
+                    <span>Matches → Locked</span>
+                    <div className="bar-track"><div className="bar-fill" style={{ width: `${totalMatchesCount > 0 ? Math.round((lockedCount / totalMatchesCount) * 100) : 0}%`, background: '#8b5cf6' }} /></div>
+                    <span>{totalMatchesCount > 0 ? Math.round((lockedCount / totalMatchesCount) * 100) : 0}%</span>
+                  </div>
+                  <div className="drill-group-row" title="Locked → Selected">
+                    <span>Locked → Selected</span>
+                    <div className="bar-track"><div className="bar-fill" style={{ width: `${selectionRate}%`, background: '#10b981' }} /></div>
+                    <span>{selectionRate}%</span>
+                  </div>
+                  <div className="drill-group-row" title="Selected → Mapped">
+                    <span>Selected → Mapped</span>
+                    <div className="bar-track"><div className="bar-fill" style={{ width: `${selectedCount > 0 ? Math.round((stats.mappedTrainees / selectedCount) * 100) : 0}%`, background: '#059669' }} /></div>
+                    <span>{selectedCount > 0 ? Math.round((stats.mappedTrainees / selectedCount) * 100) : 0}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {dashView === 'skills' && (
+          <div className="bento-grid" style={{ marginTop: '0.5rem' }}>
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><AlertCircle size={16} /> Complete Skill Gap Analysis</h3>
+              </div>
+              <div className="bento-panel-body" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                {(dsAnalysis?.skillGaps || []).map((s) => (
+                  <div key={s.skill} className="drill-group-row" title={`Skill: ${s.skill}\nDemand: ${s.demand} (from job openings)\nSupply: ${s.supply} (from trainee strengths)\nGap: ${s.gap > 0 ? 'Shortage of ' + s.gap : 'Surplus of ' + Math.abs(s.gap)}`}>
+                    <span style={{ fontWeight: 600 }}>{s.skill}</span>
+                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>D:{s.demand} S:{s.supply}</span>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${Math.min(100, s.fillRate)}%`, background: s.fillRate >= 80 ? '#10b981' : s.fillRate >= 50 ? '#f59e0b' : '#ef4444' }} />
+                    </div>
+                    <span className={`status-badge status-${String(s.status).toLowerCase()}`}>{s.status}</span>
+                  </div>
+                ))}
+                {(dsAnalysis?.skillGaps || []).length === 0 && (
+                  <p className="no-data">No skill gap data. Run Demand-Supply analysis.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><BookOpen size={16} /> Course Demand vs Supply</h3>
+              </div>
+              <div className="bento-panel-body">
+                {courseData.length === 0 ? (
+                  <p className="no-data">No course data.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <ReBarChart data={courseData} margin={{ top: 8, right: 8, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="course" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="demand" fill="#3b82f6" name="Demand" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="supply" fill="#10b981" name="Supply" radius={[4, 4, 0, 0]} />
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {dashView === 'location' && (
+          <div className="bento-grid" style={{ marginTop: '0.5rem' }}>
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><MapPin size={16} /> Location Demand vs Supply</h3>
+              </div>
+              <div className="bento-panel-body">
+                {locationData.length === 0 ? (
+                  <p className="no-data">No location data.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <ReBarChart data={locationData.map(l => ({
+                      ...l,
+                      supply: locationSupply[l.name] || 0,
+                    }))} margin={{ top: 8, right: 8, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="value" fill="#3b82f6" name="Demand (Jobs)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="supply" fill="#10b981" name="Supply (Trainees)" radius={[4, 4, 0, 0]} />
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><MapPin size={16} /> Preferred Locations Distribution</h3>
+              </div>
+              <div className="bento-panel-body" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {Object.entries(locationSupply).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([loc, count]) => (
+                  <div key={loc} className="drill-group-row">
+                    <span style={{ fontWeight: 600 }}>{loc}</span>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${(count / Math.max(1, allTrainees.length)) * 100}%`, background: '#8b5cf6' }} />
+                    </div>
+                    <span>{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {dashView === 'batch' && (
+          <div className="bento-grid" style={{ marginTop: '0.5rem' }}>
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><Layers size={16} /> Batch-wise Complete Breakdown</h3>
+              </div>
+              <div className="bento-panel-body" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                <table className="drill-table">
+                  <thead>
+                    <tr>
+                      <th>Batch</th>
+                      <th>Total</th>
+                      <th>Mapped</th>
+                      <th>Unmapped</th>
+                      <th>Fill Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchStats.map((b) => (
+                      <tr key={b.batch} title={`${b.batch}: ${b.total} trainees, ${b.mapped} mapped, ${b.unmapped} unmapped`}>
+                        <td><strong>{b.batch}</strong></td>
+                        <td>{b.total}</td>
+                        <td style={{ color: '#059669', fontWeight: 600 }}>{b.mapped}</td>
+                        <td style={{ color: '#dc2626' }}>{b.unmapped}</td>
+                        <td>
+                          <div className="mini-progress" style={{ width: '80px', display: 'inline-block' }}>
+                            <div className="mini-fill" style={{ width: `${b.fillRate}%`, background: b.fillRate >= 60 ? '#10b981' : b.fillRate >= 30 ? '#f59e0b' : '#ef4444' }} />
+                          </div>
+                          <strong> {b.fillRate}%</strong>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bento-panel">
+              <div className="bento-panel-header">
+                <h3><BarChart2 size={16} /> Batch Fill Rate Comparison</h3>
+              </div>
+              <div className="bento-panel-body">
+                <ResponsiveContainer width="100%" height={250}>
+                  <ReBarChart data={batchStats} margin={{ top: 8, right: 8, left: 0, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 10 }}
-                      angle={-25}
-                      textAnchor="end"
-                      height={50}
-                    />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#5F68C3" radius={[4, 4, 0, 0]} />
+                    <XAxis dataKey="batch" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={50} />
+                    <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} />
+                    <Tooltip formatter={(value) => [`${value}%`, 'Fill Rate']} />
+                    <Bar dataKey="fillRate" fill="#3b82f6" name="Fill Rate %" radius={[4, 4, 0, 0]} />
                   </ReBarChart>
                 </ResponsiveContainer>
-              )}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Recent activity */}
-          <div className="bento-panel">
-            <div className="bento-panel-header">
-              <h3>
-                <Activity size={16} /> Recent activity
-              </h3>
-            </div>
-            <div className="bento-panel-body">
-              {recentActivity.length === 0 ? (
-                <p className="no-data" style={{ padding: '1rem' }}>
-                  No recent actions yet.
-                </p>
-              ) : (
-                <ul className="activity-list" style={{ margin: 0 }}>
-                  {recentActivity.slice(0, 8).map((a, i) => (
-                    <li
-                      key={i}
-                      className="activity-item"
-                      style={{
-                        gridTemplateColumns: '90px 1fr auto',
-                        gap: '0.75rem',
-                        padding: '0.65rem 0.5rem',
-                      }}
-                    >
-                      <span
-                        className={`activity-type ${String(a.type || '')
-                            .toLowerCase()
-                            .includes('map')
-                            ? 'match'
-                            : 'lock'
-                          }`}
-                      >
-                        {a.type}
-                      </span>
-                      <span
-                        className="activity-detail"
-                        style={{ fontSize: '0.85rem' }}
-                      >
-                        {a.trainee} → {a.job}
-                      </span>
-                      <span
-                        className="activity-time"
-                        style={{ fontSize: '0.75rem' }}
-                      >
-                        {a.time}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Quick ops ── */}
-        <div
-          className="section-header"
-          style={{
-            marginTop: '0.75rem',
-            marginBottom: 0,
-            padding: '0.85rem 1rem',
-          }}
-        >
+        {/* ── QUICK ACTIONS (always visible) ── */}
+        <div className="section-header" style={{ marginTop: '0.5rem', padding: '0.6rem 1rem' }}>
           <div className="header-title">
-            <h2 style={{ fontSize: '0.95rem' }}>
-              <Zap size={18} /> Quick operations
-            </h2>
+            <h2 style={{ fontSize: '0.9rem' }}><Zap size={16} /> Quick Actions</h2>
           </div>
           <div className="header-actions">
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowExcelTemplate(true)}
-            >
-              <FileSpreadsheet size={14} /> Job Excel
+            <button className="btn btn-primary btn-sm" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }}>
+              <Plus size={14} /> New Job
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowWordTemplate(true)}
-            >
-              <File size={14} /> Job Word
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowExcelTemplate(true)}>
+              <FileSpreadsheet size={14} /> Excel
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowBulkMappingModal(true)}
-            >
-              <Link size={14} /> Bulk map
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkMappingModal(true)}>
+              <Link size={14} /> Bulk Map
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowBulkLockModal(true)}
-            >
-              <Lock size={14} /> Bulk lock
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkLockModal(true)}>
+              <Lock size={14} /> Bulk Lock
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowPrefLocModal(true)}
-            >
-              <MapPin size={14} /> Pref. locations
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setActiveTab('recommendations')}
-            >
-              <ThumbsUp size={14} /> Recommendations
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setActiveTab('audit')}
-            >
-              <Shield size={14} /> Audit
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowPrefLocModal(true)}>
+              <MapPin size={14} /> Locations
             </button>
           </div>
         </div>
@@ -3083,6 +3122,7 @@ const renderWorkbook = () => {
   // ==================== SIDEBAR & RENDER CONTENT ====================
   const sidebarItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { id: 'report', label: 'AI Report', icon: <Sparkles size={20} /> },
     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={20} /> },
     { id: 'trainees', label: 'Trainees', icon: <Users size={20} /> },
     { id: 'talentSearch', label: 'Talent Search', icon: <Search size={20} /> },
@@ -3111,6 +3151,7 @@ const renderWorkbook = () => {
       case 'demandSupply': return renderDemandSupplyAnalysis();
       case 'recommendations': return renderRecommendations();
       case 'workbook':  return renderWorkbook();
+      case 'report': return <ReportViewer selectedBatch={selectedBatch} />;
       default: return renderDashboard();
     }
   };
