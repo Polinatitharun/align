@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import Sidebar from "./Sidebar";
 import "./styles/ManagerDashboard.css";
+import DataTable from "./DataTable";
 import {
   LayoutDashboard, Briefcase, Users, CheckCircle, MapPin, Target,
   BriefcaseBusiness, Clock, Calendar, User, Building, AlertCircle,
@@ -895,50 +896,215 @@ function DashboardManager({ userData, onLogout }) {
     );
   };
 
-  const renderTrainees = () => (
-    <div className="trainees">
-      <div className="section-header">
-        <h2><Users size={24} /> All Trainees ({filteredTrainees.length})</h2>
-        <div className="filter-options">
-          <input value={traineeSearchTerm} onChange={e => setTraineeSearchTerm(e.target.value)} placeholder="Search..." className="search-input" />
-          <select value={traineeLocationFilter} onChange={e => setTraineeLocationFilter(e.target.value)} className="filter-select"><option value="all">All Locations</option>{uniqueLocations.filter(l => l !== "all").map(l => <option key={l} value={l}>{cap(l)}</option>)}</select>
-          <select value={traineeMappingFilter} onChange={e => setTraineeMappingFilter(e.target.value)} className="filter-select"><option value="all">All Status</option><option value="mapped">Mapped</option><option value="unmapped">Unmapped</option></select>
-          <button onClick={() => downloadReport("mapped")} className="btn btn-success"><Download size={16} /> Mapped</button>
-          <button onClick={() => downloadReport("unmapped")} className="btn btn-danger"><Download size={16} /> Unmapped</button>
-          <button onClick={fetchTrainees} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
-        </div>
-      </div>
-      <div className="table-container">
-        <table className="data-table">
-          <thead><tr><th>Name</th><th>Employee ID</th><th>Location</th><th>Batch</th><th>Avg Score</th><th>Mapping Status</th><th>Actions</th></tr></thead>
-          <tbody>{filteredTrainees.map(t => (<tr key={t.id} className="clickable-row"><td><div className="trainee-info"><div className="avatar">{t.name.charAt(0)}</div>{t.name}</div></td><td>{t.employeeId}</td><td>{cap(t.location)}</td><td>{t.batch_name || '—'}</td><td><span className="score-badge">{t.averageScore}%</span></td><td>{t.isMapped ? <span className="status-badge status-approved"><CheckCircle size={12} /> Mapped</span> : <span className="status-badge status-rejected"><AlertCircle size={12} /> Unmapped</span>}</td><td><button className="btn-icon" onClick={() => setSelectedTraineeForView(t)}><Eye size={16} /></button></td></tr>))}</tbody>
-        </table>
-      </div>
-      {/* Trainee Details Modal */}
-      {selectedTraineeForView && (
-        <div className="modal-overlay" onClick={() => setSelectedTraineeForView(null)}>
-          <div className="modal-content trainee-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h3><User size={20} /> {selectedTraineeForView.name}</h3><button className="modal-close" onClick={() => setSelectedTraineeForView(null)}><X /></button></div>
-            <div className="modal-body"><p><strong>Employee ID:</strong> {selectedTraineeForView.employeeId}</p><p><strong>Location:</strong> {cap(selectedTraineeForView.location)}</p><p><strong>Batch:</strong> {selectedTraineeForView.batch_name || 'N/A'}</p><p><strong>Average Score:</strong> {selectedTraineeForView.averageScore}%</p><p><strong>Status:</strong> {selectedTraineeForView.isMapped ? `Mapped to ${selectedTraineeForView.projectName}` : 'Unmapped'}</p><h4>Skills</h4><div className="skill-tags">{selectedTraineeForView.skills?.map(s => <span key={s} className="skill-tag">{s}</span>)}</div><h4>Matched Jobs</h4>{traineeMatchesLoading ? <div className="spinner" /> : <div>{(traineeMatches?.perfect_match?.length || 0) + (traineeMatches?.skills_only?.length || 0)} matches found</div>}</div>
-            <div className="modal-actions"><button className="btn-secondary" onClick={() => setSelectedTraineeForView(null)}>Close</button></div>
+  const renderTrainees = () => {
+    const traineeColumns = [
+      {
+        key: 'name',
+        label: 'Trainee Name',
+        sortable: true,
+        filterable: true,
+        render: (t) => (
+          <div className="trainee-info" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <div className="avatar" style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.78rem' }}>
+              {t.name?.charAt(0)}
+            </div>
+            <span style={{ fontWeight: 600 }}>{t.name}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'employeeId',
+        label: 'Employee ID',
+        sortable: true,
+        filterable: true,
+        render: (t) => t.employeeId || '—',
+      },
+      {
+        key: 'location',
+        label: 'Location',
+        sortable: true,
+        filterable: true,
+        render: (t) => cap(t.location || '—'),
+      },
+      {
+        key: 'batch_name',
+        label: 'Batch',
+        sortable: true,
+        filterable: true,
+        render: (t) => t.batch_name || '—',
+      },
+      {
+        key: 'averageScore',
+        label: 'Average Score',
+        sortable: true,
+        render: (t) => <span className="badge badge-primary">{t.averageScore}%</span>,
+      },
+      {
+        key: 'isMapped',
+        label: 'Assignment Status',
+        sortable: true,
+        filterable: true,
+        filterOptions: [
+          { label: 'Mapped to Project', value: 'true' },
+          { label: 'Unmapped', value: 'false' },
+        ],
+        render: (t) => (
+          t.isMapped ? (
+            <span className="status-badge status-selected">
+              <CheckCircle size={12} /> Mapped
+            </span>
+          ) : (
+            <span className="status-badge status-unmapped">
+              <AlertCircle size={12} /> Unassigned
+            </span>
+          )
+        ),
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (t) => (
+          <button 
+            type="button"
+            className="btn-icon" 
+            onClick={() => setSelectedTraineeForView(t)}
+            title="View Trainee Profile"
+          >
+            <Eye size={15} />
+          </button>
+        ),
+      },
+    ];
+
+    return (
+      <div className="trainees">
+        <div className="page-context-bar">
+          <div className="breadcrumb-nav">
+            <span className="breadcrumb-root">Manager Dashboard</span>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">Trainee Talent</span>
+            {selectedBatch && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>Batch: {selectedBatch}</span>}
+          </div>
+          <div className="page-context-actions">
+            <button onClick={() => downloadReport("mapped")} className="btn btn-secondary btn-sm"><Download size={14} /> Export Mapped</button>
+            <button onClick={() => downloadReport("unmapped")} className="btn btn-secondary btn-sm"><Download size={14} /> Export Unmapped</button>
+            <button onClick={fetchTrainees} className="btn btn-secondary btn-sm" disabled={loading}><RefreshCw size={14} className={loading ? 'spinning' : ''} /> Refresh</button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        <DataTable
+          columns={traineeColumns}
+          data={filteredTrainees}
+          loading={loading}
+          pageSize={10}
+          pageSizeOptions={[10, 25, 50, 100]}
+          emptyMessage="No trainees found matching the criteria."
+          searchPlaceholder="Search trainees by name, employee ID, location..."
+        />
+
+        {/* Trainee Details Modal */}
+        {selectedTraineeForView && (
+          <div className="modal-overlay" onClick={() => setSelectedTraineeForView(null)}>
+            <div className="modal-content trainee-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3><User size={20} /> {selectedTraineeForView.name}</h3>
+                <button className="modal-close" onClick={() => setSelectedTraineeForView(null)}><X /></button>
+              </div>
+              <div className="modal-body">
+                <p><strong>Employee ID:</strong> {selectedTraineeForView.employeeId}</p>
+                <p><strong>Location:</strong> {cap(selectedTraineeForView.location)}</p>
+                <p><strong>Batch:</strong> {selectedTraineeForView.batch_name || 'N/A'}</p>
+                <p><strong>Average Score:</strong> {selectedTraineeForView.averageScore}%</p>
+                <p><strong>Status:</strong> {selectedTraineeForView.isMapped ? `Mapped to ${selectedTraineeForView.projectName}` : 'Unmapped'}</p>
+                <h4>Skills</h4>
+                <div className="skill-tags">{selectedTraineeForView.skills?.map(s => <span key={s} className="skill-tag">{s}</span>)}</div>
+                <h4>Matched Jobs</h4>
+                {traineeMatchesLoading ? <div className="spinner" /> : <div>{(traineeMatches?.perfect_match?.length || 0) + (traineeMatches?.skills_only?.length || 0)} matches found</div>}
+              </div>
+              <div className="modal-actions"><button className="btn btn-secondary" onClick={() => setSelectedTraineeForView(null)}>Close</button></div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderOpenPool = () => {
-    const filtered = openPoolTrainees.filter(t => !traineeSearchTerm || t.name.toLowerCase().includes(traineeSearchTerm.toLowerCase()));
+    const openPoolColumns = [
+      {
+        key: 'name',
+        label: 'Candidate Name',
+        sortable: true,
+        filterable: true,
+        render: (t) => (
+          <div className="trainee-info" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <div className="avatar" style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.78rem' }}>
+              {t.name?.charAt(0)}
+            </div>
+            <span style={{ fontWeight: 600 }}>{t.name}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'location',
+        label: 'Location',
+        sortable: true,
+        filterable: true,
+        render: (t) => cap(t.location || '—'),
+      },
+      {
+        key: 'batch_name',
+        label: 'Batch',
+        sortable: true,
+        filterable: true,
+        render: (t) => t.batch_name || '—',
+      },
+      {
+        key: 'averageScore',
+        label: 'Average Score',
+        sortable: true,
+        render: (t) => <span className="badge badge-primary">{t.averageScore}%</span>,
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (t) => (
+          <button 
+            type="button"
+            className="btn-icon" 
+            onClick={() => setSelectedTraineeForView(t)}
+            title="View Details"
+          >
+            <Eye size={15} />
+          </button>
+        ),
+      },
+    ];
+
     return (
       <div className="open-pool">
-        <div className="section-header">
-          <h2><Database size={24} /> Open Pool ({openPoolTrainees.length})</h2>
-          <input value={traineeSearchTerm} onChange={e => setTraineeSearchTerm(e.target.value)} placeholder="Search open pool..." className="search-input" />
-          <button onClick={fetchOpenPoolTrainees} disabled={openPoolLoading} className="btn-secondary"><RefreshCw size={16} /> Refresh</button>
+        <div className="page-context-bar">
+          <div className="breadcrumb-nav">
+            <span className="breadcrumb-root">Manager Dashboard</span>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">Unassigned Talent Pool</span>
+          </div>
+          <div className="page-context-actions">
+            <button onClick={fetchOpenPoolTrainees} disabled={openPoolLoading} className="btn btn-secondary btn-sm">
+              <RefreshCw size={14} className={openPoolLoading ? 'spinning' : ''} /> Refresh
+            </button>
+          </div>
         </div>
-        {openPoolLoading ? <div className="loading-state"><div className="spinner" /></div> : filtered.length === 0 ? <div className="empty-state"><Database size={40} /><h3>No open pool trainees</h3></div> : (
-          <div className="table-container"><table className="data-table"><thead><tr><th>Name</th><th>Location</th><th>Batch</th><th>Avg Score</th><th>Actions</th></tr></thead><tbody>{filtered.map(t => (<tr key={t.id}><td><div className="trainee-info"><div className="avatar">{t.name.charAt(0)}</div>{t.name}</div></td><td>{cap(t.location)}</td><td>{t.batch_name || '—'}</td><td><span className="score-badge">{t.averageScore}%</span></td><td><button className="btn-icon" onClick={() => setSelectedTraineeForView(t)}><Eye size={16} /></button></td></tr>))}</tbody></table></div>
-        )}
+
+        <DataTable
+          columns={openPoolColumns}
+          data={openPoolTrainees}
+          loading={openPoolLoading}
+          pageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+          emptyMessage="No unassigned candidates in open pool."
+          searchPlaceholder="Search open pool candidates..."
+        />
       </div>
     );
   };

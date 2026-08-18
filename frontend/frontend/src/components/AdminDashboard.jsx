@@ -3,6 +3,7 @@ import api from "../api/axios";
 import "./styles/AdminDashboard.css";
 import { Toaster, toast } from "sonner";
 import Sidebar from "./Sidebar";
+import DataTable from "./DataTable";
 import { Cloud, BookOpen, Edit, Trash2 } from "lucide-react";
 
 import {
@@ -545,32 +546,125 @@ function AdminDashboard({ userData, onLogout, onBack }) {
   );
 
   // --- Render Tabs ---
-  const renderUsersTab = () => (
-    <div className="adm-users-tab">
-      <div className="adm-section-header">
-        <div className="adm-header-title">
-          <h2><Users size={24} /> User Management</h2>
-          <p className="adm-subtitle">Monitor and manage all platform identities</p>
-        </div>
-        <div className="adm-header-actions">
-          <div className="adm-search-box">
-            <input
-              type="text"
-              placeholder="Search users by name, email or ID..."
-              className="adm-search-input"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+  const renderUsersTab = () => {
+    const userColumns = [
+      {
+        key: 'username',
+        label: 'User Identity',
+        sortable: true,
+        filterable: true,
+        render: (user) => (
+          <div className="adm-user-cell">
+            <div className="adm-user-avatar">
+              {user.username?.charAt(0)}
+            </div>
+            <div className="adm-user-details">
+              <div className="adm-user-name">{user.username}</div>
+              <div className="adm-user-id">UID: {user.id}</div>
+            </div>
           </div>
-          <div className="adm-action-group">
+        ),
+      },
+      {
+        key: 'email',
+        label: 'Contact Email',
+        sortable: true,
+        filterable: true,
+        render: (user) => <div className="adm-email-cell">{user.email}</div>,
+      },
+      {
+        key: 'role',
+        label: 'Access Role',
+        sortable: true,
+        filterable: true,
+        filterOptions: rolesDef.map(r => ({ label: r.label, value: r.value })),
+        render: (user) => {
+          const roleInfo = rolesDef.find((r) => r.value === user.role);
+          return (
+            <span className={`role-badge role-${user.role}`}>
+              {roleInfo?.icon} {roleInfo?.label || user.role}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'status',
+        label: 'Account Status',
+        sortable: true,
+        filterable: true,
+        filterOptions: [
+          { label: 'Active', value: 'active' },
+          { label: 'Inactive', value: 'inactive' },
+        ],
+        render: (user) => (
+          <button
+            type="button"
+            className={`status-toggle ${user.is_active ? "status-active" : "status-inactive"}`}
+            onClick={() => handleToggleStatus(user.id)}
+            title={user.is_active ? "Click to Deactivate" : "Click to Activate"}
+          >
+            {user.is_active ? <CheckCircle size={14} /> : <XCircle size={14} />}
+            <span>{user.is_active ? "Active" : "Inactive"}</span>
+          </button>
+        ),
+      },
+      {
+        key: 'joinDate',
+        label: 'Join Date',
+        sortable: true,
+        render: (user) => <div className="adm-date-cell">{user.joinDate}</div>,
+      },
+      {
+        key: 'actions',
+        label: 'Administrative Actions',
+        render: (user) => (
+          <div className="adm-action-buttons">
             <button
-              className="btn btn-success"
-              onClick={() => setShowBulkUploadModal(true)}
+              type="button"
+              className="btn-icon btn-icon-edit"
+              onClick={() => handleEditUser(user)}
+              title="Edit User"
             >
-              <FileSpreadsheet size={18} /> Bulk Import
+              <UserCog size={15} />
             </button>
             <button
-              className="btn btn-primary btn-cta"
+              type="button"
+              className="btn-icon btn-icon-view"
+              onClick={() => handleResetPasswordClick(user)}
+              title="Reset Password"
+            >
+              <KeyRound size={15} />
+            </button>
+            <button
+              type="button"
+              className="btn-icon btn-icon-delete"
+              onClick={() => askDeleteUser(user)}
+              title="Delete user"
+            >
+              <TrashIcon size={15} />
+            </button>
+          </div>
+        ),
+      },
+    ];
+
+    return (
+      <div className="adm-users-tab">
+        <div className="page-context-bar">
+          <div className="breadcrumb-nav">
+            <span className="breadcrumb-root">Admin Console</span>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">User Management</span>
+          </div>
+          <div className="page-context-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowBulkUploadModal(true)}
+            >
+              <FileSpreadsheet size={14} /> Bulk Import
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
               onClick={() => {
                 setEditingUser(null);
                 setNewUser({
@@ -583,97 +677,23 @@ function AdminDashboard({ userData, onLogout, onBack }) {
                 setShowAddUserModal(true);
               }}
             >
-              <Plus size={18} /> Add New User
+              <Plus size={14} /> Add New User
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="adm-users-table-container">
-        {loading ? (
-          <div className="loading-overlay">
-            <div className="loading-spinner"></div>
-            <p>Syncing user directory...</p>
-          </div>
-        ) : (
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>User Identity</th>
-                  <th>Contact Email</th>
-                  <th>Access Role</th>
-                  <th>Account Status</th>
-                  <th>Join Date</th>
-                  <th>Administrative Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td>
-                      <div className="adm-user-cell">
-                        <div className="adm-user-avatar">
-                          {user.username?.charAt(0)}
-                        </div>
-                        <div className="adm-user-details">
-                          <div className="adm-user-name">{user.username}</div>
-                          <div className="adm-user-id">UID: {user.id}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td><div className="adm-email-cell">{user.email}</div></td>
-                    <td>
-                      <span className={`role-badge role-${user.role}`}>
-                        {rolesDef.find((r) => r.value === user.role)?.icon}{" "}
-                        {rolesDef.find((r) => r.value === user.role)?.label}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className={`status-toggle ${user.is_active ? "status-active" : "status-inactive"}`}
-                        onClick={() => handleToggleStatus(user.id)}
-                        title={user.is_active ? "Click to Deactivate" : "Click to Activate"}
-                      >
-                        {user.is_active ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                        {user.is_active ? "Active" : "Inactive"}
-                      </button>
-                    </td>
-                    <td><div className="adm-date-cell">{user.joinDate}</div></td>
-                    <td>
-                      <div className="adm-action-buttons">
-                        <button
-                          className="btn-icon btn-icon-edit"
-                          onClick={() => handleEditUser(user)}
-                          title="Edit User"
-                        >
-                          <UserCog size={16} />
-                        </button>
-                        <button
-                          className="btn-icon btn-icon-view"
-                          onClick={() => handleResetPasswordClick(user)}
-                          title="Reset Password"
-                        >
-                          <KeyRound size={16} />
-                        </button>
-                        <button
-                          className="btn-icon btn-icon-delete"
-                          onClick={() => askDeleteUser(user)}
-                          title="Delete user"
-                        >
-                          <TrashIcon size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={userColumns}
+          data={users}
+          loading={loading}
+          pageSize={10}
+          pageSizeOptions={[10, 25, 50, 100]}
+          emptyMessage="No users found in directory."
+          searchPlaceholder="Search users by name, email, role, or ID..."
+        />
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStatisticsTab = () => (
     <div className="adm-statistics-tab">
@@ -882,111 +902,143 @@ function AdminDashboard({ userData, onLogout, onBack }) {
   );
 
   // --- Courses Tab ---
-  const renderCoursesTab = () => (
-    <div className="adm-users-tab">
-      <div className="adm-section-header">
-        <div className="adm-header-title">
-          <h2><BookOpen size={24} /> Course Management</h2>
-          <p className="adm-subtitle">Manage courses and assign course owners</p>
-        </div>
-        <div className="adm-header-actions">
-          <button className="btn btn-primary btn-cta" onClick={handleAddCourse}>
-            <Plus size={18} /> Add New Course
-          </button>
-        </div>
-      </div>
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Course Name</th>
-              <th>Description</th>
-              <th>Owners</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {courses.map(course => (
-              <tr key={course.id}>
-                <td>{course.name}</td>
-                <td>{course.description}</td>
-                <td>
-                  {course.owners?.length > 0
-                    ? course.owners.map(ownerId => {
-                        const user = availableOwners.find(u => u.id === ownerId);
-                        return user ? user.username : ownerId;
-                      }).join(', ')
-                    : 'None'}
-                </td>
-                <td>
-                  <div className="adm-action-buttons">
-                    <button className="btn-icon btn-icon-edit" onClick={() => handleEditCourse(course)} title="Edit"><Edit size={16} /></button>
-                    <button className="btn-icon btn-icon-delete" onClick={() => handleDeleteCourse(course.id)} title="Delete"><Trash2 size={16} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  const renderCoursesTab = () => {
+    const courseColumns = [
+      {
+        key: 'name',
+        label: 'Course Name',
+        sortable: true,
+        filterable: true,
+        render: (c) => <strong>{c.name}</strong>,
+      },
+      {
+        key: 'description',
+        label: 'Description',
+        sortable: false,
+        render: (c) => c.description || '—',
+      },
+      {
+        key: 'owners',
+        label: 'Assigned Course Owners',
+        sortable: false,
+        render: (c) => (
+          c.owners?.length > 0
+            ? c.owners.map(ownerId => {
+                const user = availableOwners.find(u => u.id === ownerId);
+                return user ? user.username : ownerId;
+              }).join(', ')
+            : <span className="text-muted">None</span>
+        ),
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (c) => (
+          <div className="adm-action-buttons">
+            <button
+              type="button"
+              className="btn-icon btn-icon-edit"
+              onClick={() => handleEditCourse(c)}
+              title="Edit Course"
+            >
+              <Edit size={15} />
+            </button>
+            <button
+              type="button"
+              className="btn-icon btn-icon-delete"
+              onClick={() => handleDeleteCourse(c.id)}
+              title="Delete Course"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ),
+      },
+    ];
 
-      {/* Course Modal */}
-      {showCourseModal && (
-        <div className="modal-overlay" onClick={() => setShowCourseModal(false)}>
-          <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{editingCourse ? 'Edit Course' : 'Create Course'}</h3>
-              <button className="modal-close" onClick={() => setShowCourseModal(false)}><X /></button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label>Course Name *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={newCourse.name}
-                  onChange={e => setNewCourse({ ...newCourse, name: e.target.value })}
-                  placeholder="e.g., Java Full Stack"
-                />
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  className="form-control"
-                  value={newCourse.description}
-                  onChange={e => setNewCourse({ ...newCourse, description: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Course Owners</label>
-                <select
-                  multiple
-                  className="form-control"
-                  value={newCourse.owners}
-                  onChange={e => setNewCourse({
-                    ...newCourse,
-                    owners: Array.from(e.target.selectedOptions, option => parseInt(option.value))
-                  })}
-                  size={5}
-                >
-                  {availableOwners.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} ({user.email})
-                    </option>
-                  ))}
-                </select>
-                <small>Hold Ctrl/Cmd to select multiple owners</small>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowCourseModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSaveCourse}>Save</button>
-            </div>
+    return (
+      <div className="adm-users-tab">
+        <div className="page-context-bar">
+          <div className="breadcrumb-nav">
+            <span className="breadcrumb-root">Admin Console</span>
+            <span className="breadcrumb-sep">/</span>
+            <span className="breadcrumb-current">Course Management</span>
+          </div>
+          <div className="page-context-actions">
+            <button className="btn btn-primary btn-sm" onClick={handleAddCourse}>
+              <Plus size={14} /> Add New Course
+            </button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        <DataTable
+          columns={courseColumns}
+          data={courses}
+          loading={loading}
+          pageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+          emptyMessage="No courses defined yet."
+          searchPlaceholder="Search courses by name or description..."
+        />
+
+        {/* Course Modal */}
+        {showCourseModal && (
+          <div className="modal-overlay" onClick={() => setShowCourseModal(false)}>
+            <div className="modal-content modal-md" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>{editingCourse ? 'Edit Course' : 'Create Course'}</h3>
+                <button className="modal-close" onClick={() => setShowCourseModal(false)}><X /></button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Course Name *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCourse.name}
+                    onChange={e => setNewCourse({ ...newCourse, name: e.target.value })}
+                    placeholder="e.g., Java Full Stack"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    className="form-control"
+                    value={newCourse.description}
+                    onChange={e => setNewCourse({ ...newCourse, description: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Course Owners</label>
+                  <select
+                    multiple
+                    className="form-control"
+                    value={newCourse.owners}
+                    onChange={e => setNewCourse({
+                      ...newCourse,
+                      owners: Array.from(e.target.selectedOptions, option => parseInt(option.value))
+                    })}
+                    size={5}
+                  >
+                    {availableOwners.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.username} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                  <small>Hold Ctrl/Cmd to select multiple owners</small>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => setShowCourseModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleSaveCourse}>Save</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // --- Modals (unchanged) ---
   const renderAddUserModal = () => (
