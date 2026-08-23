@@ -3,7 +3,7 @@ from .models import (
     User, Course, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
     Recommendation, InterviewLock, InterviewFeedback,
     ManagerChatSession, ManagerChatMessage, TraineeSelfAssessment,
-    Notification, AuditLog
+    Notification, AuditLog, Consent
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
@@ -177,8 +177,56 @@ class JobSerializer(serializers.ModelSerializer):
 
 # ---------- Match Serializers ----------
 class MatchListSerializer(serializers.ModelSerializer):
+    dpi = serializers.SerializerMethodField()
+    employee_id = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    preferred_locations = serializers.SerializerMethodField()
+    consent_status = serializers.SerializerMethodField()
+
     class Meta:
         model = Match
+        fields = '__all__'
+
+    def get_dpi(self, obj):
+        return getattr(obj.trainee_ref, 'dpi', None) if obj.trainee_ref else None
+
+    def get_employee_id(self, obj):
+        if obj.trainee_ref and obj.trainee_ref.userInfo:
+            return obj.trainee_ref.userInfo.employeeId or obj.trainee_ref.userInfo.userId
+        return ''
+
+    def get_email(self, obj):
+        if obj.trainee_ref and obj.trainee_ref.userInfo:
+            return obj.trainee_ref.userInfo.email or ''
+        return ''
+
+    def get_preferred_locations(self, obj):
+        if not obj.trainee_ref or not obj.trainee_ref.userInfo:
+            return []
+        u = obj.trainee_ref.userInfo
+        locs = []
+        for l in [u.preferred_location_1, u.preferred_location_2, u.preferred_location_3, getattr(u, 'preferred_city', None), getattr(u, 'preferred_state', None)]:
+            if l and str(l).strip() and str(l).strip() not in locs:
+                locs.append(str(l).strip())
+        return locs
+
+    def get_consent_status(self, obj):
+        if not obj.trainee_ref:
+            return None
+        consent = Consent.objects.filter(trainee=obj.trainee_ref, job_id=obj.job_id).first()
+        return consent.status if consent else None
+
+
+class ConsentSerializer(serializers.ModelSerializer):
+    trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
+    employee_id = serializers.CharField(source='trainee.userInfo.employeeId', read_only=True)
+    job_title = serializers.CharField(source='job.project_name', read_only=True)
+    demand_id = serializers.CharField(source='job.demand_id', read_only=True)
+    rgs_id = serializers.CharField(source='job.rgs_id', read_only=True)
+    sent_by_username = serializers.CharField(source='sent_by.username', read_only=True)
+
+    class Meta:
+        model = Consent
         fields = '__all__'
 
 
@@ -326,3 +374,38 @@ class TraineeSelfAssessmentSerializer(serializers.ModelSerializer):
         model = TraineeSelfAssessment
         fields = ['id', 'questions_asked', 'technical_percentage', 'theoretical_percentage', 'question_list', 'submitted_at']
         read_only_fields = ['id', 'submitted_at']
+
+
+# ---------- Consent Serializers ----------
+class ConsentSerializer(serializers.ModelSerializer):
+    trainee_name = serializers.SerializerMethodField()
+    trainee_employee_id = serializers.SerializerMethodField()
+    trainee_email = serializers.SerializerMethodField()
+    job_title = serializers.CharField(source='job.project_name', read_only=True)
+    job_location = serializers.CharField(source='job.location', read_only=True)
+    job_skills = serializers.CharField(source='job.skills', read_only=True)
+    job_openings = serializers.IntegerField(source='job.openings', read_only=True)
+    job_stream = serializers.CharField(source='job.stream', read_only=True)
+    sent_by_name = serializers.CharField(source='sent_by.username', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Consent
+        fields = [
+            'id', 'trainee', 'job', 'status', 'remarks',
+            'sent_by', 'sent_at', 'responded_at', 'updated_at',
+            'trainee_name', 'trainee_employee_id', 'trainee_email',
+            'job_title', 'job_location', 'job_skills', 'job_openings', 'job_stream',
+            'sent_by_name',
+        ]
+        read_only_fields = ['id', 'sent_at', 'responded_at', 'updated_at']
+
+    def get_trainee_name(self, obj):
+        return obj.trainee.userInfo.name if obj.trainee and obj.trainee.userInfo else None
+
+    def get_trainee_employee_id(self, obj):
+        return obj.trainee.userInfo.employeeId if obj.trainee and obj.trainee.userInfo else None
+
+    def get_trainee_email(self, obj):
+        if obj.trainee and obj.trainee.userInfo:
+            return obj.trainee.userInfo.email
+        return None

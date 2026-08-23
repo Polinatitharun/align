@@ -10,7 +10,7 @@ import {
   BriefcaseBusiness, Building, BookOpen, Sparkles, FileSpreadsheet, File,
   Upload, Users2, Lock, XCircle, Shield, Layers, Activity, Zap, Award,
   TrendingUp, Clock, Info, MessageSquare, UploadCloud, ChevronDown,
-  RefreshCw, Database, Megaphone, ThumbsUp,
+  RefreshCw, Database, Megaphone, ThumbsUp, Send, FileCheck,
 } from 'lucide-react';
 import { groupBy, ClickableStatCard, DrillDownModal } from './Drilldown';
 import {
@@ -24,10 +24,16 @@ import ReportViewer from './ReportViewer';
 import DataTable from './DataTable';
 import CandidatesView from './CandidatesView';
 import AutoMappingModal from './AutoMappingModal';
+import ConsentModal from './ConsentModal';
+import JDParserModal from './JDParserModal';
+import BulkStatusModal from './BulkStatusModal';
+import ConsentStatusView from './ConsentStatusView';
 
 function DashboardHR({ userData, onLogout }) {
   // ==================== Core State ====================
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showJDParserModal, setShowJDParserModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedTrainee, setSelectedTrainee] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -143,6 +149,18 @@ const [workbookFilter, setWorkbookFilter] = useState('');
   const getRemainingOpenings = (job) => Math.max(0, Number(job?.openings || 0) - Number(job?.filled || 0));
   const getMatchTraineeUserId = (match) => String(match?.trainee_id || '');
   const findTraineeByUserId = (userId) => allTrainees.find((t) => String(t.userId) === String(userId));
+
+  const selectedCandidatesForConsent = useMemo(() => {
+    if (!searchJobMatches) return [];
+    const allMatches = [
+      ...(searchJobMatches.perfect_match || []),
+      ...(searchJobMatches.skills_only || []),
+      ...(searchJobMatches.location_only || []),
+      ...(searchJobMatches.nearby || []),
+      ...(searchJobMatches.no_match || [])
+    ];
+    return allMatches.filter(m => selectedSearchTraineeIds.includes(getMatchTraineeUserId(m)));
+  }, [searchJobMatches, selectedSearchTraineeIds]);
 
   const normalizeMatchedSkills = (skills) => {
     if (Array.isArray(skills)) return skills;
@@ -1597,29 +1615,21 @@ const renderWorkbook = () => {
     }
   };
 
-  const downloadPrefLocTemplate = () => {
-    XlsxPopulate.fromBlankAsync().then(wb => {
-      const s = wb.sheet(0); s.name("Preferred Locations");
-      s.cell(1, 1).value("Employee ID");
-      s.cell(1, 2).value("Preferred Location 1");
-      s.cell(1, 3).value("Preferred Location 2");
-      s.cell(1, 4).value("Preferred Location 3");
-      s.range(1, 1, 1, 4).style('bold', true).style('fill', '2563eb').style('fontColor', 'ffffff');
-      s.cell(2, 1).value("EMP001"); s.cell(2, 2).value("Bangalore");
-      s.cell(2, 3).value("Chennai");
-      s.cell(2, 4).value("Hyderabad");
-      s.column(1).width(15);
-      s.column(2).width(20);
-      s.column(3).width(20);
-      s.column(4).width(20);
-      return wb.outputAsync();
-    }).then(blob => {
-      const u = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = u;
+  const downloadPrefLocTemplate = async () => {
+    try {
+      const res = await api.get('/users/download-preferred-locations-template/', { responseType: 'blob' });
+      const u = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = u;
       a.download = 'preferred_locations_template.xlsx';
-      document.body.appendChild(a); a.click(); URL.revokeObjectURL(u);
-      document.body.removeChild(a); toast.success('Template downloaded');
-    }).catch(() => toast.error('Download failed'));
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(u);
+      document.body.removeChild(a);
+      toast.success('Preferred Locations template downloaded');
+    } catch {
+      toast.error('Download failed');
+    }
   };
 
   const downloadHRSummaryPDF = async () => {
@@ -2785,6 +2795,14 @@ const renderDashboard = () => {
             >
               <Zap size={14} /> Auto-Map Talent
             </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowJDParserModal(true)}
+              style={{ background: 'linear-gradient(135deg, #4f46e5, #3730a3)', fontWeight: 600 }}
+              title="Parse raw JD text with AI into structured job requirement"
+            >
+              <Sparkles size={14} /> Parse JD with AI
+            </button>
             <button className="btn btn-primary btn-sm" onClick={() => { setSelectedJob(null); setIsEditMode(false); setActiveTab('createJob'); }}>
               <Plus size={14} /> New Job
             </button>
@@ -2805,6 +2823,9 @@ const renderDashboard = () => {
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkMappingModal(true)}>
               <Link size={14} /> Bulk Map
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowPrefLocModal(true)} title="Upload Trainee Preferred Locations with State and City (Excel)">
+              <MapPin size={14} /> Upload Pref Locations
             </button>
           </div>
         </div>
@@ -3135,7 +3156,21 @@ const renderDashboard = () => {
     const matchColumns = [
       {
         key: 'select',
-        label: '',
+        label: (
+          <input
+            type="checkbox"
+            checked={filtered.length > 0 && selectedSearchTraineeIds.length === filtered.length}
+            onChange={(e) => {
+              if (e.target.checked) {
+                const allIds = filtered.map(m => getMatchTraineeUserId(m)).filter(Boolean);
+                setSelectedSearchTraineeIds(allIds);
+              } else {
+                setSelectedSearchTraineeIds([]);
+              }
+            }}
+            title="Select All Matching Candidates"
+          />
+        ),
         render: (match) => {
           const traineeUserId = getMatchTraineeUserId(match);
           const disabled = !jobHasOpenings || !traineeUserId;
@@ -3171,6 +3206,45 @@ const renderDashboard = () => {
               </div>
             </div>
           );
+        },
+      },
+      {
+        key: 'dpi',
+        label: 'DPI Score',
+        sortable: true,
+        render: (match) => {
+          const dpi = match.dpi !== undefined && match.dpi !== null
+            ? Number(match.dpi).toFixed(1)
+            : match.experience_percentage
+              ? (Number(match.experience_percentage) / 20).toFixed(1)
+              : '—';
+          return (
+            <span style={{ fontWeight: 700, color: '#1e293b' }}>
+              {dpi !== '—' ? `${dpi}/5` : '—'}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'consent_status',
+        label: 'Consent Status',
+        sortable: true,
+        filterable: true,
+        render: (match) => {
+          const st = match.consent_status;
+          if (!st || st === 'NONE') {
+            return <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>Not Sent</span>;
+          }
+          if (st === 'PENDING') {
+            return <span className="badge badge-warning" style={{ fontSize: '0.72rem', background: '#fef3c7', color: '#b45309' }}>Consent Pending</span>;
+          }
+          if (st === 'ACCEPTED') {
+            return <span className="badge badge-success" style={{ fontSize: '0.72rem', background: '#dcfce7', color: '#15803d' }}>Consent Accepted</span>;
+          }
+          if (st === 'DECLINED') {
+            return <span className="badge badge-danger" style={{ fontSize: '0.72rem', background: '#fee2e2', color: '#b91c1c' }}>Consent Declined</span>;
+          }
+          return <span className="badge badge-neutral">{st}</span>;
         },
       },
       {
@@ -3303,10 +3377,20 @@ const renderDashboard = () => {
             )}
           </div>
           <div className="page-context-actions">
-            {selectedSearchTraineeIds.length > 0 && jobHasOpenings && (
+            {selectedSearchTraineeIds.length > 0 && selectedJobForSearch && (
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
+                onClick={() => setShowConsentModal(true)}
+                style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', fontWeight: 600 }}
+              >
+                <Send size={14} /> Send Consent ({selectedSearchTraineeIds.length})
+              </button>
+            )}
+            {selectedSearchTraineeIds.length > 0 && jobHasOpenings && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
                 onClick={() => {
                   setSelectedTraineeIds(selectedSearchTraineeIds);
                   setSelectedJob(selectedJobForSearch);
@@ -4335,10 +4419,12 @@ const renderDashboard = () => {
             <div className="template-info" style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem' }}>
               <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', fontWeight: 600 }}>Template Columns:</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.5rem', fontSize: '0.85rem' }}>
-                <strong>Employee ID:</strong><span>Required</span>
-                <strong>Preferred Location 1:</strong><span>Optional</span>
-                <strong>Preferred Location 2:</strong><span>Optional</span>
-                <strong>Preferred Location 3:</strong><span>Optional</span>
+                <strong>Employee ID:</strong><span>Required (e.g., EMP001)</span>
+                <strong>Location 1:</strong><span>Preferred Location 1</span>
+                <strong>Location 2:</strong><span>Preferred Location 2</span>
+                <strong>Location 3:</strong><span>Preferred Location 3</span>
+                <strong>State:</strong><span>Preferred State (e.g., Telangana)</span>
+                <strong>City:</strong><span>Preferred City (e.g., Hyderabad)</span>
               </div>
             </div>
           </div>
@@ -4489,12 +4575,12 @@ const renderDashboard = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'job_template.xlsx';
+      a.download = 'job_demand_template.xlsx';
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success('Template downloaded');
+      toast.success('Job Demand template downloaded');
     } catch {
       toast.error('Download failed');
     }
@@ -4522,6 +4608,7 @@ const renderDashboard = () => {
     { id: 'jobs', label: 'Job Management', icon: <Briefcase size={18} /> },
     { id: 'candidates', label: 'Candidate Hub', icon: <Users size={18} /> },
     { id: 'talentSearch', label: 'Talent Search', icon: <Search size={18} /> },
+    { id: 'consents', label: 'Consent Management', icon: <Send size={18} /> },
     { id: 'demandSupply', label: 'Demand vs Supply', icon: <TrendingUp size={18} /> },
     { id: 'recommendations', label: 'Recommendations', icon: <ThumbsUp size={18} /> },
     { id: 'feedback', label: 'Interview Feedback', icon: <MessageSquare size={18} /> },
@@ -4557,10 +4644,13 @@ const renderDashboard = () => {
             onUnmapTrainee={handleUnmapFromProject}
             onRefresh={refreshCurrentView}
             onRequestDownload={requestDownload}
+            onOpenPrefLoc={() => setShowPrefLocModal(true)}
           />
         );
       case 'talentSearch':
         return renderTalentSearch();
+      case 'consents':
+        return <ConsentStatusView currentBatch={selectedBatch} jobs={jobs} />;
       case 'feedback':
         return renderFeedbackList();
       case 'audit':
@@ -4620,6 +4710,19 @@ const renderDashboard = () => {
       {renderErrorDetailsModal()}
       {renderNotifyModal()}
       {renderPrefLocModal()}
+      <ConsentModal
+        isOpen={showConsentModal}
+        onClose={() => setShowConsentModal(false)}
+        selectedCandidates={selectedCandidatesForConsent}
+        selectedJob={selectedJobForSearch}
+        onSuccess={refreshCurrentView}
+      />
+      <JDParserModal
+        isOpen={showJDParserModal}
+        onClose={() => setShowJDParserModal(false)}
+        onSuccess={() => { fetchJobs(); refreshCurrentView(); }}
+        currentBatch={selectedBatch}
+      />
       <AutoMappingModal
         isOpen={showAutoMappingModal}
         onClose={() => setShowAutoMappingModal(false)}

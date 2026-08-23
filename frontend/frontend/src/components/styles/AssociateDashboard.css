@@ -659,3 +659,155 @@
   .profile-hero-score { margin: 1rem auto 0; }
   .career-path-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Associate workspace polish ── */
+.associate-dashboard-layout {
+  --associate-ink: #10233f;
+  --associate-muted: #64748b;
+  --associate-line: #dce6ef;
+  --associate-surface: rgba(255, 255, 255, 0.94);
+  --associate-blue: #1261a0;
+  --associate-teal: #087f8c;
+  background:
+    radial-gradient(circle at 92% 4%, rgba(18, 97, 160, 0.1), transparent 28rem),
+    linear-gradient(135deg, #f7fafc 0%, #eef5f7 100%) !important;
+  color: var(--associate-ink);
+  font-family: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
+}
+
+.associate-dashboard-layout .main-content {
+  min-width: 0;
+  padding: 30px clamp(20px, 4vw, 56px) 48px !important;
+  background: transparent;
+}
+
+.associate-dashboard-layout .main-content > div:first-child {
+  max-width: 1440px;
+  margin: 0 auto 24px !important;
+  padding: 6px 0 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.associate-dashboard-layout h1,
+.associate-dashboard-layout h2,
+.associate-dashboard-layout h3,
+.associate-dashboard-layout h4 {
+  color: var(--associate-ink) !important;
+  letter-spacing: -0.02em;
+}
+
+.associate-dashboard-layout .main-content > div:first-child h1 {
+  font-size: clamp(1.45rem, 2.5vw, 2rem) !important;
+  line-height: 1.15;
+}
+
+.associate-dashboard-layout .main-content > div:first-child p {
+  color: var(--associate-muted) !important;
+}
+
+.associate-dashboard-layout .main-content > div:first-child > div:last-child {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.associate-dashboard-layout .main-content > div:first-child > div:last-child button {
+  white-space: nowrap;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
+}
+
+.associate-dashboard-layout .main-content > div:first-child > div:last-child button:hover {
+  color: var(--associate-blue) !important;
+  background: #edf5fb !important;
+  transform: translateY(-1px);
+}
+
+.associate-dashboard-layout .main-content > div:first-child > div:last-child button[style*="background: rgb(37, 99, 235)"] {
+  background: var(--associate-blue) !important;
+  box-shadow: 0 5px 14px rgba(18, 97, 160, 0.24);
+}
+
+.associate-dashboard-layout .main-content > div:not(:first-child) {
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.associate-dashboard-layout .main-content button {
+  font-family: inherit;
+}
+
+.associate-dashboard-layout .main-content button:focus-visible,
+.associate-dashboard-layout .main-content textarea:focus-visible {
+  outline: 3px solid rgba(8, 127, 140, 0.28);
+  outline-offset: 2px;
+}
+
+.associate-dashboard-layout .main-content [style*="box-shadow: '0 1px 3px"] {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.associate-dashboard-layout .main-content [style*="box-shadow: '0 1px 3px"]:hover {
+  border-color: #b8ccdb !important;
+  box-shadow: 0 12px 28px rgba(16, 35, 63, 0.08) !important;
+}
+
+.associate-dashboard-layout .main-content [style*="background: 'linear-gradient(135deg, #065f46"] {
+  box-shadow: 0 12px 28px rgba(8, 127, 140, 0.2) !important;
+}
+
+.associate-dashboard-layout .main-content [style*="background: '#f8fafc'"] {
+  border-color: var(--associate-line) !important;
+}
+
+.associate-dashboard-layout .main-content [style*="background: '#f0fdf4'"] {
+  border-left: 4px solid var(--associate-teal) !important;
+}
+
+@media (max-width: 900px) {
+  .associate-dashboard-layout .main-content {
+    padding: 24px 20px 40px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .associate-dashboard-layout .main-content {
+    padding: 18px 14px 32px !important;
+  }
+
+  .associate-dashboard-layout .main-content > div:first-child {
+    align-items: flex-start !important;
+    padding-bottom: 16px;
+  }
+
+  .associate-dashboard-layout .main-content > div:first-child > div:last-child {
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .associate-dashboard-layout .main-content > div:first-child > div:last-child button {
+    padding: 8px 11px !important;
+    font-size: 0.76rem !important;
+  }
+
+  .associate-dashboard-layout .main-content [style*="gridTemplateColumns: 'repeat(auto-fit, minmax(320px"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .associate-dashboard-layout .main-content [style*="display: 'flex'"][style*="justifyContent: 'space-between'"] {
+    align-items: flex-start !important;
+  }
+
+  .associate-dashboard-layout .main-content [style*="display: 'flex'"][style*="justifyContent: 'space-between'"] > button {
+    flex-shrink: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .associate-dashboard-layout *,
+  .associate-dashboard-layout *::before,
+  .associate-dashboard-layout *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

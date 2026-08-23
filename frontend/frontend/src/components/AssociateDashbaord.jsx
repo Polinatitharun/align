@@ -1,5 +1,5 @@
-// AssociateDashboard.js – Self‑assessment form, prior batch jobs, polished UI
-import React, { useState, useEffect, useMemo } from "react";
+// AssociateDashbaord.jsx – Comprehensive Trainee Associate Dashboard
+import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import "./styles/AssociateDashboard.css";
 import { Toaster, toast } from "sonner";
@@ -9,56 +9,52 @@ import {
   GraduationCap,
   Target,
   Lightbulb,
-  BookOpen,
-  Map,
+  MapPin,
   Award,
   Clock,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   Sparkles,
-  TrendingUp,
-  Users,
   PieChart,
   Calendar,
   AlertCircle,
   Layers,
-  Plus,
-  Trash2,
-  Save,
   FileText,
-  Percent,
+  Send,
+  Loader2,
+  Check,
+  X,
+  MessageSquare,
+  Building,
+  Star,
+  FileCheck
 } from "lucide-react";
-
 import Sidebar from './Sidebar';
 
-function AssociateDashboard({ userData, onLogout }) {
+export default function AssociateDashboard({ userData, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Profile data
+  // Profile and dashboard data
   const [profile, setProfile] = useState(null);
-
-  // Jobs data (public + prior batches)
+  const [dashboardData, setDashboardData] = useState(null);
+  const [consents, setConsents] = useState([]);
+  const [myInterviews, setMyInterviews] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
 
-  // AI generated data
+  // AI tools state
   const [suggestion, setSuggestion] = useState("");
   const [interviewQA, setInterviewQA] = useState(null);
   const [careerPath, setCareerPath] = useState(null);
-
-  // Dashboard insights
-  const [skillGaps, setSkillGaps] = useState([]);
-  const [similarProjects, setSimilarProjects] = useState([]);
-  const [dashboardAdvice, setDashboardAdvice] = useState("");
-
-  // Trainee matches
   const [traineeMatches, setTraineeMatches] = useState(null);
 
-  // Interview locks for the associate
-  const [myInterviews, setMyInterviews] = useState([]);
-  const [selectedInterviewForForm, setSelectedInterviewForForm] = useState(null);
+  // Consent response modal state
+  const [respondingConsent, setRespondingConsent] = useState(null);
+  const [consentRemarks, setConsentRemarks] = useState("");
+  const [submittingConsent, setSubmittingConsent] = useState(false);
 
   // Self-assessment form state
+  const [selectedInterviewForForm, setSelectedInterviewForForm] = useState(null);
   const [selfAssessment, setSelfAssessment] = useState({
     questions_asked: 0,
     technical_percentage: 50,
@@ -69,580 +65,1036 @@ function AssociateDashboard({ userData, onLogout }) {
   // Loading states
   const [loading, setLoading] = useState({
     profile: true,
+    dashboard: true,
+    consents: true,
+    interviews: true,
     jobs: true,
+    matches: false,
     suggestion: false,
     interview: false,
     career: false,
-    dashboard: true,
-    matches: true,
-    interviews: true,
-    assessment: false,
+    assessment: false
   });
 
   useEffect(() => {
-    fetchProfile();
-    fetchRelevantJobs();
-    fetchDashboardData();
-    fetchMyInterviews();
+    fetchAllData();
   }, []);
 
-  useEffect(() => {
-    if (profile?.id) {
-      fetchTraineeMatches();
-    }
-  }, [profile]);
+  const fetchAllData = async () => {
+    fetchDashboardDetails();
+    fetchConsents();
+    fetchRelevantJobs();
+  };
 
-  const fetchProfile = async () => {
-    setLoading((prev) => ({ ...prev, profile: true }));
+  const fetchDashboardDetails = async () => {
+    setLoading(prev => ({ ...prev, profile: true, dashboard: true }));
     try {
-      const response = await api.get("associate/profile/");
-      setProfile(response.data);
+      const res = await api.get('/associate/dashboard/');
+      setDashboardData(res.data);
+      if (res.data.profile) {
+        setProfile(res.data.profile);
+      }
+      if (res.data.consent_requests) {
+        setConsents(res.data.consent_requests);
+      }
+      if (res.data.interviews) {
+        setMyInterviews(res.data.interviews);
+      }
     } catch (err) {
-      toast.error("Failed to load profile");
+      console.error(err);
+      toast.error('Failed to load associate dashboard data.');
     } finally {
-      setLoading((prev) => ({ ...prev, profile: false }));
+      setLoading(prev => ({ ...prev, profile: false, dashboard: false }));
+    }
+  };
+
+  const fetchConsents = async () => {
+    setLoading(prev => ({ ...prev, consents: true }));
+    try {
+      const res = await api.get('/consent/trainee/');
+      setConsents(res.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(prev => ({ ...prev, consents: false }));
     }
   };
 
   const fetchRelevantJobs = async () => {
-    setLoading((prev) => ({ ...prev, jobs: true }));
+    setLoading(prev => ({ ...prev, jobs: true }));
     try {
-      // Get all active jobs
-      const response = await api.get("/jobs/");
-      const allJobs = response.data.filter(job => job.status === 'active');
-      
-      // If profile loaded, filter: public OR batch different from trainee's batch
-      if (profile?.batch_name) {
-        const relevant = allJobs.filter(job => 
-          job.is_public || job.batch_name !== profile.batch_name
-        );
-        setJobs(relevant);
-      } else {
-        setJobs(allJobs.filter(job => job.is_public));
-      }
+      const res = await api.get('/jobs/');
+      const active = (res.data || []).filter(j => j.status === 'active');
+      setJobs(active);
     } catch (err) {
-      toast.error("Failed to load jobs");
+      console.error(err);
     } finally {
-      setLoading((prev) => ({ ...prev, jobs: false }));
+      setLoading(prev => ({ ...prev, jobs: false }));
     }
   };
 
-  const fetchDashboardData = async () => {
-    setLoading((prev) => ({ ...prev, dashboard: true }));
-    try {
-      const response = await api.get("/associate/dashboard/");
-      setSkillGaps(response.data.skill_gaps || []);
-      setSimilarProjects(response.data.similar_projects || []);
-      setDashboardAdvice(response.data.advice || "");
-    } catch (err) {
-      toast.error("Failed to load dashboard insights");
-    } finally {
-      setLoading((prev) => ({ ...prev, dashboard: false }));
-    }
+  const handleOpenConsentModal = (consent, initialStatus) => {
+    setRespondingConsent({
+      ...consent,
+      actionStatus: initialStatus
+    });
+    setConsentRemarks("");
   };
 
-  const fetchTraineeMatches = async () => {
-    if (!profile?.id) return;
-    setLoading((prev) => ({ ...prev, matches: true }));
+  const handleRespondConsent = async () => {
+    if (!respondingConsent) return;
+    if (!consentRemarks.trim()) {
+      toast.error('Remarks are mandatory when responding to a consent request.');
+      return;
+    }
+
+    setSubmittingConsent(true);
     try {
-      const response = await api.get(`/trainee-matches/${profile.id}/`);
-      setTraineeMatches(response.data);
+      const payload = {
+        consent_id: respondingConsent.id,
+        status: respondingConsent.actionStatus,
+        remarks: consentRemarks.trim()
+      };
+      const res = await api.post('/consent/respond/', payload);
+      toast.success(res.data.message || `Consent recorded as ${respondingConsent.actionStatus}`);
+      setRespondingConsent(null);
+      fetchDashboardDetails();
+      fetchConsents();
     } catch (err) {
-      console.log("Trainee matches not available");
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to submit consent response.');
     } finally {
-      setLoading((prev) => ({ ...prev, matches: false }));
+      setSubmittingConsent(false);
     }
   };
-
-  const fetchMyInterviews = async () => {
-    setLoading((prev) => ({ ...prev, interviews: true }));
-    try {
-      if (!profile?.id) return;
-      const response = await api.get(`/interview-locks/?trainee=${profile.id}`);
-      setMyInterviews(response.data);
-    } catch (err) {
-      console.log("Could not fetch interviews");
-    } finally {
-      setLoading((prev) => ({ ...prev, interviews: false }));
-    }
-  };
-
-  useEffect(() => {
-    if (profile?.id) fetchMyInterviews();
-    if (profile) fetchRelevantJobs();
-  }, [profile]);
 
   const handleGetSuggestion = async (job) => {
     setSelectedJob(job);
     setSuggestion("");
-    setLoading((prev) => ({ ...prev, suggestion: true }));
+    setLoading(prev => ({ ...prev, suggestion: true }));
     try {
-      const response = await api.post("/associate/suggest/", { job_id: job.id });
-      setSuggestion(response.data.suggestion);
+      const res = await api.post("/associate/suggest/", { job_id: job.id });
+      setSuggestion(res.data.suggestion);
     } catch (err) {
-      toast.error("Failed to generate suggestion");
+      toast.error("Failed to generate AI suggestion");
     } finally {
-      setLoading((prev) => ({ ...prev, suggestion: false }));
+      setLoading(prev => ({ ...prev, suggestion: false }));
     }
   };
 
   const handleGetInterviewQA = async (job) => {
     setSelectedJob(job);
     setInterviewQA(null);
-    setLoading((prev) => ({ ...prev, interview: true }));
+    setLoading(prev => ({ ...prev, interview: true }));
     try {
-      const response = await api.post("/associate/interview-questions/", {
+      const res = await api.post("/associate/interview-questions/", {
         job_id: job.id,
         levels: ["low", "medium", "high"],
       });
-      setInterviewQA(response.data);
+      setInterviewQA(res.data);
     } catch (err) {
       toast.error("Failed to generate interview questions");
     } finally {
-      setLoading((prev) => ({ ...prev, interview: false }));
+      setLoading(prev => ({ ...prev, interview: false }));
     }
   };
 
   const handleGetCareerPath = async () => {
-    setLoading((prev) => ({ ...prev, career: true }));
+    setLoading(prev => ({ ...prev, career: true }));
     try {
-      const response = await api.get("/associate/career-path/");
-      setCareerPath(response.data);
+      const res = await api.get("/associate/career-path/");
+      setCareerPath(res.data);
       setActiveTab("career");
     } catch (err) {
       toast.error("Failed to generate career path");
     } finally {
-      setLoading((prev) => ({ ...prev, career: false }));
+      setLoading(prev => ({ ...prev, career: false }));
     }
   };
 
-  const openSelfAssessment = (interview) => {
-    setSelectedInterviewForForm(interview);
-    // Initialize form
-    setSelfAssessment({
-      questions_asked: 0,
-      technical_percentage: 50,
-      theoretical_percentage: 50,
-      question_list: [""],
-    });
-  };
+  const userInfo = profile?.userInfo || userData || {};
+  const dpiVal = dashboardData?.dpi ?? profile?.dpi ?? 0;
+  const dpiPercentage = dashboardData?.dpi_percentage ?? Math.round((dpiVal / 5) * 100);
 
-  const handleQuestionChange = (index, value) => {
-    const updated = [...selfAssessment.question_list];
-    updated[index] = value;
-    setSelfAssessment(prev => ({ ...prev, question_list: updated }));
-  };
+  // Preferred locations summary
+  const prefLocs = [
+    userInfo.preferred_location_1,
+    userInfo.preferred_location_2,
+    userInfo.preferred_location_3
+  ].filter(Boolean);
 
-  const addQuestionField = () => {
-    setSelfAssessment(prev => ({
-      ...prev,
-      question_list: [...prev.question_list, ""]
-    }));
-  };
+  const pendingConsents = consents.filter(c => c.status === 'PENDING');
 
-  const removeQuestionField = (index) => {
-    setSelfAssessment(prev => ({
-      ...prev,
-      question_list: prev.question_list.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handlePercentageChange = (field, value) => {
-    const num = Math.min(100, Math.max(0, Number(value) || 0));
-    const otherField = field === 'technical_percentage' ? 'theoretical_percentage' : 'technical_percentage';
-    setSelfAssessment(prev => ({
-      ...prev,
-      [field]: num,
-      [otherField]: 100 - num,
-    }));
-  };
-
-  const submitSelfAssessment = async () => {
-    if (!selectedInterviewForForm) return;
-    setLoading(prev => ({ ...prev, assessment: true }));
-    try {
-      await api.post("/associate/self-assessment/", {
-        interview_lock_id: selectedInterviewForForm.id,
-        ...selfAssessment,
-        question_list: selfAssessment.question_list.filter(q => q.trim() !== ""),
-      });
-      toast.success("Self-assessment submitted");
-      setSelectedInterviewForForm(null);
-      fetchMyInterviews(); // refresh
-    } catch (err) {
-      toast.error("Failed to submit assessment");
-    } finally {
-      setLoading(prev => ({ ...prev, assessment: false }));
-    }
-  };
-
-  // Helper to render skill chips
-  const renderSkillChips = (items, type) => {
-    const colorClass = type === "strength" ? "strength" : "weakness";
-    return items.map((item, idx) => (
-      <span key={idx} className={`skill-chip ${colorClass}`}>
-        {item.courseName} {item.avgScore ? `(${item.avgScore}%)` : ""}
-      </span>
-    ));
-  };
-
-  // Profile Card
-  const renderProfileCard = () => {
-    if (loading.profile) return <div className="insight-card placeholder">Loading profile...</div>;
-    if (!profile) return <div className="insight-card placeholder">No profile data</div>;
-
-    const userInfo = profile.userInfo || {};
-    return (
-      <div className="profile-card">
-        <div className="profile-header">
-          <div className="profile-avatar">{userInfo.name?.charAt(0) || "U"}</div>
-          <div className="profile-title">
-            <h2>{userInfo.name || "Unknown"}</h2>
-            <p><User size={14} /> {userInfo.userId} • {userInfo.location || "Location not set"}</p>
-            <p className="batch-info"><Layers size={14} /> Batch: {profile.batch_name || "N/A"}</p>
-          </div>
-        </div>
-        <div className="profile-details">
-          <div className="detail-item"><GraduationCap size={18} /><span>Avg Score: {userInfo.averageScore || "N/A"}%</span></div>
-          <div className="detail-item"><Award size={18} /><span>Rank: {profile.batchRank || "N/A"}</span></div>
-          <div className="detail-item"><Clock size={18} /><span>Joined: {profile.created_at?.split("T")[0]}</span></div>
-        </div>
-        <div className="profile-skills">
-          <div className="skill-section">
-            <h4>Strengths</h4>
-            <div className="skill-list">{profile.strengths?.length > 0 ? renderSkillChips(profile.strengths, "strength") : "No strengths recorded"}</div>
-          </div>
-          <div className="skill-section">
-            <h4>Areas to Improve</h4>
-            <div className="skill-list">{profile.weaknesses?.length > 0 ? renderSkillChips(profile.weaknesses, "weakness") : "No weaknesses recorded"}</div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Match Distribution
-  const renderMatchDistribution = () => {
-    if (loading.matches || !traineeMatches) return null;
-    const total = traineeMatches.total_matches || 0;
-    if (total === 0) return null;
-    const perfect = traineeMatches.perfect_match?.length || 0;
-    const skills = traineeMatches.skills_only?.length || 0;
-    const location = traineeMatches.location_only?.length || 0;
-    const nearby = traineeMatches.nearby?.length || 0;
-    const noMatch = traineeMatches.no_match?.length || 0;
-    return (
-      <div className="insight-card">
-        <h3><PieChart size={20} /> Your Match Distribution</h3>
-        <div className="match-distribution">
-          <div className="stacked-bar">
-            {perfect > 0 && <div className="bar-segment perfect" style={{ width: `${(perfect / total) * 100}%` }}>{perfect}</div>}
-            {skills > 0 && <div className="bar-segment skills" style={{ width: `${(skills / total) * 100}%` }}>{skills}</div>}
-            {location > 0 && <div className="bar-segment location" style={{ width: `${(location / total) * 100}%` }}>{location}</div>}
-            {nearby > 0 && <div className="bar-segment nearby" style={{ width: `${(nearby / total) * 100}%` }}>{nearby}</div>}
-            {noMatch > 0 && <div className="bar-segment nomatch" style={{ width: `${(noMatch / total) * 100}%` }}>{noMatch}</div>}
-          </div>
-          <div className="legend">
-            <div className="legend-item"><span className="legend-color perfect"></span> Perfect ({perfect})</div>
-            <div className="legend-item"><span className="legend-color skills"></span> Skills ({skills})</div>
-            <div className="legend-item"><span className="legend-color location"></span> Location ({location})</div>
-            <div className="legend-item"><span className="legend-color nearby"></span> Nearby ({nearby})</div>
-            <div className="legend-item"><span className="legend-color nomatch"></span> No Match ({noMatch})</div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Self Assessment Section (replaces feedback viewer)
-  const renderSelfAssessmentSection = () => {
-    if (loading.interviews) return <div className="loading-spinner">Loading interviews...</div>;
-    if (myInterviews.length === 0) return null;
-
-    const completedInterviews = myInterviews.filter(i => i.status === 'selected' || i.status === 'rejected');
-    if (completedInterviews.length === 0) return null;
-
-    return (
-      <div className="insight-card">
-        <h3><FileText size={20} /> Self‑Assessment Required</h3>
-        <p className="insight-advice">Please fill out a brief self‑assessment for your completed interviews.</p>
-        <div className="interview-list">
-          {completedInterviews.map(interview => (
-            <div key={interview.id} className={`interview-item ${interview.status}`}>
-              <div className="interview-header">
-                <span className="job-title">{interview.job_title}</span>
-                <span className={`status-badge status-${interview.status}`}>{interview.status}</span>
-              </div>
-              <div className="interview-meta">
-                <Calendar size={14} /> {new Date(interview.interview_datetime).toLocaleString()}
-              </div>
-              <button className="btn-primary-small" onClick={() => openSelfAssessment(interview)}>
-                <FileText size={14} /> Fill Self‑Assessment
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // Self-Assessment Modal
-  const renderSelfAssessmentModal = () => {
-    if (!selectedInterviewForForm) return null;
-    return (
-      <div className="modal-overlay" onClick={() => setSelectedInterviewForForm(null)}>
-        <div className="modal-content assessment-modal" onClick={e => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3><FileText size={20} /> Self‑Assessment: {selectedInterviewForForm.job_title}</h3>
-            <button className="modal-close" onClick={() => setSelectedInterviewForForm(null)}>×</button>
-          </div>
-          <div className="modal-body">
-            <div className="form-group">
-              <label>Total Questions Asked</label>
-              <input
-                type="number"
-                min="0"
-                value={selfAssessment.questions_asked}
-                onChange={(e) => setSelfAssessment(prev => ({ ...prev, questions_asked: parseInt(e.target.value) || 0 }))}
-                className="form-control"
-              />
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Technical %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={selfAssessment.technical_percentage}
-                  onChange={(e) => handlePercentageChange('technical_percentage', e.target.value)}
-                  className="form-control"
-                />
-              </div>
-              <div className="form-group">
-                <label>Theoretical %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={selfAssessment.theoretical_percentage}
-                  onChange={(e) => handlePercentageChange('theoretical_percentage', e.target.value)}
-                  className="form-control"
-                />
-              </div>
-            </div>
-            <div className="percentage-bar">
-              <div className="tech-bar" style={{ width: `${selfAssessment.technical_percentage}%` }}>
-                Tech {selfAssessment.technical_percentage}%
-              </div>
-              <div className="theory-bar" style={{ width: `${selfAssessment.theoretical_percentage}%` }}>
-                Theory {selfAssessment.theoretical_percentage}%
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Questions Asked (list as many as you remember)</label>
-              {selfAssessment.question_list.map((q, idx) => (
-                <div key={idx} className="question-input-group">
-                  <input
-                    type="text"
-                    value={q}
-                    onChange={(e) => handleQuestionChange(idx, e.target.value)}
-                    placeholder={`Question ${idx + 1}`}
-                    className="form-control"
-                  />
-                  {selfAssessment.question_list.length > 1 && (
-                    <button type="button" className="btn-icon" onClick={() => removeQuestionField(idx)}>
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button type="button" className="btn-secondary" onClick={addQuestionField}>
-                <Plus size={14} /> Add Question
-              </button>
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button className="btn-secondary" onClick={() => setSelectedInterviewForForm(null)}>Cancel</button>
-            <button className="btn-primary" onClick={submitSelfAssessment} disabled={loading.assessment}>
-              <Save size={14} /> {loading.assessment ? "Submitting..." : "Submit Assessment"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Jobs List
-  const renderJobsList = () => {
-    if (loading.jobs) return <div className="insight-card placeholder">Loading jobs...</div>;
-    if (!jobs.length) return <div className="insight-card placeholder">No relevant jobs available at the moment.</div>;
-
-    return (
-      <div className="jobs-list">
-        {jobs.map((job) => (
-          <div key={job.id} className="job-card">
-            <div className="job-header">
-              <h3>{job.project_name}</h3>
-              <span className={`job-status ${job.status}`}>{job.status}</span>
-            </div>
-            <div className="job-meta">
-              <span><Briefcase size={14} /> {job.department}</span>
-              <span><Map size={14} /> {job.location?.join(", ")}</span>
-              <span><Target size={14} /> Openings: {job.openings}</span>
-              {job.batch_name && <span><Layers size={14} /> {job.batch_name}</span>}
-            </div>
-            <div className="job-skills">
-              <strong>Tech:</strong> {job.techSkills?.join(", ")}
-            </div>
-            <div className="job-actions">
-              <button className="btn-suggestion" onClick={() => handleGetSuggestion(job)} disabled={loading.suggestion && selectedJob?.id === job.id}>
-                <Lightbulb size={16} /> Suggestion
-              </button>
-              <button className="btn-interview" onClick={() => handleGetInterviewQA(job)} disabled={loading.interview && selectedJob?.id === job.id}>
-                <BookOpen size={16} /> Interview Q&A
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // AI Suggestion Display
-  const renderSuggestion = () => {
-    if (!selectedJob || !suggestion) return null;
-    return (
-      <div className="suggestion-card">
-        <h3><Sparkles size={20} /> AI Suggestion for {selectedJob.project_name}</h3>
-        <p>{suggestion}</p>
-      </div>
-    );
-  };
-
-  // Interview Q&A Display
-  const renderInterviewQA = () => {
-    if (!selectedJob || !interviewQA) return null;
-    return (
-      <div className="interview-qa-card">
-        <h3>Interview Questions & Answers for {selectedJob.project_name}</h3>
-        {["low", "medium", "high"].map((level) => (
-          <div key={level} className="qa-level">
-            <h4>{level.charAt(0).toUpperCase() + level.slice(1)} Level</h4>
-            {interviewQA[level]?.map((item, idx) => (
-              <div key={idx} className="qa-item">
-                <p className="question">Q{idx + 1}: {item.question}</p>
-                <p className="answer">A: {item.answer}</p>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // Career Path Display
-  const renderCareerPath = () => {
-    if (loading.career) return <div className="loading-spinner">Generating career path...</div>;
-    if (!careerPath) return null;
-    return (
-      <div className="career-path-card">
-        <h2>Your Personalized Career Roadmap</h2>
-        <div className="path-section">
-          <h3>Short Term (1-2 years)</h3>
-          <div className="path-roles"><strong>Roles:</strong> {careerPath.short_term?.roles?.join(" → ")}</div>
-          <div className="path-skills"><strong>Skills to develop:</strong> {careerPath.short_term?.skills_to_develop?.join(", ")}</div>
-          {careerPath.short_term?.certifications?.length > 0 && <div className="path-certs"><strong>Certifications:</strong> {careerPath.short_term.certifications.join(", ")}</div>}
-          <p className="path-advice">{careerPath.short_term?.advice}</p>
-        </div>
-        <div className="path-section">
-          <h3>Long Term (3-5 years)</h3>
-          <div className="path-roles"><strong>Roles:</strong> {careerPath.long_term?.roles?.join(" → ")}</div>
-          <div className="path-skills"><strong>Skills to develop:</strong> {careerPath.long_term?.skills_to_develop?.join(", ")}</div>
-          {careerPath.long_term?.certifications?.length > 0 && <div className="path-certs"><strong>Certifications:</strong> {careerPath.long_term.certifications.join(", ")}</div>}
-          <p className="path-advice">{careerPath.long_term?.advice}</p>
-        </div>
-        <div className="path-overall">
-          <h3>Overall Advice</h3>
-          <p>{careerPath.overall_advice}</p>
-        </div>
-      </div>
-    );
-  };
-
-  // Overview Tab
-  const renderOverview = () => (
-    <div className="tab-content overview-tab">
-      <div className="grid-2col">
-        <div className="left-col">{renderProfileCard()}</div>
-        <div className="right-col">
-          {renderMatchDistribution()}
-        </div>
-      </div>
-      <div className="grid-2col">
-        <div className="left-col">{renderSelfAssessmentSection()}</div>
-        <div className="right-col">
-          <div className="insight-card">
-            <h3><Target size={20} /> Skill Gap Analysis</h3>
-            <p className="insight-advice">{dashboardAdvice}</p>
-            {skillGaps.map((gap, idx) => (
-              <div key={idx} className="gap-item">
-                <div className="gap-header">
-                  <span className="job-title">{gap.job_title}</span>
-                  <span className={`match-percent ${gap.has_all_skills ? "full" : "partial"}`}>{gap.match_percentage}% Match</span>
-                </div>
-                {!gap.has_all_skills && <div className="missing-skills"><strong>Missing:</strong> {gap.missing_skills.join(", ")}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="section-header">
-        <h3>Available Job Opportunities</h3>
-        <button className="btn-career" onClick={handleGetCareerPath}><Map size={16} /> Get Career Path</button>
-      </div>
-      {renderJobsList()}
-      {renderSuggestion()}
-      {renderInterviewQA()}
-      {renderSelfAssessmentModal()}
-    </div>
-  );
-
-  const renderCareerTab = () => (
-    <div className="tab-content career-tab">
-      {renderCareerPath()}
-      {!careerPath && !loading.career && <div className="placeholder"><p>Click "Get Career Path" to generate your roadmap.</p></div>}
-    </div>
-  );
-
-  const sidebarItems = [
-    { id: "overview", label: "Overview", icon: <User size={18} /> },
-    { id: "career", label: "Career Path", icon: <Map size={18} /> },
+  const associateSidebarItems = [
+    { id: 'overview', label: 'Overview & Profile', icon: <User size={18} /> },
+    { id: 'consents', label: `Consent Requests${pendingConsents.length > 0 ? ` (${pendingConsents.length})` : ''}`, icon: <FileCheck size={18} /> },
+    { id: 'jobs', label: 'My Assignments', icon: <Briefcase size={18} /> },
+    { id: 'career', label: 'Skills & Growth', icon: <GraduationCap size={18} /> },
   ];
 
   return (
-    <div className="dashboard-page">
-      <Toaster richColors position="top-right" />
-      <Sidebar items={sidebarItems} activeTab={activeTab} onTabChange={setActiveTab} userData={userData} onLogout={onLogout} />
-      <div className="dashboard-main">
-        <div className="dashboard-header">
-          <h1>Associate Dashboard</h1>
-          <div className="header-right">
-            <button className="btn btn-ghost btn-sm" onClick={handleGetCareerPath}>
-              Get Career Path
+    <div className="associate-dashboard-layout" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
+      <Toaster position="top-right" richColors />
+
+      {/* Sidebar */}
+      <Sidebar
+        items={associateSidebarItems}
+        userRole="trainee"
+        userData={userData}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={onLogout}
+      />
+
+      {/* Main Content Area */}
+      <div className="main-content" style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
+        {/* Top Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px',
+          flexWrap: 'wrap',
+          gap: '16px'
+        }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}>
+              Welcome back, {userInfo.name || 'Associate'}!
+            </h1>
+            <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#64748b' }}>
+              Talent Align Career & Project Allocation Portal
+            </p>
+          </div>
+
+          {/* Quick Tabs Navigation */}
+          <div style={{ display: 'flex', gap: '8px', background: '#ffffff', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <button
+              onClick={() => setActiveTab('overview')}
+              style={tabBtnStyle(activeTab === 'overview')}
+            >
+              Overview & Profile
+            </button>
+            <button
+              onClick={() => setActiveTab('consents')}
+              style={tabBtnStyle(activeTab === 'consents')}
+            >
+              Consent Requests {pendingConsents.length > 0 && (
+                <span style={{
+                  background: '#ef4444',
+                  color: '#fff',
+                  padding: '2px 7px',
+                  borderRadius: '999px',
+                  fontSize: '0.7rem',
+                  marginLeft: '6px'
+                }}>
+                  {pendingConsents.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('jobs')}
+              style={tabBtnStyle(activeTab === 'jobs')}
+            >
+              Available Projects
+            </button>
+            <button
+              onClick={() => setActiveTab('career')}
+              style={tabBtnStyle(activeTab === 'career')}
+            >
+              AI Career Path
             </button>
           </div>
         </div>
-        <div className="dashboard-content">
-          <div className="tab-panel">
-            {activeTab === "overview" && renderOverview()}
-            {activeTab === "career" && renderCareerTab()}
+
+        {/* Mapped Project Assignment Alert Banner (if mapped) */}
+        {dashboardData?.assignment?.isMapped && (
+          <div style={{
+            background: 'linear-gradient(135deg, #065f46 0%, #047857 100%)',
+            color: '#ffffff',
+            borderRadius: '14px',
+            padding: '18px 24px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 15px rgba(4, 120, 87, 0.25)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                borderRadius: '10px',
+                padding: '10px',
+                display: 'flex'
+              }}>
+                <CheckCircle2 size={24} color="#a7f3d0" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>
+                  Project Allocation Confirmed!
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#d1fae5' }}>
+                  You are mapped to: <strong>{dashboardData.assignment.projectName}</strong> (Project ID: #{dashboardData.assignment.projectId})
+                </p>
+              </div>
+            </div>
+            <span style={{
+              background: '#ffffff',
+              color: '#065f46',
+              padding: '6px 14px',
+              borderRadius: '999px',
+              fontWeight: 700,
+              fontSize: '0.8rem'
+            }}>
+              Active Assignment
+            </span>
+          </div>
+        )}
+
+        {/* TAB 1: OVERVIEW & PROFILE */}
+        {activeTab === 'overview' && (
+          <div>
+            {/* Top Grid: Profile Card + Preferred Locations Card + DPI Card */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '20px',
+              marginBottom: '24px'
+            }}>
+              {/* Profile Card */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+                  <div style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.4rem',
+                    fontWeight: 700
+                  }}>
+                    {userInfo.name ? userInfo.name.charAt(0).toUpperCase() : 'A'}
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+                      {userInfo.name || 'Unknown Associate'}
+                    </h3>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                      {userInfo.email || `${userInfo.employeeId || userInfo.userId}@tcs.com`}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.85rem' }}>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Employee ID:</span>
+                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{userInfo.employeeId || userInfo.userId || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Batch:</span>
+                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{profile?.batch_name || 'Current Batch'}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Current Location:</span>
+                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{userInfo.location || 'Not set'}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Average Score:</span>
+                    <div style={{ fontWeight: 600, color: '#10b981' }}>{userInfo.averageScore || '0'}%</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* DPI Score Card */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>
+                    DPI Readiness Rating
+                  </span>
+                  <Award size={20} color="#f59e0b" />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 800, color: '#0f172a' }}>
+                    {dpiVal} <span style={{ fontSize: '1.2rem', color: '#94a3b8' }}>/ 5.0</span>
+                  </div>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    background: dpiVal >= 4 ? '#dcfce7' : dpiVal >= 2.5 ? '#fef3c7' : '#fee2e2',
+                    color: dpiVal >= 4 ? '#15803d' : dpiVal >= 2.5 ? '#b45309' : '#b91c1c'
+                  }}>
+                    {dpiPercentage}% Ready
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', marginBottom: '12px' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${dpiPercentage}%`,
+                    background: 'linear-gradient(90deg, #3b82f6 0%, #10b981 100%)',
+                    borderRadius: '999px'
+                  }} />
+                </div>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                  DPI score evaluates technical proficiency, assessment outcomes, and interview readiness.
+                </p>
+              </div>
+
+              {/* Preferred Locations Card */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>
+                    Preferred Locations
+                  </span>
+                  <MapPin size={20} color="#3b82f6" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                  {prefLocs.length > 0 ? (
+                    prefLocs.map((loc, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '0.85rem',
+                        color: '#334155'
+                      }}>
+                        <span style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: '#eff6ff',
+                          color: '#2563eb',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {i + 1}
+                        </span>
+                        <strong>{loc}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>No preferred locations registered.</span>
+                  )}
+                </div>
+
+                {/* State & City */}
+                <div style={{
+                  borderTop: '1px solid #f1f5f9',
+                  paddingTop: '8px',
+                  fontSize: '0.8rem',
+                  color: '#64748b',
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span>State: <strong>{userInfo.preferred_state || 'N/A'}</strong></span>
+                  <span>City: <strong>{userInfo.preferred_city || 'N/A'}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Skills & AI Advice Card */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '20px',
+              marginBottom: '24px'
+            }}>
+              {/* Strengths & Weaknesses */}
+              <div style={cardStyle}>
+                <h3 style={{ margin: '0 0 14px', fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                  Skill Competencies
+                </h3>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#059669', display: 'block', marginBottom: '6px' }}>
+                    Strengths:
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {profile?.strengths?.length > 0 ? (
+                      profile.strengths.map((s, i) => (
+                        <span key={i} style={skillChipStyle('#dcfce7', '#15803d')}>
+                          {s.courseName || s} {s.avgScore ? `(${s.avgScore}%)` : ''}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>None recorded</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#b91c1c', display: 'block', marginBottom: '6px' }}>
+                    Areas to Upskill:
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {profile?.weaknesses?.length > 0 ? (
+                      profile.weaknesses.map((w, i) => (
+                        <span key={i} style={skillChipStyle('#fee2e2', '#b91c1c')}>
+                          {w.courseName || w} {w.avgScore ? `(${w.avgScore}%)` : ''}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>None recorded</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Career Advice */}
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Sparkles size={18} color="#6366f1" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                    AI Career Growth Advice
+                  </h3>
+                </div>
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  fontSize: '0.86rem',
+                  lineHeight: '1.5',
+                  color: '#334155'
+                }}>
+                  {dashboardData?.advice || "Keep practicing your core technologies and review feedback from assessments to increase project allocation readiness."}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: CONSENT REQUESTS */}
+        {activeTab === 'consents' && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px'
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                  Project Consent Inquiries ({consents.length})
+                </h2>
+                <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Please review and submit your decision with required remarks
+                </p>
+              </div>
+            </div>
+
+            {loading.consents ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                <Loader2 size={28} className="animate-spin" style={{ margin: '0 auto 8px', display: 'block' }} />
+                Loading consent requests...
+              </div>
+            ) : consents.length === 0 ? (
+              <div style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '48px 24px',
+                textAlign: 'center',
+                color: '#64748b'
+              }}>
+                <Send size={36} color="#cbd5e1" style={{ margin: '0 auto 12px', display: 'block' }} />
+                <h3 style={{ margin: 0, color: '#334155' }}>No Active Consent Requests</h3>
+                <p style={{ margin: '6px 0 0', fontSize: '0.88rem', color: '#94a3b8' }}>
+                  When HR selects you for a matching project requirement, your consent requests will appear here.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '16px' }}>
+                {consents.map((c) => (
+                  <div key={c.id} style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '16px'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '280px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
+                          {c.project_name}
+                        </h3>
+                        <span style={{
+                          padding: '3px 10px',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          background: c.status === 'ACCEPTED' ? '#dcfce7' : c.status === 'DECLINED' ? '#fee2e2' : '#fef3c7',
+                          color: c.status === 'ACCEPTED' ? '#15803d' : c.status === 'DECLINED' ? '#b91c1c' : '#b45309'
+                        }}>
+                          {c.status}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '0.85rem', color: '#475569', marginBottom: '8px' }}>
+                        <div><MapPin size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /><strong>Location:</strong> {c.location}</div>
+                        <div><Briefcase size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /><strong>Role:</strong> {c.role || 'Developer'}</div>
+                        <div><Layers size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /><strong>Skills:</strong> {c.skills || c.stream}</div>
+                      </div>
+
+                      {c.remarks && (
+                        <div style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '0.8rem',
+                          color: '#334155',
+                          fontStyle: 'italic',
+                          marginTop: '6px'
+                        }}>
+                          Your Remark: "{c.remarks}"
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    {c.status === 'PENDING' ? (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                          onClick={() => handleOpenConsentModal(c, 'ACCEPTED')}
+                          style={{
+                            padding: '9px 18px',
+                            background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                            border: 'none',
+                            color: '#ffffff',
+                            borderRadius: '8px',
+                            fontWeight: 600,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)'
+                          }}
+                        >
+                          <Check size={16} />
+                          <span>Accept Project</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenConsentModal(c, 'DECLINED')}
+                          style={{
+                            padding: '9px 18px',
+                            background: '#ffffff',
+                            border: '1px solid #ef4444',
+                            color: '#dc2626',
+                            borderRadius: '8px',
+                            fontWeight: 600,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <X size={16} />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'right' }}>
+                        <div>Responded on:</div>
+                        <strong>{c.responded_at ? new Date(c.responded_at).toLocaleDateString() : 'Completed'}</strong>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: AVAILABLE PROJECTS */}
+        {activeTab === 'jobs' && (
+          <div>
+            <h2 style={{ margin: '0 0 16px', fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+              Active Project Requirements
+            </h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+              {jobs.map((job) => (
+                <div key={job.id} style={cardStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                      {job.project_name}
+                    </h3>
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      background: '#eff6ff',
+                      color: '#1d4ed8'
+                    }}>
+                      {job.openings} Openings
+                    </span>
+                  </div>
+
+                  <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: '#64748b' }}>
+                    Location: <strong>{job.location}</strong> • Stream: <strong>{job.stream || 'Technology'}</strong>
+                  </p>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                      Required Skills:
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                      {job.skills}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
+                    <button
+                      onClick={() => handleGetSuggestion(job)}
+                      disabled={loading.suggestion && selectedJob?.id === job.id}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        color: '#334155',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Lightbulb size={14} />
+                      <span>{loading.suggestion && selectedJob?.id === job.id ? 'Analyzing...' : 'AI Advice'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleGetInterviewQA(job)}
+                      disabled={loading.interview && selectedJob?.id === job.id}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        color: '#334155',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Sparkles size={14} />
+                      <span>Interview Prep</span>
+                    </button>
+                  </div>
+
+                  {/* AI Suggestion Output inline */}
+                  {suggestion && selectedJob?.id === job.id && (
+                    <div style={{
+                      marginTop: '12px',
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      fontSize: '0.82rem',
+                      color: '#166534'
+                    }}>
+                      <strong>AI Suggestion:</strong> {suggestion}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: AI CAREER PATH */}
+        {activeTab === 'career' && (
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                  AI Career Pathway Generator
+                </h2>
+                <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Personalized milestones and upskilling trajectory based on your skills
+                </p>
+              </div>
+
+              <button
+                onClick={handleGetCareerPath}
+                disabled={loading.career}
+                style={{
+                  padding: '9px 18px',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {loading.career ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                <span>Generate New Career Path</span>
+              </button>
+            </div>
+
+            {careerPath ? (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '20px',
+                fontSize: '0.9rem',
+                lineHeight: '1.6',
+                color: '#1e293b'
+              }}>
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {typeof careerPath === 'string' ? careerPath : JSON.stringify(careerPath, null, 2)}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                <Sparkles size={36} color="#cbd5e1" style={{ margin: '0 auto 10px', display: 'block' }} />
+                Click "Generate New Career Path" to build your custom milestone roadmap with AI.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* CONSENT RESPONSE MODAL WITH MANDATORY REMARKS */}
+      {respondingConsent && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            maxWidth: '520px',
+            width: '100%',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '18px 24px',
+              background: respondingConsent.actionStatus === 'ACCEPTED'
+                ? 'linear-gradient(135deg, #065f46 0%, #047857 100%)'
+                : 'linear-gradient(135deg, #991b1b 0%, #b91c1c 100%)',
+              color: '#ffffff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {respondingConsent.actionStatus === 'ACCEPTED' ? <CheckCircle2 size={22} /> : <XCircle size={22} />}
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: '#fff' }}>
+                  {respondingConsent.actionStatus === 'ACCEPTED' ? 'Accept Project Consent' : 'Decline Project Consent'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setRespondingConsent(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '6px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '14px',
+                marginBottom: '18px'
+              }}>
+                <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{respondingConsent.project_name}</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>
+                  Location: {respondingConsent.location} • Stream: {respondingConsent.stream || respondingConsent.skills}
+                </p>
+              </div>
+
+              {/* Mandatory Remark input */}
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '6px', fontSize: '0.88rem' }}>
+                  Mandatory Remarks / Feedback *
+                </label>
+                <textarea
+                  rows={4}
+                  value={consentRemarks}
+                  onChange={e => setConsentRemarks(e.target.value)}
+                  placeholder={
+                    respondingConsent.actionStatus === 'ACCEPTED'
+                      ? "e.g., I am excited to join this project in Hyderabad and have experience with Java & React."
+                      : "e.g., Unable to relocate due to personal constraints or looking for different technology stream."
+                  }
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.88rem',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '0.8rem',
+                color: '#1e40af'
+              }}>
+                {respondingConsent.actionStatus === 'ACCEPTED' ? (
+                  <span>
+                    <strong>Note:</strong> On accepting, you will be locked to this project requirement and your status will update in the Talent Management System.
+                  </span>
+                ) : (
+                  <span>
+                    <strong>Note:</strong> On declining, your profile will remain in the available talent pool for other project requirements.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 24px',
+              background: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px'
+            }}>
+              <button
+                onClick={() => setRespondingConsent(null)}
+                disabled={submittingConsent}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRespondConsent}
+                disabled={submittingConsent || !consentRemarks.trim()}
+                style={{
+                  padding: '9px 22px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: respondingConsent.actionStatus === 'ACCEPTED' ? '#059669' : '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: submittingConsent || !consentRemarks.trim() ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {submittingConsent ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>Confirm {respondingConsent.actionStatus === 'ACCEPTED' ? 'Acceptance' : 'Decline'}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      {renderSelfAssessmentModal()}
+      )}
     </div>
   );
 }
 
-export default AssociateDashboard;
+const tabBtnStyle = (active) => ({
+  padding: '8px 16px',
+  borderRadius: '8px',
+  border: 'none',
+  background: active ? '#2563eb' : 'transparent',
+  color: active ? '#ffffff' : '#64748b',
+  fontWeight: 600,
+  fontSize: '0.85rem',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease'
+});
+
+const cardStyle = {
+  background: '#ffffff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '14px',
+  padding: '20px',
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)'
+};
+
+const skillChipStyle = (bg, color) => ({
+  padding: '4px 10px',
+  borderRadius: '999px',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  background: bg,
+  color: color
+});

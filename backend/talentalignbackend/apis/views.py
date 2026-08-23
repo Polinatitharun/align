@@ -3,8 +3,10 @@ import threading
 import json
 import re
 import requests
+import time
 import csv
 import logging
+import os
 from datetime import datetime
 from io import BytesIO
 from docx import Document
@@ -13,7 +15,8 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.db import models as django_models
+from django.utils import timezone
+from django.db import models
 from django.db import transaction
 from django.db.models import Q
 from django.contrib.auth import get_user_model
@@ -30,7 +33,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from .models import (
     User, Course, Job, UserInfo, ProfileRecord, Strength, Weakness,
-    Recommendation, Match, InterviewLock, InterviewFeedback, Notification, AuditLog
+    Recommendation, Match, InterviewLock, InterviewFeedback, Notification, AuditLog, Consent
 )
 from .serializers import (
     UserSerializer, AddUserSerializer, EditUserSerializer, ResetPasswordSerializer,
@@ -38,10 +41,11 @@ from .serializers import (
     JobSerializer, ProfileRecordSerializer, UserInfoSerializer, UserInfoMappingSerializer,
     RecommendationSerializer, MatchListSerializer, InterviewLockSerializer,
     InterviewLockCreateSerializer, InterviewFeedbackSerializer,
-    ManagerChatSessionSerializer, ManagerChatMessageSerializer,TraineeSelfAssessmentSerializer
+    ManagerChatSessionSerializer, ManagerChatMessageSerializer,TraineeSelfAssessmentSerializer,
+    ConsentSerializer
 )
 from .tokens import CustomTokenObtainPairSerializer
-from .matching_engine import run_matching_logic, llm, clean
+from .matching_engine import run_matching_logic, llm, clean, SKILL_MAPPING, normalize_skills
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +144,13 @@ class UploadAddExcelView(APIView):
 
         created_users = []
         df.columns = [c.lower().strip() for c in df.columns]
+        required_columns = {'username', 'email', 'role'}
+        missing_columns = sorted(required_columns - set(df.columns))
+        if missing_columns:
+            return Response(
+                {"error": "Missing required columns", "missing": missing_columns},
+                status=400,
+            )
         if 'password' not in df.columns:
             df['password'] = None
 
@@ -388,7 +399,7 @@ class DashboardAnalyticsView(APIView):
             month = job.created_at.strftime('%Y-%m')
             month_counts[month] = month_counts.get(month, 0) + (job.filled or 0)
 
-        candidate_status = dict(locks.values('status').annotate(count=django_models.Count('id')).values_list('status', 'count'))
+        candidate_status = dict(locks.values('status').annotate(count=models.Count('id')).values_list('status', 'count'))
         selected = locks.filter(status='selected').count()
         rejected = locks.filter(status='rejected').count()
         completed = selected + rejected
@@ -536,36 +547,89 @@ class UploadExcelView(APIView):
         batch_name = request.data.get('batch_name')
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
-        if not file.name.endswith(('.xlsx', '.xls', '.csv')):
+        if not file.name.lower().endswith(('.xlsx', '.xls', '.csv')):
             return Response({"error": "Invalid file type"}, status=400)
 
         try:
-            df = pd.read_excel(file)
+            if file.name.lower().endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
             df.columns = [c.strip() for c in df.columns]
-            required = ['demand id', 'location', 'skills', 'openings']
-            missing = [c for c in required if c not in [x.lower() for x in df.columns]]
-            if missing:
-                return Response({"error": f"Missing required columns: {missing}"}, status=400)
+
+            # Case-insensitive column mapping to handle jumbled columns
+            col_map = {}
+            for col in df.columns:
+                col_lower = col.lower().strip()
+                if 'demand' in col_lower and 'id' in col_lower:
+                    col_map['demand_id'] = col
+                elif col_lower == 'rgs id' or col_lower == 'rgs_id' or (col_lower.startswith('rgs') and 'id' in col_lower):
+                    col_map['rgs_id'] = col
+                elif 'location' in col_lower:
+                    col_map['location'] = col
+                elif col_lower == 'skills' or col_lower == 'skill':
+                    col_map['skills'] = col
+                elif 'opening' in col_lower or col_lower == 'count':
+                    col_map['openings'] = col
+                elif 'project' in col_lower and 'name' in col_lower:
+                    col_map['project_name'] = col
+                elif col_lower == 'bg':
+                    col_map['bg'] = col
+                elif 'isu' in col_lower or 'hsu' in col_lower:
+                    col_map['isu_hsu'] = col
+                elif col_lower == 'stream':
+                    col_map['stream'] = col
+                elif col_lower == 'role':
+                    col_map['role'] = col
+                elif 'spoc' in col_lower and 'name' in col_lower:
+                    col_map['spoc_name'] = col
+                elif 'spoc' in col_lower and ('emp' in col_lower or 'id' in col_lower):
+                    col_map['spoc_emp_id'] = col
+                elif 'rmg' in col_lower and 'head' in col_lower:
+                    col_map['rmg_head'] = col
+
+            # Check at least some essential columns exist
+            if not col_map.get('location') and not col_map.get('skills') and not col_map.get('stream'):
+                return Response({"error": "Missing essential columns. Need at least Location and Skills/Stream."}, status=400)
 
             created_jobs = []
             errors = []
             for idx, row in df.iterrows():
-                if pd.isna(row.get('Demand ID')) or pd.isna(row.get('Location')) or pd.isna(row.get('Skills')) or pd.isna(row.get('Openings')):
-                    continue
                 try:
-                    project_name = str(row.get('Project Name', '')).strip() or 'Unnamed Project'
-                    location = str(row['Location']).strip()
-                    demand_id = str(row['Demand ID']).strip()
-                    skills = str(row['Skills']).strip()
-                    openings = int(row['Openings'])
+                    # Helper to safely get column value
+                    def get_val(key, default=''):
+                        if key in col_map and col_map[key] in row.index:
+                            val = row[col_map[key]]
+                            if pd.isna(val):
+                                return default
+                            return str(val).strip()
+                        return default
 
-                    bg = str(row.get('BG', '')).strip() or None
-                    isu_hsu = str(row.get('ISU/HSU', '')).strip() or None
-                    stream = str(row.get('Stream', '')).strip() or None
-                    role = str(row.get('Role', '')).strip() or None
-                    spoc_name = str(row.get('Project SPOC Name', '')).strip() or None
-                    spoc_emp_id = str(row.get('Project SPOC Emp ID', '')).strip() or None
-                    rmg_head = str(row.get('RMG Head', '')).strip() or None
+                    location = get_val('location')
+                    if not location:
+                        continue
+
+                    # Handle stream -> skills expansion
+                    stream = get_val('stream')
+                    skills = get_val('skills')
+                    if not skills and stream:
+                        # Auto-populate skills from stream using SKILL_MAPPING
+                        expanded = normalize_skills(stream)
+                        skills = ', '.join(expanded) if expanded else stream
+
+                    if not skills:
+                        errors.append(f"Row {idx+2}: No skills or stream specified")
+                        continue
+
+                    openings_val = get_val('openings', '1')
+                    try:
+                        openings = int(float(openings_val))
+                    except (ValueError, TypeError):
+                        openings = 1
+
+                    project_name = get_val('project_name') or 'Unnamed Project'
+                    demand_id = get_val('demand_id') or f'AUTO-{idx+1}'
+                    rgs_id = get_val('rgs_id') or None
 
                     job_data = {
                         'project_name': project_name,
@@ -573,13 +637,14 @@ class UploadExcelView(APIView):
                         'demand_id': demand_id,
                         'skills': skills,
                         'openings': openings,
-                        'bg': bg,
-                        'isu_hsu': isu_hsu,
-                        'stream': stream,
-                        'role': role,
-                        'spoc_name': spoc_name,
-                        'spoc_emp_id': spoc_emp_id,
-                        'rmg_head': rmg_head,
+                        'bg': get_val('bg') or None,
+                        'isu_hsu': get_val('isu_hsu') or None,
+                        'stream': stream or None,
+                        'role': get_val('role') or None,
+                        'spoc_name': get_val('spoc_name') or None,
+                        'spoc_emp_id': get_val('spoc_emp_id') or None,
+                        'rmg_head': get_val('rmg_head') or None,
+                        'rgs_id': rgs_id,
                         'status': 'active',
                         'filled': 0,
                         'matches': 0,
@@ -671,18 +736,18 @@ class DownloadExcelTemplateView(APIView):
     def get(self, request):
         wb = Workbook()
         ws = wb.active
-        ws.title = "Job Template"
-        headers = ['Location', 'BG', 'ISU/HSU', 'Project Name', 'Stream', 'Role', 'Project SPOC Name', 'Openings', 'Project SPOC Emp ID', 'RMG Head', 'Skills', 'Demand ID']
+        ws.title = "Job Demand Template"
+        headers = ['BG', 'ISU/HSU', 'Project Name', 'Stream', 'Location', 'Role', 'Project SPOC Name', 'Project SPOC Emp ID', 'RMG Head', 'RGS ID', 'COUNT', 'Skills']
         for col, h in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=h)
-        sample = ['Hyderabad,Bangalore', 'Technology', 'ISU', 'Frontend Developer', 'Java', 'Developer', 'John Doe', '3', 'EMP001', 'Jane Smith', 'React,JavaScript', 'DEMAND001']
+        sample = ['Technology', 'ISU', 'Java Fullstack Project', 'Java', 'Hyderabad, Bangalore', 'Developer', 'John Doe', 'EMP1001', 'Jane Smith', 'RGS-001', 3, 'Spring Boot, Microservices, React']
         for col, val in enumerate(sample, 1):
             ws.cell(row=2, column=col, value=val)
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename="job_template.xlsx"'
+        response['Content-Disposition'] = 'attachment; filename="job_demand_template.xlsx"'
         return response
 
 class DownloadWordTemplateView(APIView):
@@ -884,7 +949,7 @@ class RunMatchingEngineView(APIView):
         if job_id:
             try:
                 job_id = int(job_id)
-            except ValueError:
+            except (TypeError, ValueError):
                 return Response({"error": "Invalid job_id"}, status=400)
         result = run_matching_logic(job_id=job_id)
         if result:
@@ -1090,9 +1155,9 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         total_selected = qs.filter(status='selected').count()
         total_rejected = qs.filter(status='rejected').count()
         by_job = qs.values('job__project_name').annotate(
-            locked=django_models.Count('id', filter=django_models.Q(status='locked')),
-            selected=django_models.Count('id', filter=django_models.Q(status='selected')),
-            rejected=django_models.Count('id', filter=django_models.Q(status='rejected')),
+            locked=models.Count('id', filter=models.Q(status='locked')),
+            selected=models.Count('id', filter=models.Q(status='selected')),
+            rejected=models.Count('id', filter=models.Q(status='rejected')),
         )
         return Response({
             'total_locked': total_locked,
@@ -1241,9 +1306,9 @@ class InterviewFeedbackListView(APIView):
         end = request.query_params.get('end')
         if search:
             qs = qs.filter(
-                django_models.Q(lock__trainee__userInfo__name__icontains=search) |
-                django_models.Q(interviewer__username__icontains=search) |
-                django_models.Q(overall_comments__icontains=search)
+                models.Q(lock__trainee__userInfo__name__icontains=search) |
+                models.Q(interviewer__username__icontains=search) |
+                models.Q(overall_comments__icontains=search)
             )
         if recommendation:
             qs = qs.filter(recommendation=recommendation)
@@ -1648,6 +1713,59 @@ class AssociateDashboardView(APIView):
 
         profile_data = ProfileRecordSerializer(profile).data
 
+        # Compute DPI percentage: (DPI / 5.0) * 100
+        dpi_val = profile.dpi if profile.dpi is not None else 0.0
+        dpi_percentage = round((max(0.0, min(5.0, float(dpi_val))) / 5.0) * 100.0, 1)
+
+        # Consent requests for this trainee
+        consents_qs = Consent.objects.filter(trainee=profile).select_related('job', 'sent_by')
+        consents_data = []
+        for c in consents_qs:
+            job = c.job
+            consents_data.append({
+                'id': c.id,
+                'job_id': job.id,
+                'project_name': job.project_name,
+                'location': job.location,
+                'skills': job.skills,
+                'stream': job.stream or '',
+                'role': job.role or '',
+                'openings': job.openings,
+                'status': c.status,
+                'remarks': c.remarks or '',
+                'sent_by': c.sent_by.username if c.sent_by else 'HR',
+                'sent_at': c.sent_at.isoformat() if c.sent_at else None,
+                'responded_at': c.responded_at.isoformat() if c.responded_at else None,
+            })
+
+        # My Interview locks & Status
+        locks_qs = InterviewLock.objects.filter(trainee=profile).select_related('job', 'assigned_to').prefetch_related('feedback')
+        interviews_data = []
+        for lock in locks_qs:
+            feedback_obj = getattr(lock, 'feedback', None)
+            interviews_data.append({
+                'id': lock.id,
+                'job_id': lock.job.id,
+                'job_title': lock.job.project_name,
+                'location': lock.job.location,
+                'status': lock.status,
+                'interview_datetime': lock.interview_datetime.isoformat() if lock.interview_datetime else None,
+                'interviewer': lock.assigned_to.username if lock.assigned_to else 'Pending Assignment',
+                'comments': lock.comments or '',
+                'has_feedback': feedback_obj is not None,
+                'recommendation': feedback_obj.recommendation if feedback_obj else None,
+                'feedback_comments': feedback_obj.overall_comments if feedback_obj else None,
+            })
+
+        # Project Mapping / Assignment details
+        assignment_data = None
+        if profile.userInfo and profile.userInfo.isMapped:
+            assignment_data = {
+                'isMapped': True,
+                'projectId': profile.userInfo.projectId,
+                'projectName': profile.userInfo.projectName,
+            }
+
         matches = Match.objects.filter(trainee_ref=profile).select_related('job_ref')[:5]
         skill_gaps = []
         for match in matches:
@@ -1676,6 +1794,11 @@ class AssociateDashboardView(APIView):
 
         return Response({
             'profile': profile_data,
+            'dpi': dpi_val,
+            'dpi_percentage': dpi_percentage,
+            'consent_requests': consents_data,
+            'interviews': interviews_data,
+            'assignment': assignment_data,
             'skill_gaps': skill_gaps,
             'similar_projects': similar_projects_data,
             'advice': advice
@@ -1796,7 +1919,7 @@ class BulkCreateInterviewersView(APIView):
                 if not email.endswith('@tcs.com'):
                     report['errors'].append({"row": idx + 2, "error": "Email must be @tcs.com"})
                     continue
-                if User.objects.filter(django_models.Q(username=employee_id) | django_models.Q(email=email)).exists():
+                if User.objects.filter(models.Q(username=employee_id) | models.Q(email=email)).exists():
                     report['duplicates'].append({"row": idx + 2, "email": email, "employee_id": employee_id})
                     continue
                 parts = name.split()
@@ -1849,6 +1972,11 @@ def resolve_job_identifier(value, batch=None):
         pass
     try:
         return Job.objects.get(demand_id=identifier, **filters)
+    except Job.DoesNotExist:
+        pass
+    # Also try RGS ID
+    try:
+        return Job.objects.get(rgs_id=identifier, **filters)
     except Job.DoesNotExist:
         return None
 
@@ -1947,46 +2075,82 @@ class DownloadStatusUpdateTemplateView(APIView):
         return response
 
 class BulkStatusUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+
         file = request.FILES.get('file')
-        if not file:
-            return Response({"error": "No file uploaded"}, status=400)
-        try:
-            df = pd.read_excel(file)
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
+        # Check if JSON payload was sent
+        json_locks = request.data.get('locks') or request.data.get('items')
+        json_status = request.data.get('status')
 
-        df.columns = [c.strip().lower() for c in df.columns]
-        col_map = {}
-        for col in df.columns:
-            if 'trainee' in col:
-                col_map['trainee'] = col
-            elif 'job' in col:
-                col_map['job'] = col
-            elif 'status' in col:
-                col_map['status'] = col
-
-        if not all(k in col_map for k in ['trainee','job','status']):
-            return Response({"error": "Missing required columns"}, status=400)
-
-        job_selected_counts = {}
         row_details = []
-        for idx, row in df.iterrows():
+        if json_locks and json_status:
+            new_status = str(json_status).strip().lower()
+            if new_status not in ['selected', 'rejected']:
+                return Response({"error": "Status must be 'selected' or 'rejected'"}, status=400)
+            
+            for idx, item in enumerate(json_locks):
+                lock_id = item if isinstance(item, (int, str)) and str(item).isdigit() else None
+                if lock_id:
+                    lock_obj = InterviewLock.objects.filter(id=int(lock_id)).select_related('trainee', 'trainee__userInfo', 'job').first()
+                    if lock_obj:
+                        row_details.append({
+                            'idx': idx,
+                            'lock': lock_obj,
+                            'trainee_id': lock_obj.trainee.userInfo.employeeId if lock_obj.trainee and lock_obj.trainee.userInfo else str(lock_obj.trainee_id),
+                            'job': lock_obj.job,
+                            'status': new_status,
+                            'error': None
+                        })
+                    else:
+                        row_details.append({'idx': idx, 'error': f"Lock ID {lock_id} not found", 'trainee_id': None, 'job': None, 'status': new_status})
+                else:
+                    row_details.append({'idx': idx, 'error': "Invalid lock identifier", 'trainee_id': None, 'job': None, 'status': new_status})
+        elif file:
             try:
-                trainee_id = str(row[col_map['trainee']]).strip()
-                job = resolve_job_identifier(row[col_map['job']])
-                new_status = str(row[col_map['status']]).strip().lower()
-                if not job:
-                    row_details.append({'idx': idx, 'error': f"Job not found", 'trainee_id': trainee_id, 'job': None, 'status': new_status})
-                    continue
-                if new_status not in ['selected', 'rejected']:
-                    row_details.append({'idx': idx, 'error': f"Invalid status", 'trainee_id': trainee_id, 'job': job, 'status': new_status})
-                    continue
-                if new_status == 'selected':
-                    job_selected_counts[job.id] = job_selected_counts.get(job.id, 0) + 1
-                row_details.append({'idx': idx, 'trainee_id': trainee_id, 'job': job, 'status': new_status, 'error': None})
+                df = pd.read_excel(file)
             except Exception as e:
-                row_details.append({'idx': idx, 'error': str(e), 'trainee_id': None, 'job': None, 'status': None})
+                return Response({"error": str(e)}, status=400)
+
+            df.columns = [c.strip().lower() for c in df.columns]
+            col_map = {}
+            for col in df.columns:
+                if 'trainee' in col or 'employee' in col:
+                    col_map['trainee'] = col
+                elif 'job' in col or 'demand' in col or 'rgs' in col:
+                    col_map['job'] = col
+                elif 'status' in col:
+                    col_map['status'] = col
+
+            if not all(k in col_map for k in ['trainee', 'job', 'status']):
+                return Response({"error": "Missing required columns: Trainee/Employee ID, Job/Demand ID, and Status"}, status=400)
+
+            for idx, row in df.iterrows():
+                try:
+                    trainee_id = str(row[col_map['trainee']]).strip()
+                    job = resolve_job_identifier(row[col_map['job']])
+                    new_status = str(row[col_map['status']]).strip().lower()
+                    if not job:
+                        row_details.append({'idx': idx, 'error': "Job not found", 'trainee_id': trainee_id, 'job': None, 'status': new_status})
+                        continue
+                    if new_status not in ['selected', 'rejected']:
+                        row_details.append({'idx': idx, 'error': "Invalid status", 'trainee_id': trainee_id, 'job': job, 'status': new_status})
+                        continue
+                    row_details.append({'idx': idx, 'trainee_id': trainee_id, 'job': job, 'status': new_status, 'error': None})
+                except Exception as e:
+                    row_details.append({'idx': idx, 'error': str(e), 'trainee_id': None, 'job': None, 'status': None})
+        else:
+            return Response({"error": "Provide either an Excel file or locks list with status"}, status=400)
+
+        # Validate openings for 'selected' status
+        job_selected_counts = {}
+        for detail in row_details:
+            if not detail['error'] and detail.get('status') == 'selected' and detail.get('job'):
+                j_id = detail['job'].id
+                job_selected_counts[j_id] = job_selected_counts.get(j_id, 0) + 1
 
         openings_errors = []
         for job_id, selected_count in job_selected_counts.items():
@@ -1994,7 +2158,7 @@ class BulkStatusUpdateView(APIView):
                 job = Job.objects.get(id=job_id)
                 remaining_openings = job.openings - job.filled
                 if selected_count > remaining_openings:
-                    openings_errors.append(f"Job '{job.project_name}' has only {remaining_openings} openings left, but you're trying to select {selected_count}.")
+                    openings_errors.append(f"Job '{job.project_name}' has only {remaining_openings} openings left, but you are selecting {selected_count}.")
             except Job.DoesNotExist:
                 openings_errors.append(f"Job ID {job_id} not found")
         if openings_errors:
@@ -2003,62 +2167,66 @@ class BulkStatusUpdateView(APIView):
         results = {'updated': 0, 'errors': [], 'openings_remaining': {}}
         for detail in row_details:
             if detail['error']:
-                results['errors'].append(f"Row {detail['idx']+2}: {detail['error']}")
+                results['errors'].append(f"Row {detail['idx']+1}: {detail['error']}")
                 continue
             try:
-                trainee_id = detail['trainee_id']
+                lock = detail.get('lock')
                 job = detail['job']
                 new_status = detail['status']
-                trainee_profile = None
-                user_info = UserInfo.objects.filter(employeeId=trainee_id).first()
-                if not user_info:
-                    user_info = UserInfo.objects.filter(email=trainee_id).first()
-                if user_info:
-                    trainee_profile = user_info.profile
-                if not trainee_profile:
-                    results['errors'].append(f"Row {detail['idx']+2}: Trainee not found")
-                    continue
-                lock = InterviewLock.objects.filter(trainee=trainee_profile, job=job).first()
+
                 if not lock:
-                    results['errors'].append(f"Row {detail['idx']+2}: No existing interview lock")
-                    continue
-                if lock.status in ['selected', 'rejected']:
-                    results['errors'].append(f"Row {detail['idx']+2}: Already finalised as {lock.status}")
-                    continue
+                    trainee_id = detail['trainee_id']
+                    user_info = UserInfo.objects.filter(models.Q(employeeId=trainee_id) | models.Q(email=trainee_id) | models.Q(userId=trainee_id)).first()
+                    if not user_info or not hasattr(user_info, 'profile'):
+                        results['errors'].append(f"Row {detail['idx']+1}: Trainee {trainee_id} profile not found")
+                        continue
+                    lock = InterviewLock.objects.filter(trainee=user_info.profile, job=job).first()
+                    if not lock:
+                        # Auto-create lock if candidate is directly selected
+                        lock = InterviewLock.objects.create(
+                            trainee=user_info.profile,
+                            job=job,
+                            locked_by=request.user,
+                            interview_datetime=timezone.now(),
+                            status='locked',
+                            comments='Auto-created via Bulk Status Update'
+                        )
+
+                user_info = lock.trainee.userInfo if lock.trainee else None
+
                 if new_status == 'selected':
                     job.refresh_from_db()
                     remaining_openings = job.openings - job.filled
                     if remaining_openings <= 0:
-                        results['errors'].append(f"Row {detail['idx']+2}: Job '{job.project_name}' has no openings left")
+                        results['errors'].append(f"Row {detail['idx']+1}: Job '{job.project_name}' has no openings remaining")
                         continue
-                    lock.status = new_status
+
+                    lock.status = 'selected'
                     lock.save()
-                    if not (user_info and user_info.isMapped and user_info.projectId == str(job.id)):
-                        if user_info and user_info.isMapped:
-                            results['errors'].append(f"Row {detail['idx']+2}: Trainee already mapped to another project")
-                            continue
+
+                    if user_info:
                         user_info.isMapped = True
                         user_info.projectId = str(job.id)
                         user_info.projectName = job.project_name
                         user_info.save()
-                        job.filled += 1
-                        job.save()
-                        results['openings_remaining'][job.id] = job.openings - job.filled
+
+                    job.filled += 1
+                    job.sync_opening_status()
+                    results['openings_remaining'][job.id] = job.openings - job.filled
                 else:
-                    lock.status = new_status
+                    lock.status = 'rejected'
                     lock.save()
+
+                    if user_info and user_info.projectId == str(job.id):
+                        user_info.isMapped = False
+                        user_info.projectId = None
+                        user_info.projectName = None
+                        user_info.save()
+
                 results['updated'] += 1
             except Exception as e:
-                results['errors'].append(f"Row {detail['idx']+2}: {str(e)}")
-        if results['openings_remaining']:
-            openings_summary = []
-            for job_id, remaining in results['openings_remaining'].items():
-                try:
-                    job = Job.objects.get(id=job_id)
-                    openings_summary.append(f"{job.project_name}: {remaining} left")
-                except:
-                    pass
-            results['openings_summary'] = openings_summary
+                results['errors'].append(f"Row {detail['idx']+1}: {str(e)}")
+
         return Response(results, status=200 if results['updated'] > 0 else 400)
 
 class DownloadBulkMappingTemplateView(APIView):
@@ -3466,10 +3634,10 @@ class CourseOwnerAvailableTraineesView(APIView):
         search = request.query_params.get('search', '').strip().lower()
         if search:
             all_trainees = all_trainees.filter(
-                django_models.Q(name__icontains=search) |
-                django_models.Q(employeeId__icontains=search) |
-                django_models.Q(email__icontains=search) |
-                django_models.Q(userId__icontains=search)
+                models.Q(name__icontains=search) |
+                models.Q(employeeId__icontains=search) |
+                models.Q(email__icontains=search) |
+                models.Q(userId__icontains=search)
             )
 
         data = []
@@ -3488,8 +3656,28 @@ class CourseOwnerAvailableTraineesView(APIView):
         return Response(data)
 
 
+class DownloadPreferredLocationsTemplateView(APIView):
+    """Download Excel template for Preferred Locations with State & City."""
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Preferred Locations"
+        headers = ['Employee ID', 'Location 1', 'Location 2', 'Location 3', 'State', 'City']
+        for col, h in enumerate(headers, 1):
+            ws.cell(row=1, column=col, value=h)
+        sample = ['EMP001', 'Hyderabad', 'Bangalore', 'Chennai', 'Telangana', 'Hyderabad']
+        for col, val in enumerate(sample, 1):
+            ws.cell(row=2, column=col, value=val)
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="preferred_locations_template.xlsx"'
+        return response
+
+
 class UploadPreferredLocationsView(APIView):
-    """Upload Excel to update trainees' preferred locations."""
+    """Upload Excel to update trainees' preferred locations with State & City."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -3505,14 +3693,14 @@ class UploadPreferredLocationsView(APIView):
         except Exception as e:
             return Response({"error": f"Invalid Excel file: {str(e)}"}, status=400)
 
-        # Normalize column names
+        # Normalize column names (strip whitespace and lower)
         df.columns = [str(c).strip() for c in df.columns]
 
-        # Find columns (case-insensitive)
+        # Find columns (case-insensitive & resilient)
         col_map = {}
         for col in df.columns:
             col_lower = col.lower()
-            if 'employee' in col_lower and 'id' in col_lower:
+            if 'employee' in col_lower or col_lower in ['empid', 'emp_id', 'emp id']:
                 col_map['employee_id'] = col
             elif 'location' in col_lower and '1' in col_lower:
                 col_map['loc1'] = col
@@ -3520,9 +3708,13 @@ class UploadPreferredLocationsView(APIView):
                 col_map['loc2'] = col
             elif 'location' in col_lower and '3' in col_lower:
                 col_map['loc3'] = col
+            elif 'state' in col_lower:
+                col_map['state'] = col
+            elif 'city' in col_lower:
+                col_map['city'] = col
 
         if 'employee_id' not in col_map:
-            return Response({"error": "Missing 'Employee ID' column"}, status=400)
+            return Response({"error": "Missing 'Employee ID' column in Excel file."}, status=400)
 
         updated = 0
         errors = []
@@ -3532,26 +3724,29 @@ class UploadPreferredLocationsView(APIView):
                 if not emp_id or pd.isna(row[col_map['employee_id']]):
                     continue
 
-                user_info = UserInfo.objects.filter(employeeId=emp_id).first()
+                user_info = UserInfo.objects.filter(
+                    models.Q(employeeId=emp_id) | models.Q(userId=emp_id) | models.Q(email=emp_id)
+                ).first()
                 if not user_info:
-                    errors.append(f"Row {idx+2}: Employee {emp_id} not found")
+                    errors.append(f"Row {idx+2}: Employee '{emp_id}' not found in system")
                     continue
 
-                # Update preferred locations (can be empty to clear)
-                user_info.preferred_location_1 = str(row.get(col_map.get('loc1', ''), '')).strip() or None if col_map.get('loc1') and not pd.isna(row.get(col_map.get('loc1', ''))) else user_info.preferred_location_1
-                user_info.preferred_location_2 = str(row.get(col_map.get('loc2', ''), '')).strip() or None if col_map.get('loc2') and not pd.isna(row.get(col_map.get('loc2', ''))) else user_info.preferred_location_2
-                user_info.preferred_location_3 = str(row.get(col_map.get('loc3', ''), '')).strip() or None if col_map.get('loc3') and not pd.isna(row.get(col_map.get('loc3', ''))) else user_info.preferred_location_3
-                
-                # Handle empty values properly
-                if col_map.get('loc1') and not pd.isna(row.get(col_map.get('loc1', ''))):
+                # Update preferred locations
+                if col_map.get('loc1') and not pd.isna(row.get(col_map['loc1'])):
                     val = str(row[col_map['loc1']]).strip()
                     user_info.preferred_location_1 = val if val else None
-                if col_map.get('loc2') and not pd.isna(row.get(col_map.get('loc2', ''))):
+                if col_map.get('loc2') and not pd.isna(row.get(col_map['loc2'])):
                     val = str(row[col_map['loc2']]).strip()
                     user_info.preferred_location_2 = val if val else None
-                if col_map.get('loc3') and not pd.isna(row.get(col_map.get('loc3', ''))):
+                if col_map.get('loc3') and not pd.isna(row.get(col_map['loc3'])):
                     val = str(row[col_map['loc3']]).strip()
                     user_info.preferred_location_3 = val if val else None
+                if col_map.get('state') and not pd.isna(row.get(col_map['state'])):
+                    val = str(row[col_map['state']]).strip()
+                    user_info.preferred_state = val if val else None
+                if col_map.get('city') and not pd.isna(row.get(col_map['city'])):
+                    val = str(row[col_map['city']]).strip()
+                    user_info.preferred_city = val if val else None
 
                 user_info.save()
                 updated += 1
@@ -3559,10 +3754,467 @@ class UploadPreferredLocationsView(APIView):
                 errors.append(f"Row {idx+2}: {str(e)}")
 
         return Response({
-            "message": f"Updated {updated} trainees",
+            "message": f"Updated preferred locations for {updated} trainees",
             "updated": updated,
             "errors": errors
         }, status=200 if updated > 0 else 400)
+
+
+# ==================== CONSENT WORKFLOW VIEWS ====================
+
+class ConsentSendView(APIView):
+    """HR sends consent requests to selected candidates for a specific job."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        job_id = request.data.get('job_id')
+        trainee_ids = request.data.get('trainee_ids', [])
+        if not job_id or not trainee_ids:
+            return Response({"error": "job_id and trainee_ids are required"}, status=400)
+
+        job = get_object_or_404(Job, id=job_id)
+        created_count = 0
+        updated_count = 0
+        errors = []
+
+        for tid in trainee_ids:
+            try:
+                profile = None
+                tid_str = str(tid).strip()
+                tid_clean = tid_str.replace('user-', '').replace('trainee-', '').strip()
+
+                # 1. Direct ID match
+                if tid_str.isdigit():
+                    profile = ProfileRecord.objects.filter(id=int(tid_str)).first()
+
+                # 2. UserInfo matches
+                if not profile:
+                    profile = ProfileRecord.objects.filter(
+                        Q(userInfo__userId=tid_str) |
+                        Q(userInfo__employeeId=tid_str) |
+                        Q(userInfo__email=tid_str) |
+                        Q(userInfo__userId=tid_clean) |
+                        Q(userInfo__employeeId=tid_clean)
+                    ).first()
+
+                # 3. User table lookup
+                if not profile:
+                    user_match = None
+                    if tid_clean.isdigit():
+                        user_match = User.objects.filter(id=int(tid_clean)).first()
+                    if not user_match:
+                        user_match = User.objects.filter(
+                            Q(username=tid_str) | Q(email=tid_str) | Q(username=tid_clean)
+                        ).first()
+                    if user_match:
+                        profile = ProfileRecord.objects.filter(
+                            Q(userInfo__email=user_match.email) |
+                            Q(userInfo__employeeId=user_match.username) |
+                            Q(userInfo__userId=user_match.username)
+                        ).first()
+
+                if not profile:
+                    errors.append(f"Trainee {tid} not found")
+                    continue
+
+                consent, created = Consent.objects.update_or_create(
+                    trainee=profile,
+                    job=job,
+                    defaults={
+                        'status': 'PENDING',
+                        'sent_by': request.user,
+                        'remarks': None,
+                        'responded_at': None,
+                    }
+                )
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
+
+                # Send Notification to Trainee
+                trainee_user = None
+                if profile.userInfo and profile.userInfo.userId:
+                    trainee_user = User.objects.filter(username=profile.userInfo.userId).first() or \
+                                   User.objects.filter(email=profile.userInfo.email).first()
+
+                if trainee_user:
+                    Notification.objects.create(
+                        recipient=trainee_user,
+                        notification_type='consent_sent',
+                        title=f"Consent Request for {job.project_name}",
+                        message=f"HR has requested your consent for job requirement: {job.project_name} ({job.location}). Please review and respond in your Associate Dashboard.",
+                        payload={'job_id': job.id, 'consent_id': consent.id, 'project_name': job.project_name}
+                    )
+            except Exception as e:
+                errors.append(f"Error for {tid}: {str(e)}")
+
+        return Response({
+            "message": f"Consent request sent to {created_count + updated_count} candidates.",
+            "sent_count": created_count + updated_count,
+            "created": created_count,
+            "updated": updated_count,
+            "errors": errors
+        }, status=200)
+
+
+class ConsentRespondView(APIView):
+    """Candidate responds to consent request (Accept/Decline + mandatory remarks)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        consent_id = request.data.get('consent_id')
+        job_id = request.data.get('job_id')
+        status_val = request.data.get('status', '').strip().upper()
+        remarks = request.data.get('remarks', '').strip()
+
+        if status_val not in ['ACCEPTED', 'DECLINED']:
+            return Response({"error": "status must be 'ACCEPTED' or 'DECLINED'"}, status=400)
+
+        if not remarks:
+            return Response({"error": "Remarks are required for both Accept and Decline."}, status=400)
+
+        profile = get_trainee_profile(request.user)
+        if not profile and request.user.role != 'trainee':
+            return Response({"error": "Only associates can respond to their consent requests"}, status=403)
+
+        consent = None
+        if consent_id:
+            consent = Consent.objects.filter(id=consent_id).first()
+        elif job_id and profile:
+            consent = Consent.objects.filter(job_id=job_id, trainee=profile).first()
+
+        if not consent:
+            return Response({"error": "Consent request not found"}, status=404)
+
+        if profile and consent.trainee_id != profile.id:
+            return Response({"error": "Unauthorized to respond to this consent"}, status=403)
+
+        consent.status = status_val
+        consent.remarks = remarks
+        consent.responded_at = timezone.now()
+        consent.save()
+
+        # On ACCEPT: candidate gets locked to that job
+        if status_val == 'ACCEPTED':
+            job = consent.job
+            if consent.trainee.userInfo:
+                u_info = consent.trainee.userInfo
+                u_info.isMapped = True
+                u_info.projectId = str(job.id)
+                u_info.projectName = job.project_name
+                u_info.save()
+
+            if consent.sent_by:
+                Notification.objects.create(
+                    recipient=consent.sent_by,
+                    notification_type='consent_responded',
+                    title=f"Consent Accepted: {consent.trainee.userInfo.name if consent.trainee.userInfo else 'Candidate'}",
+                    message=f"{consent.trainee.userInfo.name if consent.trainee.userInfo else 'Candidate'} accepted consent for {job.project_name}. Remark: {remarks}",
+                    payload={'job_id': job.id, 'trainee_id': consent.trainee.id, 'status': 'ACCEPTED'}
+                )
+        elif status_val == 'DECLINED':
+            # On DECLINE: release candidate from this job consideration
+            if consent.trainee.userInfo and consent.trainee.userInfo.projectId == str(consent.job.id):
+                u_info = consent.trainee.userInfo
+                u_info.isMapped = False
+                u_info.projectId = None
+                u_info.projectName = None
+                u_info.save()
+
+        return Response({
+            "message": f"Consent response recorded as {status_val}",
+            "status": consent.status,
+            "remarks": consent.remarks,
+            "responded_at": consent.responded_at
+        }, status=200)
+
+
+class ConsentListView(APIView):
+    """HR views consent status breakdown and record details."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role not in ['hr', 'admin', 'manager']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        job_id = request.query_params.get('job_id')
+        batch = request.query_params.get('batch')
+        status_filter = request.query_params.get('status')
+
+        qs = Consent.objects.select_related('trainee', 'trainee__userInfo', 'job', 'sent_by').all()
+        if job_id:
+            qs = qs.filter(job_id=job_id)
+        if batch:
+            qs = qs.filter(trainee__batch_name=batch)
+        if status_filter:
+            qs = qs.filter(status=status_filter.upper())
+
+        total = qs.count()
+        pending_count = qs.filter(status='PENDING').count()
+        accepted_count = qs.filter(status='ACCEPTED').count()
+        declined_count = qs.filter(status='DECLINED').count()
+
+        records = []
+        for c in qs[:250]:
+            u_info = c.trainee.userInfo if c.trainee else None
+            records.append({
+                'id': c.id,
+                'trainee_id': c.trainee.id if c.trainee else None,
+                'trainee_name': u_info.name if u_info else f"Trainee#{c.trainee_id}",
+                'employee_id': u_info.employeeId if u_info else '',
+                'email': u_info.email if u_info else '',
+                'batch_name': c.trainee.batch_name if c.trainee else '',
+                'job_id': c.job.id,
+                'job_title': c.job.project_name,
+                'demand_id': c.job.demand_id,
+                'rgs_id': c.job.rgs_id or '',
+                'status': c.status,
+                'remarks': c.remarks or '',
+                'sent_by': c.sent_by.username if c.sent_by else 'HR',
+                'sent_at': c.sent_at.isoformat() if c.sent_at else None,
+                'responded_at': c.responded_at.isoformat() if c.responded_at else None,
+            })
+
+        return Response({
+            'total': total,
+            'pending': pending_count,
+            'accepted': accepted_count,
+            'declined': declined_count,
+            'records': records
+        })
+
+
+class ConsentTraineeListView(APIView):
+    """Retrieve consent requests for the currently logged-in associate."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_trainee_profile(request.user)
+        if not profile:
+            return Response({"error": "Profile not found"}, status=404)
+
+        consents = Consent.objects.filter(trainee=profile).select_related('job', 'sent_by')
+        data = []
+        for c in consents:
+            job = c.job
+            data.append({
+                'id': c.id,
+                'job_id': job.id,
+                'project_name': job.project_name,
+                'location': job.location,
+                'skills': job.skills,
+                'stream': job.stream or '',
+                'role': job.role or '',
+                'openings': job.openings,
+                'status': c.status,
+                'remarks': c.remarks or '',
+                'sent_at': c.sent_at.isoformat() if c.sent_at else None,
+                'responded_at': c.responded_at.isoformat() if c.responded_at else None,
+            })
+        return Response(data)
+
+
+class ConsentOverrideView(APIView):
+    """HR overrides consent status for a candidate."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        consent_id = request.data.get('consent_id')
+        new_status = request.data.get('status', '').strip().upper()
+        remarks = request.data.get('remarks', 'HR Manual Override')
+
+        if new_status not in ['ACCEPTED', 'DECLINED', 'PENDING']:
+            return Response({"error": "Invalid status"}, status=400)
+
+        consent = get_object_or_404(Consent, id=consent_id)
+        consent.status = new_status
+        consent.remarks = remarks
+        consent.responded_at = timezone.now()
+        consent.save()
+
+        if new_status == 'ACCEPTED' and consent.trainee.userInfo:
+            u_info = consent.trainee.userInfo
+            u_info.isMapped = True
+            u_info.projectId = str(consent.job.id)
+            u_info.projectName = consent.job.project_name
+            u_info.save()
+        elif new_status == 'DECLINED' and consent.trainee.userInfo:
+            if consent.trainee.userInfo.projectId == str(consent.job.id):
+                u_info = consent.trainee.userInfo
+                u_info.isMapped = False
+                u_info.projectId = None
+                u_info.projectName = None
+                u_info.save()
+
+        return Response({"message": f"Consent updated to {new_status}", "status": consent.status})
+
+
+class BulkConsentUploadView(APIView):
+    """Bulk send consent via Excel upload (Employee ID, Job ID/Demand ID/RGS ID)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=400)
+
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            return Response({"error": f"Invalid Excel: {str(e)}"}, status=400)
+
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        emp_col = next((c for c in df.columns if 'employee' in c or 'emp' in c or 'trainee' in c), None)
+        job_col = next((c for c in df.columns if 'job' in c or 'demand' in c or 'rgs' in c or 'project' in c), None)
+
+        if not emp_col or not job_col:
+            return Response({"error": "Must contain 'Employee ID' and 'Job ID / Demand ID' columns"}, status=400)
+
+        created = 0
+        errors = []
+        for idx, row in df.iterrows():
+            try:
+                emp_id = str(row[emp_col]).strip()
+                job_ref_val = str(row[job_col]).strip()
+                if not emp_id or not job_ref_val or pd.isna(row[emp_col]):
+                    continue
+
+                profile = ProfileRecord.objects.filter(
+                    Q(userInfo__employeeId=emp_id) | Q(userInfo__userId=emp_id) | Q(userInfo__email=emp_id)
+                ).first()
+                if not profile:
+                    errors.append(f"Row {idx+2}: Employee '{emp_id}' not found")
+                    continue
+
+                job = resolve_job_identifier(job_ref_val)
+                if not job:
+                    errors.append(f"Row {idx+2}: Job '{job_ref_val}' not found")
+                    continue
+
+                Consent.objects.update_or_create(
+                    trainee=profile,
+                    job=job,
+                    defaults={'status': 'PENDING', 'sent_by': request.user, 'remarks': None, 'responded_at': None}
+                )
+                created += 1
+            except Exception as e:
+                errors.append(f"Row {idx+2}: {str(e)}")
+
+        return Response({"message": f"Consent sent to {created} candidates", "created": created, "errors": errors}, status=200 if created > 0 else 400)
+
+
+# ==================== JD PARSER VIEW ====================
+
+class ParseJDView(APIView):
+    """Parse raw job description text with LLM and return structured fields."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin', 'manager']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        raw_text = request.data.get('text', '').strip()
+        if not raw_text:
+            return Response({"error": "Text is required for JD parsing"}, status=400)
+
+        prompt = f"""You are a JD parsing assistant. Extract the following from the job description text:
+- Project Name (generate if not specified)
+- Location(s) - comma separated city names
+- Skills/Stream - identify technologies and map to streams (Java, Python, JavaScript, .NET, Data, Cloud, Testing, Web, etc.)
+- Openings (default 1 if not specified)
+- Role (Developer, Tech Support, Non-tech, etc.)
+- BG (default "Technology")
+- ISU/HSU (default "ISU")
+- RMG Head (default empty "")
+- SPOC Name (default empty "")
+- SPOC Emp ID (default empty "")
+- RGS ID (generate unique ID like RGS-1234 if not provided)
+- COUNT (same as openings)
+
+Return as JSON matching:
+{{
+  "project_name": "...",
+  "location": "...",
+  "skills": "...",
+  "stream": "...",
+  "openings": 1,
+  "role": "...",
+  "bg": "Technology",
+  "isu_hsu": "ISU",
+  "rmg_head": "",
+  "spoc_name": "",
+  "spoc_emp_id": "",
+  "rgs_id": "..."
+}}
+
+Job text:
+{raw_text}
+"""
+        parsed_data = None
+        try:
+            ollama_url = os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/generate')
+            payload = {
+                "model": "llama3",
+                "prompt": prompt,
+                "stream": False,
+                "format": "json"
+            }
+            res = requests.post(ollama_url, json=payload, timeout=20)
+            if res.status_code == 200:
+                resp_str = res.json().get('response', '')
+                import json
+                parsed_data = json.loads(resp_str)
+        except Exception as e:
+            logger.warning(f"Ollama JD parsing unavailable: {e}. Using rule-based fallback.")
+
+        if not parsed_data:
+            import re
+            openings_match = re.search(r'(\d+)\s*(?:openings?|positions?|vacanc(?:y|ies)|seats?|developers?|engineers?)', raw_text, re.I)
+            openings = int(openings_match.group(1)) if openings_match else 1
+
+            found_skills = []
+            found_stream = None
+            text_lower = raw_text.lower()
+            for stream_key, skills_list in SKILL_MAPPING.items():
+                for sk in skills_list:
+                    if sk in text_lower and sk.title() not in found_skills:
+                        found_skills.append(sk.title())
+                        if not found_stream:
+                            found_stream = stream_key.title()
+
+            cities = ['Hyderabad', 'Bangalore', 'Chennai', 'Mumbai', 'Pune', 'Kolkata', 'Delhi', 'Noida', 'Gurugram', 'Ahmedabad', 'Kochi', 'Jaipur', 'Indore', 'Coimbatore']
+            found_locations = [c for c in cities if c.lower() in text_lower]
+
+            loc_str = ', '.join(found_locations) if found_locations else 'Hyderabad'
+            skills_str = ', '.join(found_skills) if found_skills else 'Java, Spring Boot'
+            stream_str = found_stream if found_stream else 'Java'
+
+            parsed_data = {
+                "project_name": f"{stream_str} Developer Requirement",
+                "location": loc_str,
+                "skills": skills_str,
+                "stream": stream_str,
+                "openings": openings,
+                "role": "Developer",
+                "bg": "Technology",
+                "isu_hsu": "ISU",
+                "rmg_head": "",
+                "spoc_name": "",
+                "spoc_emp_id": "",
+                "rgs_id": f"RGS-{int(time.time()) % 100000}"
+            }
+
+        return Response(parsed_data)
 
 
 from .report_agent import ReportGenerator
@@ -3570,15 +4222,15 @@ from .report_agent import ReportGenerator
 class GenerateReportView(APIView):
     """Generate AI-powered narrative report."""
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         if request.user.role not in ['hr', 'admin']:
             return Response({"error": "Permission denied"}, status=403)
-        
+
         batch = request.query_params.get('batch', '')
-        report_type = request.query_params.get('type', 'full')  # full | summary | pipeline
-        
+        report_type = request.query_params.get('type', 'full')
+
         generator = ReportGenerator(batch_name=batch if batch else None)
         report = generator.generate_full_report()
-        
+
         return Response(report)

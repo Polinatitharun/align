@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.db import transaction
 from django.core.cache import cache
 import numpy as np
-from .models import Job, ProfileRecord, Match, Notification
+from .models import Job, ProfileRecord, Match, Notification, Consent
 
 # ---------- LLM Setup (for views that use it) ----------
 try:
@@ -51,6 +51,58 @@ _embedding_session = requests.Session()
 # ----------- Caches for embeddings -----------
 _skill_embedding_cache = {}
 _trainee_embedding_cache = {}
+
+
+# ----------- Skill Normalization Mapping -----------
+SKILL_MAPPING = {
+    'java': ['java', 'spring', 'spring boot', 'selenium with java', 'junit', 'hibernate', 'j2ee', 'core java', 'advanced java'],
+    'python': ['python', 'django', 'flask', 'fastapi', 'selenium with python', 'pandas', 'numpy'],
+    'javascript': ['javascript', 'node', 'nodejs', 'node.js', 'react', 'angular', 'vue', 'vue.js', 'typescript', 'jest', 'express', 'express.js', 'next.js', 'nextjs'],
+    '.net': ['.net', 'c#', 'csharp', 'asp.net', 'dotnet', '.net core', 'vb.net'],
+    'data': ['sql', 'mysql', 'postgresql', 'mongodb', 'oracle', 'data', 'analytics', 'data science', 'data engineering', 'power bi', 'tableau'],
+    'cloud': ['aws', 'azure', 'gcp', 'cloud', 'devops', 'docker', 'kubernetes', 'terraform', 'jenkins', 'ci/cd'],
+    'testing': ['testing', 'qa', 'automation', 'manual testing', 'selenium', 'cypress', 'appium', 'jmeter', 'load testing'],
+    'web': ['html', 'css', 'bootstrap', 'tailwind', 'sass', 'less', 'responsive design'],
+}
+
+# Build reverse mapping: specific skill -> stream category
+_SKILL_TO_STREAM = {}
+for stream, skills in SKILL_MAPPING.items():
+    for skill in skills:
+        _SKILL_TO_STREAM[skill.lower()] = stream
+
+
+def normalize_skills(stream_or_skill):
+    """Expand a stream name or skill into all related skill keywords."""
+    if not stream_or_skill:
+        return []
+    key = stream_or_skill.strip().lower()
+    # If it's a stream name, return all related skills
+    if key in SKILL_MAPPING:
+        return SKILL_MAPPING[key]
+    # If it's a specific skill, return the stream's skills
+    if key in _SKILL_TO_STREAM:
+        return SKILL_MAPPING[_SKILL_TO_STREAM[key]]
+    return [key]
+
+
+def get_normalized_job_skills(job):
+    """Get expanded skill list for a job based on its skills and stream fields."""
+    skills_set = set()
+    # Add skills from the skills field
+    if job.skills:
+        for skill in job.skills.split(','):
+            skill = skill.strip()
+            if skill:
+                skills_set.add(skill.lower())
+                # Also add normalized expansions
+                for expanded in normalize_skills(skill):
+                    skills_set.add(expanded.lower())
+    # Add skills from stream field
+    if job.stream:
+        for expanded in normalize_skills(job.stream):
+            skills_set.add(expanded.lower())
+    return list(skills_set)
 
 
 def _parse_embedding_response(data):
@@ -410,7 +462,7 @@ def process_trainee(args):
     # Skills
     skills_perc, matched_skills = compute_skills_match(job_embeddings, trainee_embeddings)
 
-    # Collect only preferred locations (NOT userInfo.location)
+    # Collect preferred locations (including state and city)
     preferred_locations = []
     if trainee.userInfo:
         if trainee.userInfo.preferred_location_1 and str(trainee.userInfo.preferred_location_1).strip():
@@ -419,6 +471,14 @@ def process_trainee(args):
             preferred_locations.append(str(trainee.userInfo.preferred_location_2).strip())
         if trainee.userInfo.preferred_location_3 and str(trainee.userInfo.preferred_location_3).strip():
             preferred_locations.append(str(trainee.userInfo.preferred_location_3).strip())
+        if getattr(trainee.userInfo, 'preferred_city', None) and str(trainee.userInfo.preferred_city).strip():
+            city_val = str(trainee.userInfo.preferred_city).strip()
+            if city_val not in preferred_locations:
+                preferred_locations.append(city_val)
+        if getattr(trainee.userInfo, 'preferred_state', None) and str(trainee.userInfo.preferred_state).strip():
+            state_val = str(trainee.userInfo.preferred_state).strip()
+            if state_val not in preferred_locations:
+                preferred_locations.append(state_val)
 
     best_distance = 9999.0
     best_location = None
@@ -436,7 +496,7 @@ def process_trainee(args):
                 # Exact match check (case-insensitive, normalized)
                 if job_loc_clean and pref_loc_clean and job_loc_clean == pref_loc_clean:
                     best_location_percentage = 100.0
-                    best_location = job_loc
+                    best_location = pref_loc
                     best_distance = 0.0
                     break
                 
@@ -448,7 +508,7 @@ def process_trainee(args):
                         loc_perc = calculate_location_percentage(dist)
                         if dist < best_distance or (dist == best_distance and loc_perc > best_location_percentage):
                             best_distance = dist
-                            best_location = job_loc
+                            best_location = pref_loc
                             best_location_percentage = loc_perc
 
             # If exact match found, skip remaining job locations
@@ -456,7 +516,7 @@ def process_trainee(args):
                 break
 
     # DPI is on a 0-5 scale, convert to percentage
-    # 0 → 0%, 1 → 20%, 2 → 40%, 3 → 60%, 4 → 80%, 5 → 100%
+    # 0 -> 0%, 1 -> 20%, 2 -> 40%, 3 -> 60%, 4 -> 80%, 5 -> 100%
     dpi_value = trainee.dpi if trainee.dpi is not None else 0
     dpi_value = max(0, min(5, float(dpi_value)))  # Clamp to 0-5
     experience_perc = (dpi_value / 5.0) * 100  # Convert to percentage
@@ -470,13 +530,18 @@ def process_trainee(args):
     )
 
     # Bucket categorization
+    # - PERFECT_MATCH: Skills >= 80% AND Location >= 80%
+    # - SKILLS_ONLY: Skills >= 70% AND Location < 80%
+    # - LOCATION_ONLY: Skills < 70% AND Location >= 70%
+    # - NEARBY: Skills < 70% AND Location >= 50% (proximity match)
+    # - NO_MATCH: Everything else
     if skills_perc >= 80 and best_location_percentage >= 80:
         bucket = 'PERFECT_MATCH'
-    elif skills_perc >= 70:
+    elif skills_perc >= 70 and best_location_percentage < 80:
         bucket = 'SKILLS_ONLY'
-    elif best_location_percentage >= 70:
+    elif skills_perc < 70 and best_location_percentage >= 70:
         bucket = 'LOCATION_ONLY'
-    elif best_location_percentage >= 50:
+    elif skills_perc < 70 and best_location_percentage >= 50:
         bucket = 'NEARBY'
     else:
         bucket = 'NO_MATCH'
@@ -527,12 +592,33 @@ def run_matching_logic(job_id=None):
             trainees = trainees.filter(batch_name=job.batch_name)
             logger.info(f"  Filtered to batch '{job.batch_name}': {trainees.count()} trainees")
 
+        # Exclude trainees who have PENDING or ACCEPTED consent for OTHER jobs
+        consent_locked_trainee_ids = set(
+            Consent.objects.filter(
+                status__in=['PENDING', 'ACCEPTED']
+            ).exclude(
+                job=job
+            ).values_list('trainee_id', flat=True)
+        )
+        if consent_locked_trainee_ids:
+            trainees = trainees.exclude(id__in=consent_locked_trainee_ids)
+            logger.info(f"  Excluded {len(consent_locked_trainee_ids)} consent-locked trainees")
+
         if not trainees.exists():
             logger.info(f"  No trainees found in this batch.")
             continue
 
         job_locations = [loc.strip() for loc in job.location.split(',') if loc.strip()] if job.location else []
         job_tech_skills = [skill.strip() for skill in job.skills.split(',') if skill.strip()] if job.skills else []
+
+        # Also get normalized/expanded skills for broader matching
+        normalized_skills = get_normalized_job_skills(job)
+        # Merge: use original skills as primary, add normalized ones that aren't duplicates
+        all_skills_lower = {s.lower() for s in job_tech_skills}
+        for ns in normalized_skills:
+            if ns.lower() not in all_skills_lower:
+                job_tech_skills.append(ns)
+                all_skills_lower.add(ns.lower())
 
         if not job_tech_skills:
             logger.warning(f"  Job has no skills defined. Skipping.")

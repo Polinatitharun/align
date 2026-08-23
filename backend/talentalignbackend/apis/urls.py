@@ -18,7 +18,15 @@ from .views import (
     LoginView,
     AddUserView,
     UploadAddExcelView,
+    DownloadPreferredLocationsTemplateView,
     UploadPreferredLocationsView,
+    ConsentSendView,
+    ConsentRespondView,
+    ConsentListView,
+    ConsentTraineeListView,
+    ConsentOverrideView,
+    BulkConsentUploadView,
+    ParseJDView,
     UserListView,
     UploadBulkDeleteUsersView,
     UploadBulkActivateUsersView,
@@ -185,9 +193,21 @@ urlpatterns = [
     path('course-owner/jobs/<int:job_id>/add-recommendations/', CourseOwnerAddRecommendationsView.as_view(), name='course-owner-add-recommendations'),
     path('course-owner/jobs/<int:job_id>/available-trainees/', CourseOwnerAvailableTraineesView.as_view(), name='course-owner-available-trainees'),
 
-
+    # Preferred locations
+    path('users/download-preferred-locations-template/', DownloadPreferredLocationsTemplateView.as_view(), name='download-preferred-locations-template'),
     path('users/upload-preferred-locations/', UploadPreferredLocationsView.as_view(), name='upload-preferred-locations'),
 
+    # Consent workflow
+    path('consent/send/', ConsentSendView.as_view(), name='consent-send'),
+    path('consent/respond/', ConsentRespondView.as_view(), name='consent-respond'),
+    path('consent/', ConsentListView.as_view(), name='consent-list'),
+    path('consent/trainee/', ConsentTraineeListView.as_view(), name='consent-trainee'),
+    path('consent/override/', ConsentOverrideView.as_view(), name='consent-override'),
+    path('consent/bulk-upload/', BulkConsentUploadView.as_view(), name='consent-bulk-upload'),
+
+    # JD Parser & Bulk Status
+    path('jobs/parse-jd/', ParseJDView.as_view(), name='parse-jd'),
+    path('jobs/bulk-status/', BulkStatusUpdateView.as_view(), name='bulk-status'),
 
     path('reports/generate/', GenerateReportView.as_view(), name='generate-report'),
 ]

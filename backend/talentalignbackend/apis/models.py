@@ -69,6 +69,7 @@ class Job(models.Model):
     spoc_name = models.CharField(max_length=150, null=True, blank=True, help_text="Project SPOC Name")
     spoc_emp_id = models.CharField(max_length=50, null=True, blank=True, help_text="Project SPOC Emp ID")
     rmg_head = models.CharField(max_length=150, null=True, blank=True, help_text="RMG Head")
+    rgs_id = models.CharField(max_length=100, null=True, blank=True, unique=True, help_text="RGS ID - unique requirement identifier")
 
     # System fields
     filled = models.IntegerField(default=0)
@@ -127,6 +128,8 @@ class UserInfo(models.Model):
     preferred_location_1 = models.CharField(max_length=255, null=True, blank=True)
     preferred_location_2 = models.CharField(max_length=255, null=True, blank=True)
     preferred_location_3 = models.CharField(max_length=255, null=True, blank=True)
+    preferred_state = models.CharField(max_length=255, null=True, blank=True)
+    preferred_city = models.CharField(max_length=255, null=True, blank=True)
 
 class ProfileRecord(models.Model):
     id = models.BigAutoField(primary_key=True)
@@ -296,6 +299,8 @@ class Notification(models.Model):
         ('feedback_submitted', 'Interview Feedback Submitted'),
         ('backup_restore', 'Backup/Restore'),
         ('recommendation_requested', 'Recommendation Requested'),
+        ('consent_sent', 'Consent Sent'),
+        ('consent_responded', 'Consent Responded'),
     ]
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
@@ -328,3 +333,27 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} at {self.timestamp}"
+
+
+class Consent(models.Model):
+    CONSENT_STATUS = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('DECLINED', 'Declined'),
+    ]
+    trainee = models.ForeignKey('ProfileRecord', on_delete=models.CASCADE, related_name='consents')
+    job = models.ForeignKey('Job', on_delete=models.CASCADE, related_name='consents')
+    status = models.CharField(max_length=20, choices=CONSENT_STATUS, default='PENDING')
+    remarks = models.TextField(blank=True, null=True)
+    sent_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='sent_consents')
+    sent_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('trainee', 'job')
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        trainee_name = self.trainee.userInfo.name if self.trainee.userInfo else f'Trainee#{self.trainee.id}'
+        return f"Consent: {trainee_name} -> {self.job.project_name} ({self.status})"

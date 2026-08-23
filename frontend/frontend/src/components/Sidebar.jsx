@@ -2,8 +2,13 @@ import React, { useState, useEffect } from "react";
 import { LogOut, Network, ChevronRight, ChevronLeft } from "lucide-react";
 import "./styles/Sidebar.css";
 
-function Sidebar({ items, activeTab, onTabChange, userData, onLogout }) {
+function Sidebar({ items = [], activeTab, onTabChange, setActiveTab, userData, onLogout }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const handleTabSelect = onTabChange || setActiveTab || (() => {});
+
+  const navItems = Array.isArray(items) && items.length > 0 ? items : [
+    { id: 'dashboard', label: 'Dashboard', icon: <Network size={18} /> }
+  ];
 
   useEffect(() => {
     if (isCollapsed) {
@@ -34,11 +39,11 @@ function Sidebar({ items, activeTab, onTabChange, userData, onLogout }) {
       </div>
 
       <nav className="sidebar-nav">
-        {items.map((item) => (
+        {navItems.map((item) => (
           <div
             key={item.id}
             className={`sidebar-nav-item ${activeTab === item.id ? "active" : ""}`}
-            onClick={() => onTabChange(item.id)}
+            onClick={() => handleTabSelect(item.id)}
           >
             <div className="nav-item-content">
               <span className="nav-icon">{item.icon}</span>

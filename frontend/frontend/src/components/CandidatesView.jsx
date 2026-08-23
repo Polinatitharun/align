@@ -13,9 +13,11 @@ import {
   Unlock, 
   UserX,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  MapPin
 } from 'lucide-react';
 import DataTable from './DataTable';
+import BulkStatusModal from './BulkStatusModal';
 import api from '../api/axios';
 import { toast } from 'sonner';
 
@@ -28,12 +30,15 @@ const CandidatesView = ({
   onCancelSelected,
   onUnmapTrainee,
   onRefresh,
-  onRequestDownload
+  onRequestDownload,
+  onOpenPrefLoc
 }) => {
   const [statusFilter, setStatusFilter] = useState('all'); // all | selected | locked | rejected | unassigned
   const [jobFilter, setJobFilter] = useState('');
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
 
   const fetchLocksData = useCallback(async () => {
     setLoading(true);
@@ -98,10 +103,10 @@ const CandidatesView = ({
           name: trainee.name || 'Unknown Candidate',
           email: trainee.email || `${traineeId}@tcs.com`,
           jobId: String(trainee.projectId || ''),
-          jobTitle: trainee.projectName || 'Direct Project Assignment',
+          jobTitle: trainee.projectName || 'Direct Mapped',
           status: 'selected',
-          source: 'Direct Assignment',
-          interviewer: 'Direct HR Placement',
+          source: 'Direct Mapping',
+          interviewer: 'HR Direct',
           interviewDate: null,
           skills: trainee.skills || [],
           score: trainee.score ?? 0,
@@ -112,17 +117,17 @@ const CandidatesView = ({
           rawTrainee: trainee,
         });
       } else if (!processedUserIds.has(traineeId) && !trainee.isMapped) {
-        // Unassigned / Open pool trainees
+        // 3. Unassigned Trainees
         records.push({
-          id: `trainee-${traineeId}`,
+          id: `unassigned-${traineeId}`,
           lockId: null,
           traineeId: traineeId,
           name: trainee.name || 'Unknown Candidate',
           email: trainee.email || `${traineeId}@tcs.com`,
           jobId: '',
-          jobTitle: 'Unassigned',
+          jobTitle: 'Not Assigned',
           status: 'unassigned',
-          source: 'Talent Pool',
+          source: 'Pool',
           interviewer: '—',
           interviewDate: null,
           skills: trainee.skills || [],
@@ -155,6 +160,11 @@ const CandidatesView = ({
     });
   }, [unifiedCandidates, statusFilter, jobFilter]);
 
+  // Selected locks for bulk status modal
+  const selectedCandidatesForBulk = useMemo(() => {
+    return unifiedCandidates.filter(c => selectedIds.includes(c.id));
+  }, [unifiedCandidates, selectedIds]);
+
   // Counts for tabs
   const counts = useMemo(() => ({
     all: unifiedCandidates.length,
@@ -166,6 +176,36 @@ const CandidatesView = ({
 
   // Excel Table Columns
   const columns = useMemo(() => [
+    {
+      key: 'select',
+      label: (
+        <input 
+          type="checkbox"
+          checked={filteredData.length > 0 && selectedIds.length === filteredData.length}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedIds(filteredData.map(c => c.id));
+            } else {
+              setSelectedIds([]);
+            }
+          }}
+          title="Select All"
+        />
+      ),
+      render: (row) => (
+        <input 
+          type="checkbox"
+          checked={selectedIds.includes(row.id)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedIds(prev => [...prev, row.id]);
+            } else {
+              setSelectedIds(prev => prev.filter(id => id !== row.id));
+            }
+          }}
+        />
+      ),
+    },
     {
       key: 'name',
       label: 'Candidate Name',
@@ -202,51 +242,90 @@ const CandidatesView = ({
         { label: 'Unassigned', value: 'unassigned' },
       ],
       render: (row) => {
+        let badgeClass = 'status-unassigned';
+        let label = 'Unassigned';
+
         if (row.status === 'selected') {
-          return <span className="status-badge status-selected"><CheckCircle size={12} /> Selected</span>;
+          badgeClass = 'status-selected';
+          label = 'Selected';
+        } else if (row.status === 'locked') {
+          badgeClass = 'status-locked';
+          label = 'Locked for Interview';
+        } else if (row.status === 'rejected') {
+          badgeClass = 'status-rejected';
+          label = 'Rejected';
         }
-        if (row.status === 'locked') {
-          return <span className="status-badge status-locked"><Lock size={12} /> Locked</span>;
-        }
-        if (row.status === 'rejected') {
-          return <span className="status-badge status-rejected"><XCircle size={12} /> Rejected</span>;
-        }
-        return <span className="status-badge status-inactive">Unassigned Pool</span>;
+
+        return (
+          <span className={`status-badge ${badgeClass}`}>
+            {label}
+          </span>
+        );
       },
     },
     {
       key: 'source',
-      label: 'Source',
+      label: 'Allocation Source',
       sortable: true,
       filterable: true,
+      filterOptions: [
+        { label: 'Interview', value: 'Interview' },
+        { label: 'Direct Mapping', value: 'Direct Mapping' },
+        { label: 'Pool', value: 'Pool' },
+      ],
       render: (row) => (
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+        <span className={`source-badge source-${row.source === 'Interview' ? 'interview' : 'direct'}`}>
           {row.source}
         </span>
       ),
     },
     {
       key: 'interviewer',
-      label: 'Assigned Interviewer',
+      label: 'Interviewer',
       sortable: true,
-      filterable: true,
       render: (row) => row.interviewer || '—',
     },
     {
       key: 'interviewDate',
-      label: 'Interview Date',
+      label: 'Interview Schedule',
       sortable: true,
-      render: (row) => row.interviewDate ? new Date(row.interviewDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—',
+      render: (row) => row.interviewDate ? new Date(row.interviewDate).toLocaleString() : '—',
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      sortable: true,
+      filterable: true,
+      render: (row) => row.location || '—',
+    },
+    {
+      key: 'skills',
+      label: 'Key Skills',
+      render: (row) => {
+        const list = Array.isArray(row.skills) ? row.skills : [];
+        if (list.length === 0) return '—';
+        return (
+          <div className="skills-cell" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem', maxWidth: '240px' }}>
+            {list.slice(0, 3).map((s, i) => (
+              <span key={i} className="skill-tag-small">{s}</span>
+            ))}
+            {list.length > 3 && (
+              <span className="more-skills">+{list.length - 3}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'score',
-      label: 'Avg Score',
+      label: 'Score',
       sortable: true,
+      sorter: (a, b) => (a.score || 0) - (b.score || 0),
       render: (row) => (
-        <span style={{ 
-          fontWeight: 700, 
-          fontSize: '0.78rem', 
-          color: row.score >= 75 ? 'var(--success)' : row.score >= 50 ? 'var(--warning)' : 'var(--danger)' 
+        <span className="badge" style={{ 
+          background: row.score >= 80 ? 'rgba(16,185,129,0.1)' : row.score >= 60 ? 'rgba(59,130,246,0.1)' : 'rgba(239,68,68,0.1)',
+          color: row.score >= 80 ? '#10b981' : row.score >= 60 ? '#3b82f6' : '#ef4444',
+          fontWeight: 700
         }}>
           {row.score > 0 ? `${row.score}%` : '—'}
         </span>
@@ -304,7 +383,7 @@ const CandidatesView = ({
         </div>
       ),
     },
-  ], [onViewTrainee, onUnlockInterview, onCancelSelected, onUnmapTrainee]);
+  ], [filteredData, selectedIds, onViewTrainee, onUnlockInterview, onCancelSelected, onUnmapTrainee]);
 
   const handleRefresh = async () => {
     await fetchLocksData();
@@ -328,6 +407,18 @@ const CandidatesView = ({
         </div>
 
         <div className="page-context-actions">
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowBulkStatusModal(true)}
+              style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', fontWeight: 600 }}
+              title="Bulk update candidate statuses (Selected / Rejected)"
+            >
+              <CheckCircle size={14} />
+              <span>Bulk Update Status ({selectedIds.length})</span>
+            </button>
+          )}
           {onRequestDownload && (
             <button 
               type="button" 
@@ -337,6 +428,17 @@ const CandidatesView = ({
             >
               <Download size={14} />
               <span>Export Report</span>
+            </button>
+          )}
+          {onOpenPrefLoc && (
+            <button 
+              type="button" 
+              className="btn btn-secondary btn-sm"
+              onClick={onOpenPrefLoc}
+              title="Upload preferred locations with state/city for trainees (Excel)"
+            >
+              <MapPin size={14} />
+              <span>Upload Locations</span>
             </button>
           )}
           <button 
@@ -355,7 +457,7 @@ const CandidatesView = ({
       {/* Unified Status Filter Tabs */}
       <div className="nav-tab-strip">
         <button 
-          type="button"
+          type="button" 
           className={`nav-tab ${statusFilter === 'all' ? 'active' : ''}`}
           onClick={() => setStatusFilter('all')}
         >
@@ -365,7 +467,7 @@ const CandidatesView = ({
         </button>
 
         <button 
-          type="button"
+          type="button" 
           className={`nav-tab ${statusFilter === 'selected' ? 'active' : ''}`}
           onClick={() => setStatusFilter('selected')}
         >
@@ -375,7 +477,7 @@ const CandidatesView = ({
         </button>
 
         <button 
-          type="button"
+          type="button" 
           className={`nav-tab ${statusFilter === 'locked' ? 'active' : ''}`}
           onClick={() => setStatusFilter('locked')}
         >
@@ -385,7 +487,7 @@ const CandidatesView = ({
         </button>
 
         <button 
-          type="button"
+          type="button" 
           className={`nav-tab ${statusFilter === 'rejected' ? 'active' : ''}`}
           onClick={() => setStatusFilter('rejected')}
         >
@@ -395,7 +497,7 @@ const CandidatesView = ({
         </button>
 
         <button 
-          type="button"
+          type="button" 
           className={`nav-tab ${statusFilter === 'unassigned' ? 'active' : ''}`}
           onClick={() => setStatusFilter('unassigned')}
         >
@@ -445,6 +547,16 @@ const CandidatesView = ({
         pageSizeOptions={[10, 25, 50, 100]}
         emptyMessage="No candidates match your current filter criteria."
         searchPlaceholder="Search candidates by name, email, skills..."
+      />
+
+      <BulkStatusModal
+        isOpen={showBulkStatusModal}
+        onClose={() => setShowBulkStatusModal(false)}
+        selectedLocks={selectedCandidatesForBulk}
+        onSuccess={() => {
+          setSelectedIds([]);
+          handleRefresh();
+        }}
       />
     </div>
   );
