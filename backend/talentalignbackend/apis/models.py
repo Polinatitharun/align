@@ -232,7 +232,7 @@ class InterviewLock(models.Model):
     job = models.ForeignKey('Job', on_delete=models.CASCADE, related_name='interview_locks')
     locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='locked_interviews')
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_interviews')
-    interview_datetime = models.DateTimeField()
+    interview_datetime = models.DateTimeField(null=True, blank=True)
     comments = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='locked')
     created_at = models.DateTimeField(auto_now_add=True)

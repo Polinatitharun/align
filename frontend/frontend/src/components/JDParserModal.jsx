@@ -9,6 +9,17 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
   const [saving, setSaving] = useState(false);
   const [parsedData, setParsedData] = useState(null);
 
+  const resetAndClose = () => {
+    setRawText('');
+    setParsedData(null);
+    onClose();
+  };
+
+  const handleClose = () => {
+    if (parsing || saving) return;
+    resetAndClose();
+  };
+
   if (!isOpen) return null;
 
   const handleParse = async () => {
@@ -82,7 +93,7 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
       if (onSuccess) {
         onSuccess(res.data);
       }
-      onClose();
+      resetAndClose();
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.error || 'Failed to create job requirement.');
@@ -149,7 +160,7 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               background: 'transparent',
               border: 'none',

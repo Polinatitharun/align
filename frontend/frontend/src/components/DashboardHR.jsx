@@ -66,6 +66,7 @@ function DashboardHR({ userData, onLogout }) {
   const [assignedToId, setAssignedToId] = useState('');
   const [interviewers, setInterviewers] = useState([]);
   const [interviewLocks, setInterviewLocks] = useState([]);
+  const [selectedLockIds, setSelectedLockIds] = useState([]);
   const [lockStats, setLockStats] = useState(null);
   const [lockFilter, setLockFilter] = useState({ status: '', job: '' });
   const [selectedCandidates, setSelectedCandidates] = useState([]);
@@ -73,6 +74,8 @@ function DashboardHR({ userData, onLogout }) {
   const [viewingFeedback, setViewingFeedback] = useState(null);
   const [showJobDetailsModal, setShowJobDetailsModal] = useState(false);
   const [jobDetailsJob, setJobDetailsJob] = useState(null);
+  const [jobDetailsLoading, setJobDetailsLoading] = useState(false);
+  const [jobDetailsError, setJobDetailsError] = useState(null);
   const [jobDetailsTab, setJobDetailsTab] = useState('overview');
   const [mappedTrainees, setMappedTrainees] = useState([]);
   const [rejectedTrainees, setRejectedTrainees] = useState([]);
@@ -226,6 +229,7 @@ const [workbookFilter, setWorkbookFilter] = useState('');
   // ==================== API Calls ====================
   const jobAPI = {
     getAllJobs: async () => (await api.get(`/jobs/${getBatchParam()}`)).data,
+    getJobById: async (id) => (await api.get(`/jobs/${id}/`)).data,
     createJob: async (jobData) => (await api.post('/jobs/', { ...jobData, batch_name: selectedBatch })).data,
     updateJob: async (id, jobData) => (await api.put(`/jobs/${id}/`, jobData)).data,
     deleteJob: async (id) => (await api.delete(`/jobs/${id}/`)).data,
@@ -1229,9 +1233,19 @@ const renderWorkbook = () => {
     }
   };
   const fetchTraineeMatches = async (traineeId) => {
+    const profileId = typeof traineeId === 'object'
+      ? traineeId?.profile_id || traineeId?.id || traineeId?.pk || traineeId?.trainee_id || traineeId?.traineeId || traineeId?.profile?.id
+      : traineeId;
+    if (!profileId || !Number.isFinite(Number(profileId))) {
+      setTraineeMatches(null);
+      setTraineeMatchesLoading(false);
+      toast.error('Candidate profile ID is missing');
+      return;
+    }
     setTraineeMatchesLoading(true);
+    setTraineeMatches(null);
     try {
-      setTraineeMatches((await api.get(`/trainee-matches/${traineeId}/${getBatchParam()}`)).data);
+      setTraineeMatches((await api.get(`/trainee-matches/${encodeURIComponent(profileId)}/${getBatchParam()}`)).data);
     } catch { toast.error('Failed to fetch trainee matches'); }
     finally { setTraineeMatchesLoading(false); }
   };
@@ -1243,15 +1257,49 @@ const renderWorkbook = () => {
     catch { toast.error('Failed to fetch rejected trainees'); }
   };
 
-  const handleViewJobDetails = (job) => {
-    setJobDetailsJob(job);
+  const handleViewJobDetails = async (job) => {
+    setJobDetailsJob(normalizeJobRecord(job));
     setJobDetailsTab('overview');
-    fetchMappedForJob(job.id);
-    fetchRejectedForJob(job.id);
+    setMappedTrainees([]);
+    setRejectedTrainees([]);
+    setJobDetailsError(null);
     setShowJobDetailsModal(true);
+    setJobDetailsLoading(true);
+    try {
+      const detailedJob = await jobAPI.getJobById(job.id);
+      setJobDetailsJob(normalizeJobRecord(detailedJob));
+      await Promise.all([fetchMappedForJob(job.id), fetchRejectedForJob(job.id)]);
+    } catch (err) {
+      setJobDetailsError('Unable to load the complete job details. Please try again.');
+      toast.error('Failed to fetch job details');
+    } finally {
+      setJobDetailsLoading(false);
+    }
   };
-  const handleViewTraineeProfile = (trainee) => {
-    setSelectedTrainee(trainee); fetchTraineeMatches(trainee.id);
+  const handleViewTraineeProfile = async (trainee) => {
+    const profileId = typeof trainee === 'object'
+      ? trainee?.profile_id || trainee?.id || trainee?.pk || trainee?.trainee_id || trainee?.traineeId || trainee?.profile?.id
+      : trainee;
+    if (!profileId || !Number.isInteger(Number(profileId)) || Number(profileId) <= 0) {
+      toast.error('Candidate profile ID is missing');
+      return;
+    }
+    setSelectedTrainee(trainee);
+    try {
+      const userId = typeof trainee === 'object' ? trainee?.userId || trainee?.user_id : null;
+      if (userId) {
+        const response = await api.get(`/api/profiles/${encodeURIComponent(userId)}/`);
+        setSelectedTrainee(normalizeTraineeRecord(response.data));
+      } else {
+        const profilesResponse = await api.get('/api/profiles/');
+        const profile = (Array.isArray(profilesResponse.data) ? profilesResponse.data : []).find((item) => Number(item.id) === Number(profileId));
+        if (!profile) throw new Error('Profile not found');
+        setSelectedTrainee(normalizeTraineeRecord(profile));
+      }
+    } catch {
+      toast.error('Could not load the complete candidate profile');
+    }
+    await fetchTraineeMatches(profileId);
   };
 
   const toggleJobStatus = async (jobId) => {
@@ -1369,11 +1417,63 @@ const renderWorkbook = () => {
 
   const fetchSelectedCandidates = async () => {
     try {
-      const [locksRes, traineesRes] = await Promise.all([api.get(`/interview-locks/?status=selected${selectedBatch ? `&batch=${selectedBatch}` : ''}`), Promise.resolve(allTrainees)]);
+      const locksRes = await api.get(`/interview-locks/?status=selected${selectedBatch ? `&batch=${selectedBatch}` : ''}`);
       const interviewSelected = locksRes.data;
-      const directMapped = traineesRes.filter(t => t.isMapped);
-      setSelectedCandidates([...interviewSelected.map(lock => ({ ...lock, source: 'Interview', trainee_id: lock.trainee_id, name: lock.trainee_name, projectName: lock.job_title, lock_id: lock.id })), ...directMapped.map(t => ({ trainee_id: t.userId, trainee_name: t.name, job_title: t.projectName, assigned_to_name: 'HR Direct', interview_datetime: null, feedback: null, source: 'Direct' }))]);
+      setSelectedCandidates(interviewSelected.map(lock => ({ ...lock, source: 'Interview', trainee_id: lock.trainee_id, name: lock.trainee_name, projectName: lock.job_title, lock_id: lock.id })));
     } catch { toast.error('Failed to fetch selected candidates'); }
+  };
+
+  const handleLockStatusChange = async (lock, newStatus) => {
+    try {
+      await api.post('/jobs/bulk-status-update/', { locks: [lock.id], status: newStatus });
+      toast.success(`Candidate marked ${newStatus}`);
+      await Promise.all([fetchInterviewLocks(), fetchSelectedCandidates(), fetchRejectedLocks(), fetchJobs()]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || `Failed to mark candidate ${newStatus}`);
+    }
+  };
+
+  const handleSelectedLockStatusChange = async (newStatus) => {
+    if (selectedLockIds.length === 0) {
+      toast.error('Select at least one locked candidate');
+      return;
+    }
+    try {
+      await api.post('/jobs/bulk-status-update/', { locks: selectedLockIds, status: newStatus });
+      setSelectedLockIds([]);
+      toast.success(`${selectedLockIds.length} candidate(s) marked ${newStatus}`);
+      await Promise.all([fetchInterviewLocks(), fetchSelectedCandidates(), fetchRejectedLocks(), fetchJobs()]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || `Failed to mark candidates ${newStatus}`);
+    }
+  };
+
+  const handleViewLockedProfile = async (lock) => {
+    const rawProfileId = lock?.profile_id || lock?.trainee_id || lock?.trainee?.id || lock?.trainee?.pk || (typeof lock?.trainee === 'number' || typeof lock?.trainee === 'string' ? lock.trainee : null);
+    const profileId = Number(rawProfileId);
+    if (!Number.isInteger(profileId) || profileId <= 0) {
+      toast.error('Candidate profile ID is missing');
+      return;
+    }
+    let trainee = allTrainees.find((item) => Number(item.id) === profileId);
+    if (trainee) {
+      setSelectedTrainee(trainee);
+    }
+    try {
+      if (!trainee) {
+        const profilesResponse = await api.get('/api/profiles/');
+        const profile = (Array.isArray(profilesResponse.data) ? profilesResponse.data : []).find((item) => Number(item.id) === profileId);
+        if (!profile) throw new Error('Profile not found');
+        trainee = normalizeTraineeRecord(profile);
+      } else {
+        const response = await api.get(`/api/profiles/${encodeURIComponent(trainee.userId)}/`);
+        trainee = normalizeTraineeRecord(response.data);
+      }
+      setSelectedTrainee(trainee);
+      await fetchTraineeMatches(profileId);
+    } catch {
+      toast.error('Could not load the complete candidate profile');
+    }
   };
 
   const fetchRejectedLocks = async () => { try { setRejectedLocks((await api.get(`/interview-locks/?status=rejected${selectedBatch ? `&batch=${selectedBatch}` : ''}`)).data); } catch { toast.error('Failed to fetch rejected candidates'); } };
@@ -2962,9 +3062,25 @@ const renderDashboard = () => {
   };
 
 
-  const renderTraineeModal = () => { if (!selectedTrainee) return null; const traineeData = selectedTrainee.traineeData || selectedTrainee; const userInfo = traineeData.userInfo || {}; return (<div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}><div className="modal-header"><div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name}</h2></div><button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button></div><div className="modal-body"><div className="profile-header"><div className="profile-avatar">{selectedTrainee.name.charAt(0)}</div><div className="profile-info"><h3>{userInfo.name || selectedTrainee.name}</h3><div className="profile-meta"><span><MapPin size={16} /> {userInfo.location || selectedTrainee.location}</span><span><Mail size={16} /> {selectedTrainee.email}</span><span><Target size={16} /> Score: {userInfo.averageScore || selectedTrainee.score}%</span></div></div></div><div className="skills-section"><h4>Strengths</h4><div className="skills-list">{traineeData.strengths?.map((s, i) => <span key={i} className="skill-tag tech-tag">{s.courseName} ({s.avgScore}%)</span>) || <span className="no-data">None</span>}</div><h4>Weaknesses</h4><div className="skills-list">{traineeData.weaknesses?.map((w, i) => <span key={i} className="skill-tag soft-tag">{w.courseName} ({w.avgScore}%)</span>) || <span className="no-data">None</span>}</div></div></div><div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button></div></div></div>); };
+  const renderTraineeModal = () => { if (!selectedTrainee) return null; const traineeData = selectedTrainee.traineeData || selectedTrainee; const userInfo = traineeData.userInfo || {}; const matchBuckets = ['perfect_match', 'skills_only', 'location_only', 'nearby', 'no_match']; const strengths = Array.isArray(traineeData.strengths) ? traineeData.strengths : []; const weaknesses = Array.isArray(traineeData.weaknesses) ? traineeData.weaknesses : []; const displayScore = userInfo.averageScore ?? selectedTrainee.score ?? '—'; return (<div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}><div className="modal-header"><div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h2></div><button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button></div><div className="modal-body"><div className="profile-header"><div className="profile-avatar">{(userInfo.name || selectedTrainee.name || '?').charAt(0)}</div><div className="profile-info"><h3>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h3><div className="profile-meta"><span><MapPin size={16} /> {userInfo.location || selectedTrainee.location || '—'}</span><span><Mail size={16} /> {userInfo.email || selectedTrainee.email || '—'}</span><span><Target size={16} /> Score: {displayScore}{displayScore === '—' ? '' : '%'}</span></div></div></div><div className="skills-section"><h4>Strengths</h4><div className="skills-list">{strengths.length ? strengths.map((s, i) => <span key={i} className="skill-tag tech-tag">{s.courseName} ({s.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div><h4>Weaknesses</h4><div className="skills-list">{weaknesses.length ? weaknesses.map((w, i) => <span key={i} className="skill-tag soft-tag">{w.courseName} ({w.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div></div>{traineeMatchesLoading ? <p className="no-data">Loading job matches...</p> : traineeMatches && <div className="skills-section"><h4>Job Matches ({traineeMatches.total_matches ?? 0})</h4><div className="skills-list">{matchBuckets.flatMap((bucket) => (traineeMatches[bucket] || []).map((match, index) => <span key={`${bucket}-${index}`} className="skill-tag tech-tag">{match.job_title || match.project_name || match.job_name || bucket.replace('_', ' ')}</span>))}</div>{!matchBuckets.some((bucket) => (traineeMatches[bucket] || []).length) && <span className="no-data">No matching jobs found.</span>}</div>}</div><div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button></div></div></div>); };
 
-  const renderInterviewLocks = () => (<div className="interview-locks"><div className="section-header"><div className="header-title"><h2><Lock size={24} /> Interview Locks</h2></div><div className="header-actions"><button className="btn btn-secondary" onClick={() => requestDownload('lock-report', {})}><Download size={18} /> All Locks</button></div></div>{lockStats && (<div className="stats-grid small"><div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div><div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div><div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div></div>)}<div className="table-container"><table className="data-table"><thead><tr><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Date/Time</th><th>Status</th><th>Actions</th></tr></thead><tbody>{interviewLocks.map(lock => (<tr key={lock.id}><td>{lock.trainee_name}</td><td>{lock.job_title}</td><td>{lock.assigned_to_name || '-'}</td><td>{new Date(lock.interview_datetime).toLocaleString()}</td><td><span className={`status-badge status-${lock.status}`}>{lock.status}</span></td><td><button className="btn-icon btn-warning" onClick={() => handleUnlockInterview(lock)}><RefreshCw size={16} /></button></td></tr>))}</tbody></table></div></div>);
+  const renderInterviewLocks = () => {
+    const lockedRows = interviewLocks.filter((lock) => lock.status === 'locked');
+    const allLockedSelected = lockedRows.length > 0 && lockedRows.every((lock) => selectedLockIds.includes(lock.id));
+    return (
+      <div className="interview-locks">
+        <div className="section-header">
+          <div className="header-title"><h2><Lock size={24} /> Interview Locks</h2></div>
+          <div className="header-actions">
+            {selectedLockIds.length > 0 && <><button className="btn btn-success" onClick={() => handleSelectedLockStatusChange('selected')}><Check size={16} /> Mark Selected</button><button className="btn btn-danger" onClick={() => handleSelectedLockStatusChange('rejected')}><X size={16} /> Mark Rejected</button></>}
+            <button className="btn btn-secondary" onClick={() => requestDownload('lock-report', {})}><Download size={18} /> All Locks</button>
+          </div>
+        </div>
+        {lockStats && (<div className="stats-grid small"><div className="stat-card"><div className="stat-icon"><Lock size={20} /></div><div className="stat-content"><h3>Locked</h3><div className="stat-value">{lockStats.total_locked}</div></div></div><div className="stat-card"><div className="stat-icon"><CheckCircle size={20} /></div><div className="stat-content"><h3>Selected</h3><div className="stat-value">{lockStats.total_selected}</div></div></div><div className="stat-card"><div className="stat-icon"><XCircle size={20} /></div><div className="stat-content"><h3>Rejected</h3><div className="stat-value">{lockStats.total_rejected}</div></div></div></div>)}
+        <div className="table-container"><table className="data-table"><thead><tr><th><input type="checkbox" checked={allLockedSelected} onChange={(event) => setSelectedLockIds(event.target.checked ? lockedRows.map((lock) => lock.id) : [])} title="Select all locked candidates" /></th><th>Trainee</th><th>Job</th><th>Interviewer</th><th>Date/Time</th><th>Status</th><th>Actions</th></tr></thead><tbody>{interviewLocks.map(lock => (<tr key={lock.id}><td>{lock.status === 'locked' && <input type="checkbox" checked={selectedLockIds.includes(lock.id)} onChange={(event) => setSelectedLockIds((current) => event.target.checked ? [...current, lock.id] : current.filter((id) => id !== lock.id))} aria-label={`Select ${lock.trainee_name}`} />}</td><td>{lock.trainee_name}</td><td>{lock.job_title}</td><td>{lock.assigned_to_name || '-'}</td><td>{lock.interview_datetime ? new Date(lock.interview_datetime).toLocaleString() : 'Not scheduled'}</td><td><span className={`status-badge status-${lock.status}`}>{lock.status}</span></td><td><button className="btn-icon btn-icon-view" onClick={() => handleViewLockedProfile(lock)} title="View candidate profile"><Eye size={18} /></button>{lock.status === 'locked' && <><button className="btn-icon btn-success" onClick={() => handleLockStatusChange(lock, 'selected')} title="Mark selected"><Check size={16} /></button><button className="btn-icon btn-danger" onClick={() => handleLockStatusChange(lock, 'rejected')} title="Mark rejected"><X size={16} /></button><button className="btn-icon btn-warning" onClick={() => handleUnlockInterview(lock)} title="Unlock"><RefreshCw size={16} /></button></>}</td></tr>))}</tbody></table></div>
+      </div>
+    );
+  };
 
   const renderSelected = () => (<div className="selected-tab"><div className="section-header"><div className="header-title"><h2><CheckCircle size={24} /> Selected Candidates</h2></div><button className="btn btn-success" onClick={() => requestDownload('selected')}><Download size={18} /> Download All</button></div><div className="table-container"><table className="data-table"><thead><tr><th>Trainee</th><th>Project</th><th>Source</th><th>Actions</th></tr></thead><tbody>{selectedCandidates.map((c, idx) => (<tr key={c.trainee_id || idx}><td>{c.trainee_name}</td><td>{c.job_title || c.projectName}</td><td><span className={`source-badge source-${c.source === 'Interview' ? 'interview' : 'direct'}`}>{c.source}</span></td><td><button className="btn-icon btn-danger" onClick={() => { if (c.lock_id) handleCancelSelected(c.lock_id); else { const trainee = findTraineeByUserId(c.trainee_id); if (trainee && trainee.isMapped) handleUnmapFromProject(trainee); } }}><X size={16} /></button></td></tr>))}</tbody></table></div></div>);
 
@@ -3149,7 +3265,7 @@ const renderDashboard = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
       const trainee = findTraineeByUserId(getMatchTraineeUserId(m));
-      return !(trainee && trainee.isMapped && trainee.projectId === selectedJobForSearch?.id?.toString());
+      return !(trainee && trainee.isMapped);
     });
     const jobHasOpenings = selectedJobForSearch && getRemainingOpenings(selectedJobForSearch) > 0;
 
@@ -3290,6 +3406,12 @@ const renderDashboard = () => {
         label: 'Location Fit',
         sortable: true,
         render: (match) => `${Number(match.location_percentage || 0).toFixed(1)}%`,
+      },
+      {
+        key: 'matched_location',
+        label: 'Matched Location',
+        sortable: true,
+        render: (match) => match.matched_location || '—',
       },
       {
         key: 'preferred_locations',
@@ -4077,15 +4199,51 @@ const renderDashboard = () => {
             <button className={jobDetailsTab === 'rejected' ? 'active' : ''} onClick={() => setJobDetailsTab('rejected')}>Rejected ({rejectedTrainees.length})</button>
           </div>
           <div className="modal-body">
-            {jobDetailsTab === 'overview' && (
+            {jobDetailsLoading && <p className="no-data">Loading job details...</p>}
+            {!jobDetailsLoading && jobDetailsError && <p className="no-data">{jobDetailsError}</p>}
+            {!jobDetailsLoading && !jobDetailsError && jobDetailsTab === 'overview' && (
               <div className="job-details">
-                <p><strong>Department:</strong> {getJobDepartment(jobDetailsJob)}</p>
-                <p><strong>Location(s):</strong> {Array.isArray(jobDetailsJob.location) ? jobDetailsJob.location.join(', ') : jobDetailsJob.location}</p>
-                <p><strong>Openings:</strong> {jobDetailsJob.openings} ({jobDetailsJob.filled} filled)</p>
-                <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status}</span></p>
+                <div className="job-details-section">
+                  <h3>Requirement Details</h3>
+                  <p><strong>Project Name:</strong> {jobDetailsJob.project_name || '—'}</p>
+                  <p><strong>Demand ID:</strong> {jobDetailsJob.demand_id || '—'}</p>
+                  <p><strong>RGS ID:</strong> {jobDetailsJob.rgs_id || '—'}</p>
+                  <p><strong>Location(s):</strong> {jobDetailsJob.location || '—'}</p>
+                  <p><strong>Skills:</strong> {jobDetailsJob.skills || '—'}</p>
+                  <p><strong>Stream:</strong> {jobDetailsJob.stream || '—'}</p>
+                  <p><strong>Role:</strong> {jobDetailsJob.role || '—'}</p>
+                  <p><strong>Department / BG:</strong> {getJobDepartment(jobDetailsJob)}</p>
+                  <p><strong>ISU / HSU:</strong> {jobDetailsJob.isu_hsu || '—'}</p>
+                </div>
+                <div className="job-details-section">
+                  <h3>Ownership and Assignment</h3>
+                  <p><strong>Course:</strong> {jobDetailsJob.course_name || jobDetailsJob.course || '—'}</p>
+                  <p><strong>Batch:</strong> {jobDetailsJob.batch_name || '—'}</p>
+                  <p><strong>SPOC Name:</strong> {jobDetailsJob.spoc_name || '—'}</p>
+                  <p><strong>SPOC Employee ID:</strong> {jobDetailsJob.spoc_emp_id || '—'}</p>
+                  <p><strong>RMG Head:</strong> {jobDetailsJob.rmg_head || '—'}</p>
+                </div>
+                <div className="job-details-section">
+                  <h3>Pipeline and Visibility</h3>
+                  <p><strong>Openings:</strong> {jobDetailsJob.openings ?? 0}</p>
+                  <p><strong>Filled:</strong> {jobDetailsJob.filled ?? 0}</p>
+                  <p><strong>Remaining:</strong> {jobDetailsJob.remaining_count ?? Math.max(0, (jobDetailsJob.openings || 0) - (jobDetailsJob.filled || 0))}</p>
+                  <p><strong>Matches:</strong> {jobDetailsJob.matches ?? 0}</p>
+                  <p><strong>Status:</strong> <span className={`status-badge status-${jobDetailsJob.status}`}>{jobDetailsJob.status || '—'}</span></p>
+                  <p><strong>Recommendation Status:</strong> {jobDetailsJob.recommendation_status || '—'}</p>
+                  <p><strong>Visibility:</strong> {jobDetailsJob.is_public ? 'Public' : 'Private'}</p>
+                </div>
+                <div className="job-details-section">
+                  <h3>Record Information</h3>
+                  <p><strong>Job ID:</strong> {jobDetailsJob.id || '—'}</p>
+                  <p><strong>Created By:</strong> {jobDetailsJob.created_by || '—'}</p>
+                  <p><strong>Posted Date:</strong> {jobDetailsJob.postedDate || '—'}</p>
+                  <p><strong>Created At:</strong> {jobDetailsJob.created_at ? new Date(jobDetailsJob.created_at).toLocaleString() : '—'}</p>
+                  <p><strong>Updated At:</strong> {jobDetailsJob.updated_at ? new Date(jobDetailsJob.updated_at).toLocaleString() : '—'}</p>
+                </div>
               </div>
             )}
-            {jobDetailsTab === 'mapped' && (
+            {!jobDetailsLoading && !jobDetailsError && jobDetailsTab === 'mapped' && (
               <div>
                 {mappedTrainees.length === 0 ? (
                   <p className="no-data">No trainees mapped.</p>
@@ -4104,7 +4262,7 @@ const renderDashboard = () => {
                 )}
               </div>
             )}
-            {jobDetailsTab === 'rejected' && (
+            {!jobDetailsLoading && !jobDetailsError && jobDetailsTab === 'rejected' && (
               <div>
                 {rejectedTrainees.length === 0 ? (
                   <p className="no-data">No rejected trainees.</p>

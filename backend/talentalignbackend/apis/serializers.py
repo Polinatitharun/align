@@ -315,7 +315,7 @@ class InterviewLockSerializer(serializers.ModelSerializer):
 class InterviewLockCreateSerializer(serializers.Serializer):
     trainee_ids = serializers.ListField(child=serializers.CharField())
     job_id = serializers.IntegerField()
-    interview_datetime = serializers.DateTimeField()
+    interview_datetime = serializers.DateTimeField(required=False, allow_null=True)
     comments = serializers.CharField(required=False, allow_blank=True)
     assigned_to = serializers.IntegerField(required=False, allow_null=True)
 

@@ -65,7 +65,7 @@ const CandidatesView = ({
 
     // 1. Process Interview Locks
     (locks || []).forEach(lock => {
-      const traineeId = String(lock.trainee_id || '');
+      const traineeId = String(lock.trainee_id || lock.profile_id || lock.trainee?.id || lock.trainee?.pk || (typeof lock.trainee === 'number' || typeof lock.trainee === 'string' ? lock.trainee : '') || '');
       processedUserIds.add(traineeId);
       
       const traineeObj = (allTrainees || []).find(t => String(t.userId || t.id) === traineeId);
@@ -341,7 +341,9 @@ const CandidatesView = ({
             className="btn-icon" 
             title="View Candidate Profile"
             onClick={() => {
-              if (onViewTrainee && row.rawTrainee) {
+              if (onViewTrainee && row.status === 'locked' && row.rawLock) {
+                onViewTrainee(row.rawLock);
+              } else if (onViewTrainee && row.rawTrainee) {
                 onViewTrainee(row.rawTrainee);
               } else if (onViewTrainee) {
                 onViewTrainee({ id: row.traineeId, userId: row.traineeId, name: row.name, email: row.email, skills: row.skills, location: row.location });

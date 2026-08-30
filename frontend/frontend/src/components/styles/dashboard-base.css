@@ -150,6 +150,17 @@ body.sidebar-collapsed .dashboard-main {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.page-context-actions > button,
+.page-context-actions > .btn,
+.page-context-actions > .dropdown {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* ── Navigation Tabs vs Action Buttons Distinction ── */

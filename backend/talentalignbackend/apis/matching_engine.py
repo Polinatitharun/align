@@ -55,6 +55,7 @@ _trainee_embedding_cache = {}
 
 # ----------- Skill Normalization Mapping -----------
 SKILL_MAPPING = {
+    'ai': ['ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning', 'genai', 'generative ai'],
     'java': ['java', 'spring', 'spring boot', 'selenium with java', 'junit', 'hibernate', 'j2ee', 'core java', 'advanced java'],
     'python': ['python', 'django', 'flask', 'fastapi', 'selenium with python', 'pandas', 'numpy'],
     'javascript': ['javascript', 'node', 'nodejs', 'node.js', 'react', 'angular', 'vue', 'vue.js', 'typescript', 'jest', 'express', 'express.js', 'next.js', 'nextjs'],

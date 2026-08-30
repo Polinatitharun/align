@@ -975,8 +975,9 @@ class JobMatchListView(APIView):
             })
 
         global_excluded = InterviewLock.objects.filter(status__in=['locked','selected']).values_list('trainee_id', flat=True).distinct()
+        globally_mapped = ProfileRecord.objects.filter(userInfo__isMapped=True).values_list('id', flat=True)
         rejected_for_job = InterviewLock.objects.filter(job_id=job_id, status='rejected').values_list('trainee_id', flat=True).distinct()
-        all_excluded = list(global_excluded) + list(rejected_for_job)
+        all_excluded = set(global_excluded) | set(globally_mapped) | set(rejected_for_job)
         matches = Match.objects.filter(job_ref=job).exclude(trainee_ref_id__in=all_excluded)
 
         response = {
@@ -3901,12 +3902,22 @@ class ConsentRespondView(APIView):
         # On ACCEPT: candidate gets locked to that job
         if status_val == 'ACCEPTED':
             job = consent.job
-            if consent.trainee.userInfo:
+            if consent.trainee.userInfo and consent.trainee.userInfo.projectId == str(job.id):
                 u_info = consent.trainee.userInfo
-                u_info.isMapped = True
-                u_info.projectId = str(job.id)
-                u_info.projectName = job.project_name
+                u_info.isMapped = False
+                u_info.projectId = None
+                u_info.projectName = None
                 u_info.save()
+            InterviewLock.objects.update_or_create(
+                trainee=consent.trainee,
+                job=job,
+                defaults={
+                    'status': 'locked',
+                    'locked_by': consent.sent_by or request.user,
+                    'comments': f'Consent accepted: {remarks}',
+                    'interview_datetime': None,
+                },
+            )
 
             if consent.sent_by:
                 Notification.objects.create(
@@ -4039,12 +4050,23 @@ class ConsentOverrideView(APIView):
         consent.responded_at = timezone.now()
         consent.save()
 
-        if new_status == 'ACCEPTED' and consent.trainee.userInfo:
-            u_info = consent.trainee.userInfo
-            u_info.isMapped = True
-            u_info.projectId = str(consent.job.id)
-            u_info.projectName = consent.job.project_name
-            u_info.save()
+        if new_status == 'ACCEPTED':
+            if consent.trainee.userInfo and consent.trainee.userInfo.projectId == str(consent.job.id):
+                u_info = consent.trainee.userInfo
+                u_info.isMapped = False
+                u_info.projectId = None
+                u_info.projectName = None
+                u_info.save()
+            InterviewLock.objects.update_or_create(
+                trainee=consent.trainee,
+                job=consent.job,
+                defaults={
+                    'status': 'locked',
+                    'locked_by': request.user,
+                    'comments': f'Consent accepted by HR: {remarks}',
+                    'interview_datetime': None,
+                },
+            )
         elif new_status == 'DECLINED' and consent.trainee.userInfo:
             if consent.trainee.userInfo.projectId == str(consent.job.id):
                 u_info = consent.trainee.userInfo
@@ -4173,27 +4195,58 @@ Job text:
             if res.status_code == 200:
                 resp_str = res.json().get('response', '')
                 import json
-                parsed_data = json.loads(resp_str)
+                cleaned_response = resp_str.strip().replace('```json', '').replace('```', '').strip()
+                try:
+                    parsed_data = json.loads(cleaned_response)
+                except json.JSONDecodeError:
+                    json_start = cleaned_response.find('{')
+                    json_end = cleaned_response.rfind('}')
+                    if json_start >= 0 and json_end > json_start:
+                        parsed_data = json.loads(cleaned_response[json_start:json_end + 1])
         except Exception as e:
             logger.warning(f"Ollama JD parsing unavailable: {e}. Using rule-based fallback.")
 
+        import re
+        openings_match = re.search(r'(\d+)\s*(?:openings?|positions?|vacanc(?:y|ies)|seats?|developers?|engineers?)', raw_text, re.I)
+        explicit_openings = int(openings_match.group(1)) if openings_match else None
+        text_lower = raw_text.lower()
+        found_skills = []
+        found_stream = None
+        for stream_key, skills_list in SKILL_MAPPING.items():
+            for skill in sorted(skills_list, key=len, reverse=True):
+                if re.search(rf'(?<![a-z0-9]){re.escape(skill.lower())}(?![a-z0-9])', text_lower) and skill.title() not in found_skills:
+                    found_skills.append(skill.title())
+                    if not found_stream:
+                        found_stream = stream_key.title()
+        location_aliases = {
+            'Hyderabad': ['hyderabad'],
+            'Bangalore': ['bangalore', 'bengaluru', 'banglore', 'bangaluru'],
+            'Chennai': ['chennai'],
+            'Mumbai': ['mumbai'],
+            'Pune': ['pune'],
+            'Kolkata': ['kolkata'],
+            'Delhi': ['delhi'],
+            'Noida': ['noida'],
+            'Gurugram': ['gurugram', 'gurgaon'],
+            'Ahmedabad': ['ahmedabad'],
+            'Kochi': ['kochi'],
+            'Jaipur': ['jaipur'],
+            'Indore': ['indore'],
+            'Coimbatore': ['coimbatore'],
+        }
+        found_locations = [city for city, aliases in location_aliases.items() if any(alias in text_lower for alias in aliases)]
         if not parsed_data:
-            import re
-            openings_match = re.search(r'(\d+)\s*(?:openings?|positions?|vacanc(?:y|ies)|seats?|developers?|engineers?)', raw_text, re.I)
-            openings = int(openings_match.group(1)) if openings_match else 1
+            openings = explicit_openings or 1
 
             found_skills = []
             found_stream = None
             text_lower = raw_text.lower()
             for stream_key, skills_list in SKILL_MAPPING.items():
-                for sk in skills_list:
-                    if sk in text_lower and sk.title() not in found_skills:
+                for sk in sorted(skills_list, key=len, reverse=True):
+                    if re.search(rf'(?<![a-z0-9]){re.escape(sk.lower())}(?![a-z0-9])', text_lower) and sk.title() not in found_skills:
                         found_skills.append(sk.title())
                         if not found_stream:
                             found_stream = stream_key.title()
-
-            cities = ['Hyderabad', 'Bangalore', 'Chennai', 'Mumbai', 'Pune', 'Kolkata', 'Delhi', 'Noida', 'Gurugram', 'Ahmedabad', 'Kochi', 'Jaipur', 'Indore', 'Coimbatore']
-            found_locations = [c for c in cities if c.lower() in text_lower]
 
             loc_str = ', '.join(found_locations) if found_locations else 'Hyderabad'
             skills_str = ', '.join(found_skills) if found_skills else 'Java, Spring Boot'
@@ -4213,6 +4266,17 @@ Job text:
                 "spoc_emp_id": "",
                 "rgs_id": f"RGS-{int(time.time()) % 100000}"
             }
+
+        # Explicit facts in the JD are more reliable than an LLM default.
+        if explicit_openings is not None:
+            parsed_data['openings'] = explicit_openings
+        if found_locations:
+            parsed_data['location'] = ', '.join(found_locations)
+        if found_skills:
+            parsed_data['skills'] = ', '.join(found_skills)
+            parsed_data['stream'] = found_stream or parsed_data.get('stream') or 'Technology'
+        if parsed_data.get('openings') in (None, '', 0):
+            parsed_data['openings'] = 1
 
         return Response(parsed_data)
 
