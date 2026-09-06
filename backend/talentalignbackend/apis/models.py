@@ -70,6 +70,7 @@ class Job(models.Model):
     spoc_emp_id = models.CharField(max_length=50, null=True, blank=True, help_text="Project SPOC Emp ID")
     rmg_head = models.CharField(max_length=150, null=True, blank=True, help_text="RMG Head")
     rgs_id = models.CharField(max_length=100, null=True, blank=True, unique=True, help_text="RGS ID - unique requirement identifier")
+    shared_by = models.CharField(max_length=50, default='Direct BU', choices=[('Direct BU', 'Direct BU'), ('RMG', 'RMG')], null=True, blank=True, help_text="Shared By (Direct BU or RMG)")
 
     # System fields
     filled = models.IntegerField(default=0)

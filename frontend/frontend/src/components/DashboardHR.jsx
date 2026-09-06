@@ -77,13 +77,26 @@ function DashboardHR({ userData, onLogout }) {
   const [jobDetailsLoading, setJobDetailsLoading] = useState(false);
   const [jobDetailsError, setJobDetailsError] = useState(null);
   const [jobDetailsTab, setJobDetailsTab] = useState('overview');
+const ALLOWED_STREAMS = [
+  'AI Engineering',
+  'Angular',
+  'Devops',
+  'DotNet',
+  'PLSQL',
+  'SpringBoot',
+  'Test Automation',
+  'Cloud',
+  'Cyber Security',
+  'Data Engineering'
+];
+
   const [mappedTrainees, setMappedTrainees] = useState([]);
   const [rejectedTrainees, setRejectedTrainees] = useState([]);
   const [drill, setDrill] = useState(null); // { type, ...payload }
   const [newJob, setNewJob] = useState({
     project_name: '', location: '', demand_id: '', skills: '', openings: 1,
-    bg: '', isu_hsu: '', stream: '', role: '', spoc_name: '', spoc_emp_id: '',
-    rmg_head: '', course: '',
+    bg: '', isu_hsu: '', stream: 'SpringBoot', role: 'Developer', shared_by: 'Direct BU',
+    spoc_name: '', spoc_emp_id: '', rmg_head: '', course: '',
   });
   const [selectedJobForSearch, setSelectedJobForSearch] = useState(null);
   const [searchJobMatches, setSearchJobMatches] = useState(null);
@@ -1321,10 +1334,30 @@ const renderWorkbook = () => {
     if (!newJob.project_name || !newJob.location || !newJob.demand_id || !newJob.skills || !newJob.openings) { toast.error('Please fill all required fields'); return; }
     try {
       setLoading(true);
-      const jobData = { project_name: newJob.project_name, location: newJob.location, demand_id: newJob.demand_id, skills: newJob.skills, openings: newJob.openings, bg: newJob.bg, isu_hsu: newJob.isu_hsu, stream: newJob.stream, role: newJob.role, spoc_name: newJob.spoc_name, spoc_emp_id: newJob.spoc_emp_id, rmg_head: newJob.rmg_head, course: newJob.course || null, status: 'active', filled: 0, matches: 0, postedDate: new Date().toISOString().split('T')[0], batch_name: selectedBatch };
+      const jobData = {
+        project_name: newJob.project_name,
+        location: newJob.location,
+        demand_id: newJob.demand_id,
+        skills: newJob.skills,
+        openings: newJob.openings,
+        bg: newJob.bg,
+        isu_hsu: newJob.isu_hsu,
+        stream: newJob.stream || 'SpringBoot',
+        role: newJob.role || 'Developer',
+        shared_by: newJob.shared_by || 'Direct BU',
+        spoc_name: newJob.spoc_name,
+        spoc_emp_id: newJob.spoc_emp_id,
+        rmg_head: newJob.rmg_head,
+        course: newJob.course || null,
+        status: 'active',
+        filled: 0,
+        matches: 0,
+        postedDate: new Date().toISOString().split('T')[0],
+        batch_name: selectedBatch
+      };
       await jobAPI.createJob(jobData);
       await fetchJobs();
-      setNewJob({ project_name: '', location: '', demand_id: '', skills: '', openings: 1, bg: '', isu_hsu: '', stream: '', role: '', spoc_name: '', spoc_emp_id: '', rmg_head: '', course: '' });
+      setNewJob({ project_name: '', location: '', demand_id: '', skills: '', openings: 1, bg: '', isu_hsu: '', stream: 'SpringBoot', role: 'Developer', shared_by: 'Direct BU', spoc_name: '', spoc_emp_id: '', rmg_head: '', course: '' });
       setActiveTab('jobs'); toast.success('Job created');
     } catch { toast.error('Failed to create job'); } finally { setLoading(false); }
   };
@@ -1752,6 +1785,28 @@ const renderWorkbook = () => {
     }
   };
 
+  const downloadTalentAlignmentExcel = async () => {
+    try {
+      setLoading(true);
+      const batchParam = selectedBatch ? `?batch=${encodeURIComponent(selectedBatch)}` : '';
+      const res = await api.get(`/reports/talent-alignment-excel/${batchParam}`, { responseType: 'blob' });
+      const u = URL.createObjectURL(new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const a = document.createElement('a');
+      a.href = u;
+      a.download = `talent_alignment_executive_dashboard_${selectedBatch || 'all'}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(u);
+      document.body.removeChild(a);
+      toast.success('Executive Talent Alignment Dashboard (Excel) downloaded successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to download Talent Alignment Excel');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const requestDownload = (type, params = {}) => {
     setPendingDownload({ type, params });
     setPrivacyAgreed(false);
@@ -1765,6 +1820,12 @@ const renderWorkbook = () => {
 
     if (type === 'hr-summary-pdf') {
       await downloadHRSummaryPDF();
+      setPendingDownload(null);
+      return;
+    }
+
+    if (type === 'talent-alignment-excel') {
+      await downloadTalentAlignmentExcel();
       setPendingDownload(null);
       return;
     }
@@ -2144,6 +2205,16 @@ const renderDashboard = () => {
             >
               <FileText size={14} />
               <span>Pull HR Report (PDF)</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => requestDownload('talent-alignment-excel')}
+              title="Export Executive Talent Alignment Dashboard (2 Sheets)"
+              style={{ background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 600, border: 'none' }}
+            >
+              <Download size={14} />
+              <span>Talent Alignment Dashboard (Excel)</span>
             </button>
             <button
               type="button"
@@ -2969,14 +3040,15 @@ const renderDashboard = () => {
             <div className="form-row"><div className="form-group"><label><span className="required">*</span> Demand ID</label><input type="text" className="form-control" value={jobToEdit.demand_id || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, demand_id: e.target.value }) : setNewJob({ ...newJob, demand_id: e.target.value })} required /></div>
               <div className="form-group"><label>BG</label><input type="text" className="form-control" value={jobToEdit.bg || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, bg: e.target.value }) : setNewJob({ ...newJob, bg: e.target.value })} /></div></div>
             <div className="form-row"><div className="form-group"><label>ISU/HSU</label><input type="text" className="form-control" value={jobToEdit.isu_hsu || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, isu_hsu: e.target.value }) : setNewJob({ ...newJob, isu_hsu: e.target.value })} /></div>
-              <div className="form-group"><label>Stream</label><input type="text" className="form-control" value={jobToEdit.stream || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, stream: e.target.value }) : setNewJob({ ...newJob, stream: e.target.value })} /></div></div>
+              <div className="form-group"><label>Stream (Standard Enterprise)</label><select className="form-control" value={jobToEdit.stream || 'SpringBoot'} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, stream: e.target.value }) : setNewJob({ ...newJob, stream: e.target.value })}>{ALLOWED_STREAMS.map(s => (<option key={s} value={s}>{s}</option>))}{jobToEdit.stream && !ALLOWED_STREAMS.includes(jobToEdit.stream) && (<option value={jobToEdit.stream}>{jobToEdit.stream}</option>)}</select></div></div>
             <div className="form-row"><div className="form-group"><label>Role</label><input type="text" className="form-control" value={jobToEdit.role || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, role: e.target.value }) : setNewJob({ ...newJob, role: e.target.value })} /></div>
-              <div className="form-group"><label>SPOC Name</label><input type="text" className="form-control" value={jobToEdit.spoc_name || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_name: e.target.value }) : setNewJob({ ...newJob, spoc_name: e.target.value })} /></div></div>
-            <div className="form-row"><div className="form-group"><label>SPOC Emp ID</label><input type="text" className="form-control" value={jobToEdit.spoc_emp_id || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_emp_id: e.target.value }) : setNewJob({ ...newJob, spoc_emp_id: e.target.value })} /></div>
-              <div className="form-group"><label>RMG Head</label><input type="text" className="form-control" value={jobToEdit.rmg_head || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, rmg_head: e.target.value }) : setNewJob({ ...newJob, rmg_head: e.target.value })} /></div></div>
-            <div className="form-row"><div className="form-group"><label>Visibility</label><select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}><option value="public">Public</option><option value="private">Private</option></select></div>
-              <div className="form-group"><label>Course</label><select className="form-control" value={jobToEdit.course || ''} onChange={(e) => { const val = e.target.value ? parseInt(e.target.value) : ''; if (isEditing) setSelectedJob({ ...jobToEdit, course: val }); else setNewJob({ ...newJob, course: val }); }}><option value="">-- Select Course --</option>{coursesList.map(course => (<option key={course.id} value={course.id}>{course.name}</option>))}</select></div></div>
-            <div className="form-group"><label><span className="required">*</span> Openings</label><input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required /></div>
+              <div className="form-group"><label>JD Source (Shared By)</label><select className="form-control" value={jobToEdit.shared_by || 'Direct BU'} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, shared_by: e.target.value }) : setNewJob({ ...newJob, shared_by: e.target.value })}><option value="Direct BU">Direct BU (Business Unit)</option><option value="RMG">RMG (Resource Management Group)</option></select></div></div>
+            <div className="form-row"><div className="form-group"><label>SPOC Name</label><input type="text" className="form-control" value={jobToEdit.spoc_name || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_name: e.target.value }) : setNewJob({ ...newJob, spoc_name: e.target.value })} /></div>
+              <div className="form-group"><label>SPOC Emp ID</label><input type="text" className="form-control" value={jobToEdit.spoc_emp_id || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, spoc_emp_id: e.target.value }) : setNewJob({ ...newJob, spoc_emp_id: e.target.value })} /></div></div>
+            <div className="form-row"><div className="form-group"><label>RMG Head</label><input type="text" className="form-control" value={jobToEdit.rmg_head || ''} onChange={(e) => isEditing ? setSelectedJob({ ...jobToEdit, rmg_head: e.target.value }) : setNewJob({ ...newJob, rmg_head: e.target.value })} /></div>
+              <div className="form-group"><label>Visibility</label><select className="form-control" value={jobToEdit.is_public ? 'public' : 'private'} onChange={(e) => { const val = e.target.value === 'public'; if (isEditing) setSelectedJob({ ...jobToEdit, is_public: val }); else setNewJob({ ...newJob, is_public: val }); }}><option value="public">Public</option><option value="private">Private</option></select></div></div>
+            <div className="form-row"><div className="form-group"><label>Course</label><select className="form-control" value={jobToEdit.course || ''} onChange={(e) => { const val = e.target.value ? parseInt(e.target.value) : ''; if (isEditing) setSelectedJob({ ...jobToEdit, course: val }); else setNewJob({ ...newJob, course: val }); }}><option value="">-- Select Course --</option>{coursesList.map(course => (<option key={course.id} value={course.id}>{course.name}</option>))}</select></div>
+              <div className="form-group"><label><span className="required">*</span> Openings</label><input type="number" className="form-control" value={jobToEdit.openings} onChange={(e) => { const val = parseInt(e.target.value) || 1; if (isEditing) setSelectedJob({ ...jobToEdit, openings: val }); else setNewJob({ ...newJob, openings: val }); }} min="1" required /></div></div>
           </div>
           <div className="form-section"><h3 className="form-section-title"><BookOpen size={20} /> Skills</h3>
             <div className="form-group"><label><span className="required">*</span> Skills</label>

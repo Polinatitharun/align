@@ -167,6 +167,12 @@ class JobSerializer(serializers.ModelSerializer):
         model = Job
         fields = '__all__'
 
+    def validate_stream(self, value):
+        if value:
+            from .stream_constants import normalize_to_standard_stream
+            return normalize_to_standard_stream(value)
+        return value
+
     def get_techSkills(self, obj):
         skills = getattr(obj, 'skills', '') or ''
         return [skill.strip() for skill in skills.split(',') if skill.strip()]

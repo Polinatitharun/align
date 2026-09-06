@@ -3,6 +3,19 @@ import { Sparkles, X, Check, Loader2, Briefcase } from 'lucide-react';
 import api from '../api/axios';
 import { toast } from 'sonner';
 
+const ALLOWED_STREAMS = [
+  'AI Engineering',
+  'Angular',
+  'Devops',
+  'DotNet',
+  'PLSQL',
+  'SpringBoot',
+  'Test Automation',
+  'Cloud',
+  'Cyber Security',
+  'Data Engineering'
+];
+
 export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch }) {
   const [rawText, setRawText] = useState('');
   const [parsing, setParsing] = useState(false);
@@ -35,11 +48,12 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
         project_name: res.data.project_name || '',
         location: res.data.location || '',
         skills: res.data.skills || '',
-        stream: res.data.stream || '',
+        stream: res.data.stream || 'SpringBoot',
         openings: res.data.openings || 1,
         role: res.data.role || 'Developer',
         bg: res.data.bg || 'Technology',
         isu_hsu: res.data.isu_hsu || 'ISU',
+        shared_by: res.data.shared_by || 'Direct BU',
         rmg_head: res.data.rmg_head || '',
         spoc_name: res.data.spoc_name || '',
         spoc_emp_id: res.data.spoc_emp_id || '',
@@ -74,11 +88,12 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
         project_name: parsedData.project_name,
         location: parsedData.location,
         skills: parsedData.skills,
-        stream: parsedData.stream,
+        stream: parsedData.stream || 'SpringBoot',
         openings: parseInt(parsedData.openings, 10) || 1,
         role: parsedData.role,
         bg: parsedData.bg,
         isu_hsu: parsedData.isu_hsu,
+        shared_by: parsedData.shared_by || 'Direct BU',
         rmg_head: parsedData.rmg_head,
         spoc_name: parsedData.spoc_name,
         spoc_emp_id: parsedData.spoc_emp_id,
@@ -303,14 +318,34 @@ export default function JDParserModal({ isOpen, onClose, onSuccess, currentBatch
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                    Stream
+                    Stream (Standard Enterprise Streams) *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={parsedData.stream}
                     onChange={e => handleFieldChange('stream', e.target.value)}
                     style={inputStyle}
-                  />
+                  >
+                    {ALLOWED_STREAMS.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    {parsedData.stream && !ALLOWED_STREAMS.includes(parsedData.stream) && (
+                      <option value={parsedData.stream}>{parsedData.stream}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                    JD Source (Shared By) *
+                  </label>
+                  <select
+                    value={parsedData.shared_by || 'Direct BU'}
+                    onChange={e => handleFieldChange('shared_by', e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="Direct BU">Direct BU (Business Unit)</option>
+                    <option value="RMG">RMG (Resource Management Group)</option>
+                  </select>
                 </div>
 
                 <div>

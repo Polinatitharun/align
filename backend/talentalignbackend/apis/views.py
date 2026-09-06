@@ -46,6 +46,8 @@ from .serializers import (
 )
 from .tokens import CustomTokenObtainPairSerializer
 from .matching_engine import run_matching_logic, llm, clean, SKILL_MAPPING, normalize_skills
+from .stream_constants import ALLOWED_STREAMS, normalize_to_standard_stream
+from .excel_generator import TalentAlignmentExcelReportGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -581,6 +583,8 @@ class UploadExcelView(APIView):
                     col_map['stream'] = col
                 elif col_lower == 'role':
                     col_map['role'] = col
+                elif 'shared' in col_lower or 'source' in col_lower:
+                    col_map['shared_by'] = col
                 elif 'spoc' in col_lower and 'name' in col_lower:
                     col_map['spoc_name'] = col
                 elif 'spoc' in col_lower and ('emp' in col_lower or 'id' in col_lower):
@@ -611,6 +615,8 @@ class UploadExcelView(APIView):
 
                     # Handle stream -> skills expansion
                     stream = get_val('stream')
+                    if stream:
+                        stream = normalize_to_standard_stream(stream)
                     skills = get_val('skills')
                     if not skills and stream:
                         # Auto-populate skills from stream using SKILL_MAPPING
@@ -630,6 +636,11 @@ class UploadExcelView(APIView):
                     project_name = get_val('project_name') or 'Unnamed Project'
                     demand_id = get_val('demand_id') or f'AUTO-{idx+1}'
                     rgs_id = get_val('rgs_id') or None
+                    shared_by = get_val('shared_by') or 'Direct BU'
+                    if 'rmg' in shared_by.lower() or 'rgs' in shared_by.lower():
+                        shared_by = 'RMG'
+                    else:
+                        shared_by = 'Direct BU'
 
                     job_data = {
                         'project_name': project_name,
@@ -645,6 +656,7 @@ class UploadExcelView(APIView):
                         'spoc_emp_id': get_val('spoc_emp_id') or None,
                         'rmg_head': get_val('rmg_head') or None,
                         'rgs_id': rgs_id,
+                        'shared_by': shared_by,
                         'status': 'active',
                         'filled': 0,
                         'matches': 0,
@@ -737,10 +749,10 @@ class DownloadExcelTemplateView(APIView):
         wb = Workbook()
         ws = wb.active
         ws.title = "Job Demand Template"
-        headers = ['BG', 'ISU/HSU', 'Project Name', 'Stream', 'Location', 'Role', 'Project SPOC Name', 'Project SPOC Emp ID', 'RMG Head', 'RGS ID', 'COUNT', 'Skills']
+        headers = ['BG', 'ISU/HSU', 'Project Name', 'Stream', 'Location', 'Role', 'Project SPOC Name', 'Project SPOC Emp ID', 'RMG Head', 'RGS ID', 'Demand Count', 'Shared By', 'Skills']
         for col, h in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=h)
-        sample = ['Technology', 'ISU', 'Java Fullstack Project', 'Java', 'Hyderabad, Bangalore', 'Developer', 'John Doe', 'EMP1001', 'Jane Smith', 'RGS-001', 3, 'Spring Boot, Microservices, React']
+        sample = ['Technology', 'ISU', 'Java Fullstack Project', 'SpringBoot', 'Hyderabad, Bangalore', 'Developer', 'John Doe', 'EMP1001', 'Jane Smith', 'RGS-001', 3, 'Direct BU', 'Spring Boot, Microservices, React']
         for col, val in enumerate(sample, 1):
             ws.cell(row=2, column=col, value=val)
         buffer = BytesIO()
@@ -4137,8 +4149,10 @@ class BulkConsentUploadView(APIView):
 
 # ==================== JD PARSER VIEW ====================
 
+# ==================== JD PARSER VIEW ====================
+
 class ParseJDView(APIView):
-    """Parse raw job description text with LLM and return structured fields."""
+    """Parse raw job description text with LLM and return structured fields with standard streams."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -4149,19 +4163,21 @@ class ParseJDView(APIView):
         if not raw_text:
             return Response({"error": "Text is required for JD parsing"}, status=400)
 
+        allowed_streams_str = ", ".join(ALLOWED_STREAMS)
         prompt = f"""You are a JD parsing assistant. Extract the following from the job description text:
 - Project Name (generate if not specified)
 - Location(s) - comma separated city names
-- Skills/Stream - identify technologies and map to streams (Java, Python, JavaScript, .NET, Data, Cloud, Testing, Web, etc.)
+- Skills - key technical competencies (comma separated)
+- Stream - MUST be exactly one of the following allowed standard streams: [{allowed_streams_str}]
 - Openings (default 1 if not specified)
-- Role (Developer, Tech Support, Non-tech, etc.)
+- Role (Developer, Tech Support, QA, Automation, AI Engineering, etc.)
 - BG (default "Technology")
 - ISU/HSU (default "ISU")
+- Shared By (MUST be either "Direct BU" or "RMG". If RMG/RGS/Resource Management Group is mentioned, select "RMG", otherwise "Direct BU")
 - RMG Head (default empty "")
 - SPOC Name (default empty "")
 - SPOC Emp ID (default empty "")
 - RGS ID (generate unique ID like RGS-1234 if not provided)
-- COUNT (same as openings)
 
 Return as JSON matching:
 {{
@@ -4173,6 +4189,7 @@ Return as JSON matching:
   "role": "...",
   "bg": "Technology",
   "isu_hsu": "ISU",
+  "shared_by": "Direct BU",
   "rmg_head": "",
   "spoc_name": "",
   "spoc_emp_id": "",
@@ -4191,7 +4208,7 @@ Job text:
                 "stream": False,
                 "format": "json"
             }
-            res = requests.post(ollama_url, json=payload, timeout=20)
+            res = requests.post(ollama_url, json=payload, timeout=3)
             if res.status_code == 200:
                 resp_str = res.json().get('response', '')
                 import json
@@ -4217,7 +4234,7 @@ Job text:
                 if re.search(rf'(?<![a-z0-9]){re.escape(skill.lower())}(?![a-z0-9])', text_lower) and skill.title() not in found_skills:
                     found_skills.append(skill.title())
                     if not found_stream:
-                        found_stream = stream_key.title()
+                        found_stream = normalize_to_standard_stream(stream_key)
         location_aliases = {
             'Hyderabad': ['hyderabad'],
             'Bangalore': ['bangalore', 'bengaluru', 'banglore', 'bangaluru'],
@@ -4235,22 +4252,15 @@ Job text:
             'Coimbatore': ['coimbatore'],
         }
         found_locations = [city for city, aliases in location_aliases.items() if any(alias in text_lower for alias in aliases)]
+        
+        # Determine shared_by
+        detected_shared_by = 'RMG' if any(w in text_lower for w in ['rmg', 'rgs', 'resource management group', 'shared by rmg']) else 'Direct BU'
+
         if not parsed_data:
             openings = explicit_openings or 1
-
-            found_skills = []
-            found_stream = None
-            text_lower = raw_text.lower()
-            for stream_key, skills_list in SKILL_MAPPING.items():
-                for sk in sorted(skills_list, key=len, reverse=True):
-                    if re.search(rf'(?<![a-z0-9]){re.escape(sk.lower())}(?![a-z0-9])', text_lower) and sk.title() not in found_skills:
-                        found_skills.append(sk.title())
-                        if not found_stream:
-                            found_stream = stream_key.title()
-
             loc_str = ', '.join(found_locations) if found_locations else 'Hyderabad'
             skills_str = ', '.join(found_skills) if found_skills else 'Java, Spring Boot'
-            stream_str = found_stream if found_stream else 'Java'
+            stream_str = found_stream if found_stream else 'SpringBoot'
 
             parsed_data = {
                 "project_name": f"{stream_str} Developer Requirement",
@@ -4261,6 +4271,7 @@ Job text:
                 "role": "Developer",
                 "bg": "Technology",
                 "isu_hsu": "ISU",
+                "shared_by": detected_shared_by,
                 "rmg_head": "",
                 "spoc_name": "",
                 "spoc_emp_id": "",
@@ -4274,11 +4285,78 @@ Job text:
             parsed_data['location'] = ', '.join(found_locations)
         if found_skills:
             parsed_data['skills'] = ', '.join(found_skills)
-            parsed_data['stream'] = found_stream or parsed_data.get('stream') or 'Technology'
+            parsed_data['stream'] = found_stream or normalize_to_standard_stream(parsed_data.get('stream')) or 'SpringBoot'
+        else:
+            parsed_data['stream'] = normalize_to_standard_stream(parsed_data.get('stream'))
+        
+        if not parsed_data.get('shared_by'):
+            parsed_data['shared_by'] = detected_shared_by
+
         if parsed_data.get('openings') in (None, '', 0):
             parsed_data['openings'] = 1
 
         return Response(parsed_data)
+
+
+# ==================== TALENT ALIGNMENT EXCEL EXPORT VIEWS ====================
+
+class TalentAlignmentExcelExportView(APIView):
+    """
+    Exports the production-ready 2-sheet executive Talent Alignment Excel workbook.
+    Sheet 1: EXECUTIVE DASHBOARD (6 Analytical Sections)
+    Sheet 2: RMG REQUIREMENT (15 Preserved Transactional Columns)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role not in ['hr', 'admin', 'manager', 'ta']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        batch = request.query_params.get('batch', '')
+        generator = TalentAlignmentExcelReportGenerator.from_database(batch_name=batch if batch else None)
+        buffer = generator.export_to_bytes()
+
+        filename = f"talent_alignment_executive_dashboard_{batch or 'all'}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class TalentAlignmentTransformExcelView(APIView):
+    """
+    Accepts any raw CSV or Excel file containing Talent Alignment records,
+    transforms it via the Data Engineering engine, and returns the 2-sheet
+    executive workbook.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        if request.user.role not in ['hr', 'admin', 'manager']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        file = request.FILES.get('file') or request.FILES.get('excel_file')
+        if not file:
+            return Response({"error": "No file uploaded. Please provide 'file' or 'excel_file'."}, status=400)
+
+        batch_name = request.data.get('batch_name', '')
+        try:
+            generator = TalentAlignmentExcelReportGenerator.from_file(file, batch_name=batch_name)
+            buffer = generator.export_to_bytes()
+
+            filename = f"talent_alignment_executive_dashboard_transformed_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            response = HttpResponse(
+                buffer.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as e:
+            logger.error(f"Error transforming talent alignment dataset: {e}")
+            return Response({"error": f"Failed to transform file: {str(e)}"}, status=400)
 
 
 from .report_agent import ReportGenerator

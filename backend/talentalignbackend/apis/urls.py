@@ -85,6 +85,8 @@ from .views import (
     CourseOwnerJobRecommendationsView,
     HRJobRecommendationsView,
     GenerateReportView,
+    TalentAlignmentExcelExportView,
+    TalentAlignmentTransformExcelView,
 )
 
 router = DefaultRouter()
@@ -210,4 +212,6 @@ urlpatterns = [
     path('jobs/bulk-status/', BulkStatusUpdateView.as_view(), name='bulk-status'),
 
     path('reports/generate/', GenerateReportView.as_view(), name='generate-report'),
+    path('reports/talent-alignment-excel/', TalentAlignmentExcelExportView.as_view(), name='talent-alignment-excel-export'),
+    path('reports/talent-alignment-excel/transform/', TalentAlignmentTransformExcelView.as_view(), name='talent-alignment-excel-transform'),
 ]

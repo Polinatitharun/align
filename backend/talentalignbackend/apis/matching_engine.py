@@ -53,15 +53,34 @@ _skill_embedding_cache = {}
 _trainee_embedding_cache = {}
 
 
+from .stream_constants import (
+    ALLOWED_STREAMS,
+    STREAM_SYNONYMS,
+    STREAM_SKILL_KEYWORDS,
+    normalize_to_standard_stream,
+)
+
 # ----------- Skill Normalization Mapping -----------
 SKILL_MAPPING = {
+    # 10 Allowed Enterprise Streams
+    'ai engineering': ['ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning', 'genai', 'generative ai', 'llm', 'nlp', 'pytorch', 'tensorflow', 'langchain', 'computer vision'],
+    'angular': ['angular', 'angularjs', 'angular.js', 'angular 2+', 'typescript', 'ngrx', 'rxjs', 'javascript', 'html5', 'css3'],
+    'devops': ['devops', 'dev ops', 'ci/cd', 'docker', 'kubernetes', 'jenkins', 'terraform', 'ansible', 'helm', 'linux', 'git', 'bash'],
+    'dotnet': ['dotnet', 'dot net', '.net', 'c#', 'csharp', 'asp.net', '.net core', 'dotnet core', 'vb.net', 'entity framework', 'linq', 'wcf'],
+    'plsql': ['plsql', 'pl/sql', 'pl-sql', 'oracle plsql', 'sql developer', 'oracle database', 't-sql', 'tsql', 'stored procedures', 'triggers', 'oracle'],
+    'springboot': ['springboot', 'spring boot', 'java springboot', 'java spring boot', 'spring', 'spring framework', 'spring mvc', 'java', 'hibernate', 'microservices', 'j2ee', 'core java'],
+    'test automation': ['test automation', 'automation testing', 'automation', 'qa automation', 'selenium', 'cypress', 'playwright', 'appium', 'junit', 'testng', 'cucumber', 'testing', 'qa', 'sdet', 'manual testing'],
+    'cloud': ['cloud', 'aws', 'azure', 'gcp', 'google cloud', 'cloud architecture', 'amazon web services', 'microsoft azure', 'cloud computing'],
+    'cyber security': ['cyber security', 'cybersecurity', 'infosec', 'information security', 'network security', 'soc', 'penetration testing', 'ethical hacking', 'iam', 'siem', 'vulnerability assessment'],
+    'data engineering': ['data engineering', 'data engineer', 'etl', 'data pipeline', 'spark', 'pyspark', 'hadoop', 'kafka', 'bigquery', 'snowflake', 'databricks', 'data warehouse', 'airflow', 'sql'],
+
+    # Compatibility aliases
     'ai': ['ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning', 'genai', 'generative ai'],
     'java': ['java', 'spring', 'spring boot', 'selenium with java', 'junit', 'hibernate', 'j2ee', 'core java', 'advanced java'],
     'python': ['python', 'django', 'flask', 'fastapi', 'selenium with python', 'pandas', 'numpy'],
     'javascript': ['javascript', 'node', 'nodejs', 'node.js', 'react', 'angular', 'vue', 'vue.js', 'typescript', 'jest', 'express', 'express.js', 'next.js', 'nextjs'],
     '.net': ['.net', 'c#', 'csharp', 'asp.net', 'dotnet', '.net core', 'vb.net'],
     'data': ['sql', 'mysql', 'postgresql', 'mongodb', 'oracle', 'data', 'analytics', 'data science', 'data engineering', 'power bi', 'tableau'],
-    'cloud': ['aws', 'azure', 'gcp', 'cloud', 'devops', 'docker', 'kubernetes', 'terraform', 'jenkins', 'ci/cd'],
     'testing': ['testing', 'qa', 'automation', 'manual testing', 'selenium', 'cypress', 'appium', 'jmeter', 'load testing'],
     'web': ['html', 'css', 'bootstrap', 'tailwind', 'sass', 'less', 'responsive design'],
 }
@@ -81,6 +100,10 @@ def normalize_skills(stream_or_skill):
     # If it's a stream name, return all related skills
     if key in SKILL_MAPPING:
         return SKILL_MAPPING[key]
+    # Check canonical standard stream
+    std = normalize_to_standard_stream(key)
+    if std and std.lower() in SKILL_MAPPING:
+        return SKILL_MAPPING[std.lower()]
     # If it's a specific skill, return the stream's skills
     if key in _SKILL_TO_STREAM:
         return SKILL_MAPPING[_SKILL_TO_STREAM[key]]
