@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------
+  # 1. PostgreSQL Database Service
+  # -----------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: talentalign-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tharunsalign}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-tharunsalign}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talentalign-network
+
+  # -----------------------------------------------------------
+  # 2. Django REST API Backend Service
+  # -----------------------------------------------------------
+  backend:
+    build:
+      context: ./backend/talentalignbackend
+      dockerfile: Dockerfile
+    container_name: talentalign-backend
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-!6&m*39)4%m92s#wfen2bl)i^94ie&r6)9o&sx%xgjm1-=2+$}
+      - DEBUG=${DEBUG:-True}
+      - ALLOWED_HOSTS=*
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=${DB_NAME:-tharunsalign}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - OLLAMA_URL=http://ollama:11434/api/generate
+    ports:
+      - "8000:8000"
+    volumes:
+      - static_volume:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - talentalign-network
+
+  # -----------------------------------------------------------
+  # 3. React Frontend Service (Served via Nginx Reverse Proxy)
+  # -----------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend/frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api
+    container_name: talentalign-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - talentalign-network
+
+  # -----------------------------------------------------------
+  # 4. Ollama LLM Service (Local AI Assistant & JD Parser)
+  # -----------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: talentalign-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - talentalign-network
+
+volumes:
+  postgres_data:
+    driver: local
+  static_volume:
+    driver: local
+  ollama_data:
+    driver: local
+
+networks:
+  talentalign-network:
+    driver: bridge
