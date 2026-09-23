@@ -166,6 +166,7 @@ function DashboardTrainee({ userData, onLogout }) {
                     <div><strong>Name:</strong> {traineeData.username}</div>
                     <div><strong>Role:</strong> {traineeData.role}</div>
                     <div><strong>Location:</strong> {traineeData.location}</div>
+                    <div><strong>Group:</strong> {traineeData.groupName || traineeData.group_name || 'A1'}</div>
                     <div><strong>ISU:</strong> {traineeData.isu}</div>
                     <div><strong>DPI:</strong> {traineeData.dpi}</div>
                   </div>

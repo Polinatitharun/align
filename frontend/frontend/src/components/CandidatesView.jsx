@@ -86,6 +86,10 @@ const CandidatesView = ({
         score: traineeObj?.score ?? 0,
         location: traineeObj?.location || '—',
         batch: traineeObj?.batch_name || lock.batch_name || selectedBatch || '—',
+        group: traineeObj?.group_name || traineeObj?.groupName || lock.group_name || lock.groupName || lock.trainee?.group_name || '—',
+        groupRank: traineeObj?.groupRank || lock.groupRank || traineeObj?.group_rank || '—',
+        batchRank: traineeObj?.batchRank || lock.batchRank || traineeObj?.batch_rank || '—',
+        dpi: traineeObj?.dpi ?? lock.dpi ?? '—',
         isMapped: traineeObj?.isMapped ?? false,
         rawLock: lock,
         rawTrainee: traineeObj,
@@ -112,6 +116,10 @@ const CandidatesView = ({
           score: trainee.score ?? 0,
           location: trainee.location || '—',
           batch: trainee.batch_name || selectedBatch || '—',
+          group: trainee.group_name || trainee.groupName || '—',
+          groupRank: trainee.groupRank || trainee.group_rank || '—',
+          batchRank: trainee.batchRank || trainee.batch_rank || '—',
+          dpi: trainee.dpi ?? '—',
           isMapped: true,
           rawLock: null,
           rawTrainee: trainee,
@@ -134,6 +142,10 @@ const CandidatesView = ({
           score: trainee.score ?? 0,
           location: trainee.location || '—',
           batch: trainee.batch_name || selectedBatch || '—',
+          group: trainee.group_name || trainee.groupName || '—',
+          groupRank: trainee.groupRank || trainee.group_rank || '—',
+          batchRank: trainee.batchRank || trainee.batch_rank || '—',
+          dpi: trainee.dpi ?? '—',
           isMapped: false,
           rawLock: null,
           rawTrainee: trainee,
@@ -297,6 +309,17 @@ const CandidatesView = ({
       sortable: true,
       filterable: true,
       render: (row) => row.location || '—',
+    },
+    {
+      key: 'group',
+      label: 'Group',
+      sortable: true,
+      filterable: true,
+      render: (row) => (
+        <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', fontWeight: 600 }}>
+          {row.group || '—'}
+        </span>
+      ),
     },
     {
       key: 'skills',

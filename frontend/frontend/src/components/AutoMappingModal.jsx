@@ -88,6 +88,7 @@ const AutoMappingModal = ({
               traineeName: trainee.name || trainee.userInfo?.name || rec.trainee_name || 'Trainee',
               traineeLocation: trainee.location || trainee.userInfo?.location || 'Unknown',
               traineeScore: trainee.averageScore || trainee.userInfo?.averageScore || 80,
+              traineeGroup: trainee.group_name || trainee.groupName || trainee.group || '—',
               jobId: targetJob.id,
               jobTitle: targetJob.project_name || targetJob.title || 'Project Role',
               jobLocation: targetJob.location || targetJob.preferred_location || 'Any',
@@ -165,6 +166,7 @@ const AutoMappingModal = ({
           traineeName: trainee.name || trainee.userInfo?.name || 'Trainee',
           traineeLocation: trainee.location || trainee.userInfo?.location || 'Unknown',
           traineeScore: trainee.averageScore || trainee.userInfo?.averageScore || 75,
+          traineeGroup: trainee.group_name || trainee.groupName || trainee.group || '—',
           jobId: job.id,
           jobTitle: job.project_name || job.title || 'Project Role',
           jobLocation: job.location || job.preferred_location || 'Any',
@@ -423,7 +425,14 @@ const AutoMappingModal = ({
                             </div>
                             <div>
                               <strong style={{ fontSize: '0.82rem' }}>{p.traineeName}</strong>
-                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Score: {p.traineeScore}%</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                <span>Score: {p.traineeScore}%</span>
+                                {p.traineeGroup && p.traineeGroup !== '—' && (
+                                  <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#4f46e5', fontSize: '0.68rem', padding: '0.1rem 0.35rem' }}>
+                                    Grp: {p.traineeGroup}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>

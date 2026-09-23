@@ -49,6 +49,7 @@ function DashboardHR({ userData, onLogout }) {
   const [unfilteredTrainees, setUnfilteredTrainees] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [jobs, setJobs] = useState([]);
   const [trainees, setTrainees] = useState([]);
   const [allTrainees, setAllTrainees] = useState([]);
@@ -216,6 +217,11 @@ const [workbookFilter, setWorkbookFilter] = useState('');
       projectId: userInfo?.projectId || '',
       projectName: userInfo?.projectName || '',
       batch_name: trainee?.batch_name || '',
+      group_name: trainee?.group_name || trainee?.groupName || '',
+      groupName: trainee?.group_name || trainee?.groupName || '',
+      groupRank: trainee?.groupRank || trainee?.group_rank || '',
+      batchRank: trainee?.batchRank || trainee?.batch_rank || '',
+      dpi: trainee?.dpi ?? '',
       traineeData: trainee,
     };
   };
@@ -433,6 +439,7 @@ const buildTraineeWorkbook = () => {
     { key: 'userId', label: 'User ID' },
     { key: 'email', label: 'Email' },
     { key: 'batch_name', label: 'Batch' },
+    { key: 'group_name', label: 'Group' },
     { key: 'location', label: 'Location' },
     { key: 'preferredLocation1', label: 'Pref Loc 1' },
     { key: 'preferredLocation2', label: 'Pref Loc 2' },
@@ -454,6 +461,7 @@ const buildTraineeWorkbook = () => {
       userId: t.userId,
       email: t.email,
       batch_name: t.batch_name || '',
+      group_name: t.group_name || t.groupName || '',
       location: t.location || '',
       preferredLocation1: t.preferredLocation1 || '',
       preferredLocation2: t.preferredLocation2 || '',
@@ -904,10 +912,11 @@ const renderWorkbook = () => {
           id: 'list',
           label: 'Full List',
           type: 'list',
-          searchKeys: ['name', 'email', 'projectName', 'location'],
+          searchKeys: ['name', 'email', 'projectName', 'location', 'group_name', 'groupName'],
           columns: [
             { key: 'name', label: 'Name', sortable: true },
             { key: 'projectName', label: 'Project', sortable: true },
+            { key: 'group_name', label: 'Group', sortable: true, render: (t) => t.group_name || t.groupName || '—' },
             { key: 'location', label: 'Location', sortable: true },
             { key: 'score', label: 'Score', sortable: true },
             {
@@ -945,12 +954,14 @@ const renderWorkbook = () => {
     const rows = allTrainees.filter((t) => !t.isMapped);
     const byLocation = groupBy(rows, (t) => t.location || 'unknown');
     const byBatch = groupBy(rows, (t) => t.batch_name || '—');
+    const byGroup = groupBy(rows, (t) => t.group_name || t.groupName || '—');
     setDrill({
       type: 'unmapped',
       title: 'Unmapped Trainees',
       chips: [
         { label: 'available', value: rows.length },
         { label: 'locations', value: byLocation.length },
+        { label: 'groups', value: byGroup.length },
       ],
       tabs: [
         {
@@ -958,6 +969,12 @@ const renderWorkbook = () => {
           label: 'By Location',
           type: 'groups',
           groups: byLocation.map((g) => ({ key: g.key, count: g.count })),
+        },
+        {
+          id: 'by-group',
+          label: 'By Group',
+          type: 'groups',
+          groups: byGroup.map((g) => ({ key: g.key, count: g.count })),
         },
         {
           id: 'by-batch',
@@ -969,9 +986,10 @@ const renderWorkbook = () => {
           id: 'list',
           label: 'Full List',
           type: 'list',
-          searchKeys: ['name', 'email', 'location', 'batch_name'],
+          searchKeys: ['name', 'email', 'location', 'batch_name', 'group_name', 'groupName'],
           columns: [
             { key: 'name', label: 'Name', sortable: true },
+            { key: 'group_name', label: 'Group', sortable: true, render: (t) => t.group_name || t.groupName || '—' },
             { key: 'location', label: 'Location', sortable: true },
             { key: 'batch_name', label: 'Batch', sortable: true },
             { key: 'score', label: 'Score', sortable: true },
@@ -1840,7 +1858,7 @@ const renderWorkbook = () => {
       if (type === 'trainees' || type === 'candidates' || type === 'mapped' || type === 'unmapped' || type === 'openPool' || type === 'overview') {
         filename = `candidates_${type}_${selectedBatch || 'all'}.xlsx`;
         sheet.name('Candidates');
-        const headers = ['Employee ID', 'Name', 'Email', 'Batch', 'Location', 'Average Score %', 'Status', 'Mapped Project', 'Skills'];
+        const headers = ['Employee ID', 'Name', 'Email', 'Batch', 'Group', 'Location', 'Average Score %', 'Status', 'Mapped Project', 'Skills'];
         headers.forEach((h, i) => sheet.cell(1, i + 1).value(h));
         sheet.range(1, 1, 1, headers.length).style('bold', true).style('fill', '2563eb').style('fontColor', 'ffffff');
 
@@ -1857,11 +1875,12 @@ const renderWorkbook = () => {
           sheet.cell(row, 2).value(t.name || '—');
           sheet.cell(row, 3).value(t.email || '—');
           sheet.cell(row, 4).value(t.batch_name || '—');
-          sheet.cell(row, 5).value(t.location || '—');
-          sheet.cell(row, 6).value(`${score}%`);
-          sheet.cell(row, 7).value(t.isMapped ? 'Mapped' : 'Unmapped');
-          sheet.cell(row, 8).value(t.projectName || t.project_name || '—');
-          sheet.cell(row, 9).value(Array.isArray(t.skills) ? t.skills.join(', ') : (t.skills || '—'));
+          sheet.cell(row, 5).value(t.group_name || t.groupName || '—');
+          sheet.cell(row, 6).value(t.location || '—');
+          sheet.cell(row, 7).value(`${score}%`);
+          sheet.cell(row, 8).value(t.isMapped ? 'Mapped' : 'Unmapped');
+          sheet.cell(row, 9).value(t.projectName || t.project_name || '—');
+          sheet.cell(row, 10).value(Array.isArray(t.skills) ? t.skills.join(', ') : (t.skills || '—'));
         });
         headers.forEach((_, i) => sheet.column(i + 1).width(20));
       } else if (type === 'jobs') {
@@ -2009,7 +2028,7 @@ const renderWorkbook = () => {
   useEffect(() => { setSkillTrends(computeSkillTrends(jobs)); }, [jobs]);
   useEffect(() => { if (activeTab === 'dashboard') { fetchLockStats(); fetchDashboardAnalytics(); } }, [activeTab, jobs, selectedBatch]);
   useEffect(() => { if (activeTab === 'feedback') fetchFeedbackRecords(); if (activeTab === 'audit') fetchAuditLogs(); }, [activeTab, feedbackSearch]);
-  useEffect(() => { let f = [...allTrainees]; if (searchQuery) f = f.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.email.toLowerCase().includes(searchQuery.toLowerCase()) || t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))); if (locationFilter) f = f.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase())); if (activeTab === 'mapped') f = f.filter(t => t.isMapped); else if (activeTab === 'unmapped') f = f.filter(t => !t.isMapped); else if (activeTab === 'openPool') { const ids = traineesWithNoMatches.map(t => t.id || t.trainee_id); f = f.filter(t => !t.isMapped && ids.includes(t.id)); } setTrainees(f); }, [searchQuery, locationFilter, activeTab, allTrainees, traineesWithNoMatches]);
+  useEffect(() => { let f = [...allTrainees]; if (searchQuery) f = f.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.email.toLowerCase().includes(searchQuery.toLowerCase()) || (t.group_name && t.group_name.toLowerCase().includes(searchQuery.toLowerCase())) || t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))); if (locationFilter) f = f.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase())); if (groupFilter) f = f.filter(t => (t.group_name || t.groupName || '').toLowerCase() === groupFilter.toLowerCase()); if (activeTab === 'mapped') f = f.filter(t => t.isMapped); else if (activeTab === 'unmapped') f = f.filter(t => !t.isMapped); else if (activeTab === 'openPool') { const ids = traineesWithNoMatches.map(t => t.id || t.trainee_id); f = f.filter(t => !t.isMapped && ids.includes(t.id)); } setTrainees(f); }, [searchQuery, locationFilter, groupFilter, activeTab, allTrainees, traineesWithNoMatches]);
   useEffect(() => { if (activeTab === 'interviewLocks') { fetchInterviewLocks(); fetchLockStats(); } }, [activeTab, lockFilter, selectedBatch]);
   useEffect(() => { if (activeTab === 'selected') fetchSelectedCandidates(); if (activeTab === 'rejected') fetchRejectedLocks(); }, [activeTab, allTrainees, selectedBatch]);
   useEffect(() => { if (activeTab === 'recommendations') fetchRecommendations(); }, [activeTab, selectedRecJobId, recStatusFilter, selectedBatch]);
@@ -3065,6 +3084,7 @@ const renderDashboard = () => {
 
   const renderTraineesList = () => {
     const uniqueLocations = [...new Set(allTrainees.map((t) => t.location).filter((loc) => loc))];
+    const uniqueGroups = [...new Set(allTrainees.map((t) => t.group_name || t.groupName).filter(Boolean))];
     const openPoolCount = traineesWithNoMatches.length;
     const indexOfLast = traineePage * traineesPerPage;
     const indexOfFirst = indexOfLast - traineesPerPage;
@@ -3084,7 +3104,23 @@ const renderDashboard = () => {
             <div className="download-buttons"><button className="btn btn-success" onClick={() => requestDownload('mapped')}><Download size={16} /> Mapped</button><button className="btn btn-danger" onClick={() => requestDownload('unmapped')}><Download size={16} /> Unmapped</button></div>
           </div>
         </div>
-        <div className="search-filter"><div className="search-box"><input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div><div className="filter-group"><select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}><option value="">All Locations</option>{uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}</select></div></div>
+        <div className="search-filter">
+          <div className="search-box">
+            <input type="text" className="search-input" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
+          <div className="filter-group">
+            <select className="filter-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+              <option value="">All Locations</option>
+              {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
+          </div>
+          <div className="filter-group">
+            <select className="filter-select" value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              <option value="">All Groups</option>
+              {uniqueGroups.map((grp) => <option key={grp} value={grp}>{grp}</option>)}
+            </select>
+          </div>
+        </div>
         {trainees.length === 0 ? (<div className="no-data"><Users size={48} /><h3>No Trainees Found</h3></div>) : (
           <><div className="table-container">
             <table className="data-table">
@@ -3096,6 +3132,7 @@ const renderDashboard = () => {
                   <th>Email</th>
                   <th>Location</th>
                   <th>Batch</th>
+                  <th>Group</th>
                   <th>Skills</th>
                   <th>Score</th>
                   <th>Status</th>
@@ -3119,6 +3156,11 @@ const renderDashboard = () => {
                       </div>
                     </td>
                     <td>{trainee.batch_name || '-'}</td>
+                    <td>
+                      <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', fontWeight: 600 }}>
+                        {trainee.group_name || trainee.groupName || '—'}
+                      </span>
+                    </td>
                     <td><div className="skills-cell">{trainee.skills.slice(0, 3).map(skill => <span key={skill} className="skill-tag-small">{skill}</span>)}{trainee.skills.length > 3 && <span className="more-skills">+{trainee.skills.length - 3}</span>}</div>
                     </td><td><div className="score-cell"><div className="mini-progress"><div className="mini-fill" style={{ width: `${trainee.score}%` }} />
                     </div><span>{trainee.score}%</span></div></td><td><span className={`status-badge ${trainee.isMapped ? 'status-mapped' : 'status-unmapped'}`}>{trainee.isMapped ? 'Mapped' : 'Unmapped'}</span>
@@ -3134,7 +3176,65 @@ const renderDashboard = () => {
   };
 
 
-  const renderTraineeModal = () => { if (!selectedTrainee) return null; const traineeData = selectedTrainee.traineeData || selectedTrainee; const userInfo = traineeData.userInfo || {}; const matchBuckets = ['perfect_match', 'skills_only', 'location_only', 'nearby', 'no_match']; const strengths = Array.isArray(traineeData.strengths) ? traineeData.strengths : []; const weaknesses = Array.isArray(traineeData.weaknesses) ? traineeData.weaknesses : []; const displayScore = userInfo.averageScore ?? selectedTrainee.score ?? '—'; return (<div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}><div className="modal-header"><div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h2></div><button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button></div><div className="modal-body"><div className="profile-header"><div className="profile-avatar">{(userInfo.name || selectedTrainee.name || '?').charAt(0)}</div><div className="profile-info"><h3>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h3><div className="profile-meta"><span><MapPin size={16} /> {userInfo.location || selectedTrainee.location || '—'}</span><span><Mail size={16} /> {userInfo.email || selectedTrainee.email || '—'}</span><span><Target size={16} /> Score: {displayScore}{displayScore === '—' ? '' : '%'}</span></div></div></div><div className="skills-section"><h4>Strengths</h4><div className="skills-list">{strengths.length ? strengths.map((s, i) => <span key={i} className="skill-tag tech-tag">{s.courseName} ({s.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div><h4>Weaknesses</h4><div className="skills-list">{weaknesses.length ? weaknesses.map((w, i) => <span key={i} className="skill-tag soft-tag">{w.courseName} ({w.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div></div>{traineeMatchesLoading ? <p className="no-data">Loading job matches...</p> : traineeMatches && <div className="skills-section"><h4>Job Matches ({traineeMatches.total_matches ?? 0})</h4><div className="skills-list">{matchBuckets.flatMap((bucket) => (traineeMatches[bucket] || []).map((match, index) => <span key={`${bucket}-${index}`} className="skill-tag tech-tag">{match.job_title || match.project_name || match.job_name || bucket.replace('_', ' ')}</span>))}</div>{!matchBuckets.some((bucket) => (traineeMatches[bucket] || []).length) && <span className="no-data">No matching jobs found.</span>}</div>}</div><div className="modal-footer"><button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button></div></div></div>); };
+  const renderTraineeModal = () => {
+    if (!selectedTrainee) return null;
+    const traineeData = selectedTrainee.traineeData || selectedTrainee;
+    const userInfo = traineeData.userInfo || {};
+    const matchBuckets = ['perfect_match', 'skills_only', 'location_only', 'nearby', 'no_match'];
+    const strengths = Array.isArray(traineeData.strengths) ? traineeData.strengths : [];
+    const weaknesses = Array.isArray(traineeData.weaknesses) ? traineeData.weaknesses : [];
+    const displayScore = userInfo.averageScore ?? selectedTrainee.score ?? '—';
+    const groupName = traineeData.group_name || traineeData.groupName || selectedTrainee.group_name || selectedTrainee.groupName || '—';
+    const groupRank = traineeData.groupRank || traineeData.group_rank || selectedTrainee.groupRank || '';
+    const batchRank = traineeData.batchRank || traineeData.batch_rank || selectedTrainee.batchRank || '';
+    const dpi = traineeData.dpi ?? selectedTrainee.dpi ?? '';
+    const batchName = traineeData.batch_name || traineeData.batchName || selectedTrainee.batch_name || '—';
+    const empId = userInfo.employeeId || selectedTrainee.employeeId || '';
+
+    return (
+      <div className="modal-overlay" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>
+        <div className="modal-content trainee-profile-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <div className="modal-title"><User size={24} /><h2>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h2></div>
+            <button className="modal-close" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}><X size={24} /></button>
+          </div>
+          <div className="modal-body">
+            <div className="profile-header">
+              <div className="profile-avatar">{(userInfo.name || selectedTrainee.name || '?').charAt(0)}</div>
+              <div className="profile-info">
+                <h3>{userInfo.name || selectedTrainee.name || 'Candidate Profile'}</h3>
+                <div className="profile-meta">
+                  {empId && <span><User size={16} /> Emp ID: {empId}</span>}
+                  <span><MapPin size={16} /> {userInfo.location || selectedTrainee.location || '—'}</span>
+                  <span><Mail size={16} /> {userInfo.email || selectedTrainee.email || '—'}</span>
+                  <span><Target size={16} /> Score: {displayScore}{displayScore === '—' ? '' : '%'}</span>
+                  <span><Users size={16} /> Group: {groupName} {groupRank ? `(${groupRank})` : ''}</span>
+                  <span><Layers size={16} /> Batch: {batchName} {batchRank ? `(${batchRank})` : ''}</span>
+                  {dpi !== '' && <span><Zap size={16} /> DPI: {dpi}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="skills-section">
+              <h4>Strengths</h4>
+              <div className="skills-list">{strengths.length ? strengths.map((s, i) => <span key={i} className="skill-tag tech-tag">{s.courseName} ({s.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div>
+              <h4>Weaknesses</h4>
+              <div className="skills-list">{weaknesses.length ? weaknesses.map((w, i) => <span key={i} className="skill-tag soft-tag">{w.courseName} ({w.avgScore ?? '—'}%)</span>) : <span className="no-data">None</span>}</div>
+            </div>
+            {traineeMatchesLoading ? <p className="no-data">Loading job matches...</p> : traineeMatches && (
+              <div className="skills-section">
+                <h4>Job Matches ({traineeMatches.total_matches ?? 0})</h4>
+                <div className="skills-list">{matchBuckets.flatMap((bucket) => (traineeMatches[bucket] || []).map((match, index) => <span key={`${bucket}-${index}`} className="skill-tag tech-tag">{match.job_title || match.project_name || match.job_name || bucket.replace('_', ' ')}</span>))}</div>
+                {!matchBuckets.some((bucket) => (traineeMatches[bucket] || []).length) && <span className="no-data">No matching jobs found.</span>}
+              </div>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn-secondary" onClick={() => { setSelectedTrainee(null); setTraineeMatches(null); }}>Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderInterviewLocks = () => {
     const lockedRows = interviewLocks.filter((lock) => lock.status === 'locked');

@@ -1,0 +1,78 @@
+2026-09-23 21:43:18 [INFO] [django.utils.autoreload:668] [PID:14832] Watching for file changes with StatReloader
+2026-09-23 21:43:21 [WARNING] [root:33] [PID:14832] LangChain not installed. AI features will be limited.
+2026-09-23 21:45:54 [WARNING] [root:33] [PID:7048] LangChain not installed. AI features will be limited.
+2026-09-23 21:45:55 [INFO] [apis.matching_engine:593] [PID:7048] Running matching for job_id=2
+2026-09-23 21:45:55 [INFO] [apis.matching_engine:599] [PID:7048] No active jobs to match.
+2026-09-23 21:46:01 [WARNING] [apis.views:4270] [PID:7048] Ollama JD parsing unavailable: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=3). Using rule-based fallback.
+2026-09-23 21:47:15 [WARNING] [root:33] [PID:28968] LangChain not installed. AI features will be limited.
+2026-09-23 21:47:16 [INFO] [apis.matching_engine:593] [PID:28968] Running matching for job_id=2
+2026-09-23 21:47:17 [INFO] [apis.matching_engine:599] [PID:28968] No active jobs to match.
+2026-09-23 21:47:22 [WARNING] [apis.views:4270] [PID:28968] Ollama JD parsing unavailable: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=3). Using rule-based fallback.
+2026-09-23 21:47:27 [INFO] [apis:592] [PID:28968] Test server log entry
+2026-09-23 21:47:27 [ERROR] [apis:593] [PID:28968] Test error log entry
+2026-09-23 21:57:17 [INFO] [django.utils.autoreload:266] [PID:14832] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 21:57:22 [INFO] [django.utils.autoreload:668] [PID:28408] Watching for file changes with StatReloader
+2026-09-23 21:57:35 [WARNING] [root:33] [PID:28408] LangChain not installed. AI features will be limited.
+2026-09-23 21:57:43 [INFO] [django.utils.autoreload:266] [PID:28408] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 21:57:45 [INFO] [django.utils.autoreload:668] [PID:5824] Watching for file changes with StatReloader
+2026-09-23 21:57:47 [WARNING] [root:33] [PID:5824] LangChain not installed. AI features will be limited.
+2026-09-23 21:58:19 [INFO] [django.utils.autoreload:266] [PID:5824] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 21:58:21 [INFO] [django.utils.autoreload:668] [PID:28520] Watching for file changes with StatReloader
+2026-09-23 21:58:23 [WARNING] [root:33] [PID:28520] LangChain not installed. AI features will be limited.
+2026-09-23 21:58:53 [INFO] [django.utils.autoreload:266] [PID:28520] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 21:58:55 [INFO] [django.utils.autoreload:668] [PID:14760] Watching for file changes with StatReloader
+2026-09-23 21:58:59 [WARNING] [root:33] [PID:14760] LangChain not installed. AI features will be limited.
+2026-09-23 21:59:24 [INFO] [django.utils.autoreload:266] [PID:14760] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 21:59:26 [INFO] [django.utils.autoreload:668] [PID:7264] Watching for file changes with StatReloader
+2026-09-23 21:59:29 [WARNING] [root:33] [PID:7264] LangChain not installed. AI features will be limited.
+2026-09-23 22:00:00 [INFO] [django.utils.autoreload:266] [PID:7264] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 22:00:01 [INFO] [django.utils.autoreload:668] [PID:29812] Watching for file changes with StatReloader
+2026-09-23 22:00:04 [WARNING] [root:33] [PID:29812] LangChain not installed. AI features will be limited.
+2026-09-23 22:00:49 [INFO] [django.utils.autoreload:266] [PID:29812] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 22:00:52 [INFO] [django.utils.autoreload:668] [PID:21908] Watching for file changes with StatReloader
+2026-09-23 22:00:57 [WARNING] [root:33] [PID:21908] LangChain not installed. AI features will be limited.
+2026-09-23 22:01:55 [INFO] [django.utils.autoreload:266] [PID:21908] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 22:01:58 [INFO] [django.utils.autoreload:668] [PID:25020] Watching for file changes with StatReloader
+2026-09-23 22:02:01 [WARNING] [root:33] [PID:25020] LangChain not installed. AI features will be limited.
+2026-09-23 22:02:35 [INFO] [django.utils.autoreload:266] [PID:25020] C:\Users\tharu\Downloads\align-verison10\align-verison10\backend\talentalignbackend\apis\views.py changed, reloading.
+2026-09-23 22:02:37 [INFO] [django.utils.autoreload:668] [PID:21216] Watching for file changes with StatReloader
+2026-09-23 22:02:39 [WARNING] [root:33] [PID:21216] LangChain not installed. AI features will be limited.
+2026-09-23 22:02:53 [WARNING] [root:33] [PID:3908] LangChain not installed. AI features will be limited.
+2026-09-23 22:02:54 [INFO] [apis.views:510] [PID:3908] [JOB_CREATE] Job created: id=2, project_name='Cloud Infrastructure Security', stream='Cloud', openings=3, rgs_id='RGS-1002', created_by='admin_test'
+2026-09-23 22:02:54 [INFO] [apis.matching_engine:593] [PID:3908] Running matching for job_id=2
+2026-09-23 22:02:54 [INFO] [apis.matching_engine:599] [PID:3908] No active jobs to match.
+2026-09-23 22:02:54 [INFO] [apis.views:4458] [PID:3908] [EXCEL_EXPORT_START] Exporting Talent Alignment executive dashboard Excel: batch='all', user='admin_test'
+2026-09-23 22:02:54 [INFO] [apis.views:4463] [PID:3908] [EXCEL_EXPORT_SUCCESS] Generated Talent Alignment Excel workbook: filename='talent_alignment_executive_dashboard_all_20260923_2202.xlsx', size_bytes=8041
+2026-09-23 22:02:59 [WARNING] [apis.views:4364] [PID:3908] Ollama JD parsing unavailable: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=3). Using rule-based fallback.
+2026-09-23 22:02:59 [INFO] [apis.views:4438] [PID:3908] [JD_PARSED] Successfully parsed JD: project_name='SpringBoot Developer Requirement', stream='SpringBoot', openings=1, shared_by='RMG', parsed_by='admin_test'
+2026-09-23 22:03:01 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:03:02 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:03:02 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:03:03 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:03:03 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=1, created/updated=1, failed=0
+2026-09-23 22:03:04 [INFO] [apis.views:935] [PID:3908] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:03:04 [INFO] [apis.views:2490] [PID:3908] [HR_SUMMARY_REPORT] Generating HR Summary Excel: batch='all', user='admin_profile_test'
+2026-09-23 22:03:05 [INFO] [apis:592] [PID:3908] Test server log entry
+2026-09-23 22:03:05 [ERROR] [apis:593] [PID:3908] Test error log entry
+2026-09-23 22:04:49 [WARNING] [root:33] [PID:30004] LangChain not installed. AI features will be limited.
+2026-09-23 22:04:54 [INFO] [apis.views:510] [PID:30004] [JOB_CREATE] Job created: id=4, project_name='Cloud Infrastructure Security', stream='Cloud', openings=3, rgs_id='RGS-1002', created_by='admin_test'
+2026-09-23 22:04:54 [INFO] [apis.matching_engine:593] [PID:30004] Running matching for job_id=4
+2026-09-23 22:04:54 [INFO] [apis.matching_engine:599] [PID:30004] No active jobs to match.
+2026-09-23 22:04:54 [INFO] [apis.views:4458] [PID:30004] [EXCEL_EXPORT_START] Exporting Talent Alignment executive dashboard Excel: batch='all', user='admin_test'
+2026-09-23 22:04:54 [INFO] [apis.views:4463] [PID:30004] [EXCEL_EXPORT_SUCCESS] Generated Talent Alignment Excel workbook: filename='talent_alignment_executive_dashboard_all_20260923_2204.xlsx', size_bytes=8041
+2026-09-23 22:05:00 [WARNING] [apis.views:4364] [PID:30004] Ollama JD parsing unavailable: HTTPConnectionPool(host='localhost', port=11434): Read timed out. (read timeout=3). Using rule-based fallback.
+2026-09-23 22:05:00 [INFO] [apis.views:4438] [PID:30004] [JD_PARSED] Successfully parsed JD: project_name='SpringBoot Developer Requirement', stream='SpringBoot', openings=1, shared_by='RMG', parsed_by='admin_test'
+2026-09-23 22:05:01 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:05:02 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:05:02 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:05:03 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:05:03 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=1, created/updated=1, failed=0
+2026-09-23 22:05:04 [INFO] [apis.views:935] [PID:30004] [PROFILE_BULK_UPLOAD] Bulk profile upload completed: total=3, created/updated=3, failed=0
+2026-09-23 22:05:04 [INFO] [apis.views:2490] [PID:30004] [HR_SUMMARY_REPORT] Generating HR Summary Excel: batch='all', user='admin_profile_test'
+2026-09-23 22:05:04 [INFO] [apis:592] [PID:30004] Test server log entry
+2026-09-23 22:05:04 [ERROR] [apis:593] [PID:30004] Test error log entry
+2026-09-23 22:06:13 [WARNING] [django.server:212] [PID:21216] "GET /api/interview-locks/ HTTP/1.1" 401 172
+2026-09-23 22:06:13 [WARNING] [django.server:212] [PID:21216] "GET /api/interview-locks/ HTTP/1.1" 401 172
+2026-09-23 22:06:13 [INFO] [django.server:212] [PID:21216] "POST /api/token/refresh/ HTTP/1.1" 200 286
+2026-09-23 22:06:14 [INFO] [django.server:212] [PID:21216] "GET /api/interview-locks/ HTTP/1.1" 200 417
+2026-09-23 22:06:14 [INFO] [django.server:212] [PID:21216] "GET /api/interview-locks/ HTTP/1.1" 200 417

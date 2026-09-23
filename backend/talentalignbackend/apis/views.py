@@ -125,13 +125,24 @@ def get_trainee_profile(user):
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username')
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            logger.info(f"[AUTH_SUCCESS] User login successful: username='{username}'")
+        else:
+            logger.warning(f"[AUTH_FAILED] Login failed for username='{username}' status={response.status_code}")
+        return response
+
 # ---------- User Management ----------
 class AddUserView(APIView):
     def post(self, request):
         serializer = AddUserSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
+            logger.info(f"[USER_CREATE] New user created: username='{user.username}', email='{user.email}', role='{user.role}'")
             return Response({"message": "User created"}, status=201)
+        logger.warning(f"[USER_CREATE_ERROR] Failed to create user: {serializer.errors}")
         return Response(serializer.errors, status=400)
 
 class UploadAddExcelView(APIView):
@@ -142,6 +153,7 @@ class UploadAddExcelView(APIView):
         try:
             df = pd.read_excel(file)
         except Exception as e:
+            logger.error(f"[USER_UPLOAD_ERROR] Invalid Excel file: {str(e)}")
             return Response({"error": f"Invalid Excel file: {str(e)}"}, status=400)
 
         created_users = []
@@ -149,6 +161,7 @@ class UploadAddExcelView(APIView):
         required_columns = {'username', 'email', 'role'}
         missing_columns = sorted(required_columns - set(df.columns))
         if missing_columns:
+            logger.warning(f"[USER_UPLOAD_ERROR] Missing required columns in user upload: {missing_columns}")
             return Response(
                 {"error": "Missing required columns", "missing": missing_columns},
                 status=400,
@@ -172,6 +185,7 @@ class UploadAddExcelView(APIView):
                 is_active=True
             )
             created_users.append(row['username'])
+        logger.info(f"[USER_BULK_UPLOAD] Bulk imported {len(created_users)} users from Excel")
         return Response({"created_users": created_users}, status=201)
 
 class UserListView(APIView):
@@ -188,11 +202,14 @@ class EditUserView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
+            logger.warning(f"[USER_EDIT_ERROR] User not found: user_id={user_id}")
             return Response({"error": "User not found"}, status=404)
         serializer = EditUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            logger.info(f"[USER_UPDATE] User updated: user_id={user_id}, username='{user.username}'")
             return Response({"message": "User updated", "data": serializer.data})
+        logger.warning(f"[USER_UPDATE_ERROR] Validation failed for user_id={user_id}: {serializer.errors}")
         return Response(serializer.errors, status=400)
 
 class ToggleUserStatusView(APIView):
@@ -200,11 +217,13 @@ class ToggleUserStatusView(APIView):
         user = get_object_or_404(User, id=user_id)
         user.is_active = not user.is_active
         user.save()
+        logger.info(f"[USER_STATUS] User active status toggled: username='{user.username}', is_active={user.is_active}")
         return Response({"status": "updated"})
 
 class DeleteUserView(APIView):
     def delete(self, request, user_id):
         User.objects.filter(id=user_id).delete()
+        logger.info(f"[USER_DELETE] User deleted: user_id={user_id}")
         return Response({"message": "User deleted"})
 
 class ResetPasswordView(APIView):
@@ -214,6 +233,7 @@ class ResetPasswordView(APIView):
             user = get_object_or_404(User, id=user_id)
             user.set_password(serializer.validated_data['password'])
             user.save()
+            logger.info(f"[PASSWORD_RESET] Password reset for user: username='{user.username}'")
             return Response({"message": "Password reset successful"})
         return Response(serializer.errors, status=400)
 
@@ -487,6 +507,7 @@ class JobListView(APIView):
         serializer = JobSerializer(data=request.data)
         if serializer.is_valid():
             job = serializer.save(created_by=request.user if request.user.is_authenticated else None)
+            logger.info(f"[JOB_CREATE] Job created: id={job.id}, project_name='{job.project_name}', stream='{job.stream}', openings={job.openings}, rgs_id='{job.rgs_id}', created_by='{request.user}'")
             audit_log(request.user, 'JD Creation', job, new=JobSerializer(job).data)
             if job.course:
                 for owner in job.course.owners.all():
@@ -499,6 +520,7 @@ class JobListView(APIView):
                     )
             threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
             return Response(serializer.data, status=201)
+        logger.warning(f"[JOB_CREATE_ERROR] Failed to create job: {serializer.errors}")
         return Response(serializer.errors, status=400)
 
 class JobDetailView(APIView):
@@ -513,6 +535,7 @@ class JobDetailView(APIView):
         if job:
             serializer = JobSerializer(job)
             return Response(serializer.data)
+        logger.warning(f"[JOB_NOT_FOUND] Job not found: pk={pk}")
         return Response({"error": "Job not found"}, status=404)
 
     def put(self, request, pk):
@@ -523,16 +546,22 @@ class JobDetailView(APIView):
                 before = JobSerializer(job).data
                 saved = serializer.save()
                 sync_job_filled(saved)
+                logger.info(f"[JOB_UPDATE] Job updated: id={saved.id}, project_name='{saved.project_name}', status='{saved.status}', filled={saved.filled}/{saved.openings}")
                 audit_log(request.user, 'JD Update', saved, previous=before, new=JobSerializer(saved).data)
                 return Response(serializer.data)
+            logger.warning(f"[JOB_UPDATE_ERROR] Validation failed for job pk={pk}: {serializer.errors}")
             return Response(serializer.errors, status=400)
+        logger.warning(f"[JOB_NOT_FOUND] Cannot update, job not found: pk={pk}")
         return Response({"error": "Job not found"}, status=404)
 
     def delete(self, request, pk):
         job = self.get_object(pk)
         if job:
+            project_name = job.project_name
             job.delete()
+            logger.info(f"[JOB_DELETE] Job deleted: id={pk}, project_name='{project_name}'")
             return Response({"message": "Job deleted successfully"}, status=204)
+        logger.warning(f"[JOB_NOT_FOUND] Cannot delete, job not found: pk={pk}")
         return Response({"error": "Job not found"}, status=404)
 
 class ToggleJobStatusView(APIView):
@@ -540,6 +569,7 @@ class ToggleJobStatusView(APIView):
         job = get_object_or_404(Job, pk=pk)
         job.status = 'inactive' if job.status == 'active' else 'active'
         job.save()
+        logger.info(f"[JOB_STATUS] Job status toggled: id={job.id}, project_name='{job.project_name}', new_status='{job.status}'")
         serializer = JobSerializer(job)
         return Response(serializer.data)
 
@@ -673,11 +703,14 @@ class UploadExcelView(APIView):
                 except Exception as e:
                     errors.append(f"Row {idx+2}: {str(e)}")
 
+            logger.info(f"[JOB_EXCEL_UPLOAD] Uploaded jobs from Excel: count={len(created_jobs)}, batch='{batch_name}', errors={len(errors)}")
             response = {"message": f"Processed {len(created_jobs)} jobs", "created_jobs": created_jobs}
             if errors:
+                logger.warning(f"[JOB_EXCEL_UPLOAD_WARNING] Job rows with errors: {errors[:5]}")
                 response["errors"] = errors[:10]
             return Response(response, status=201)
         except Exception as e:
+            logger.error(f"[JOB_EXCEL_UPLOAD_ERROR] Error processing Excel file: {str(e)}")
             return Response({"error": f"Error processing file: {str(e)}"}, status=400)
 
 class UploadWordView(APIView):
@@ -697,11 +730,15 @@ class UploadWordView(APIView):
                 serializer = JobSerializer(data=job_data)
                 if serializer.is_valid():
                     job = serializer.save()
+                    logger.info(f"[JOB_WORD_UPLOAD] Created job from Word doc: id={job.id}, project_name='{job.project_name}', stream='{job.stream}', batch='{batch_name}'")
                     threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
                     return Response({"message": "Job created", "job": job.project_name}, status=201)
+                logger.warning(f"[JOB_WORD_UPLOAD_ERROR] Validation failed: {serializer.errors}")
                 return Response(serializer.errors, status=400)
+            logger.warning("[JOB_WORD_UPLOAD_ERROR] Could not parse Word document content")
             return Response({"error": "Could not parse Word document"}, status=400)
         except Exception as e:
+            logger.error(f"[JOB_WORD_UPLOAD_ERROR] Error processing Word file: {str(e)}")
             return Response({"error": f"Error processing Word: {str(e)}"}, status=400)
 
     def parse_word_content(self, content):
@@ -793,6 +830,9 @@ class ProfileListCreateAPIView(APIView):
         batch = request.query_params.get('batch')
         if batch:
             qs = qs.filter(batch_name=batch)
+        group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
+        if group:
+            qs = qs.filter(group_name=group)
         serializer = ProfileRecordSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -801,12 +841,12 @@ class ProfileListCreateAPIView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             user_info = instance.userInfo
-            if user_info.employeeId:
+            if user_info and user_info.employeeId:
                 emp_id = str(user_info.employeeId)
                 user, created = User.objects.get_or_create(
                     username=emp_id,
                     defaults={
-                        'email': f"{emp_id}@tcs.com",
+                        'email': user_info.email or f"{emp_id}@tcs.com",
                         'first_name': user_info.name.split()[0] if user_info.name else '',
                         'last_name': ' '.join(user_info.name.split()[1:]) if user_info.name and len(user_info.name.split()) > 1 else '',
                         'role': 'trainee',
@@ -854,24 +894,30 @@ class ProfileDetailAPIView(APIView):
 
 class BulkUploadProfilesAPIView(APIView):
     def post(self, request):
-        if not isinstance(request.data, list):
-            return Response({"detail": "Expected a list of JSON objects."}, status=400)
+        raw_data = request.data
+        if isinstance(raw_data, dict) and 'data' in raw_data and isinstance(raw_data['data'], list):
+            items = raw_data['data']
+        elif isinstance(raw_data, list):
+            items = raw_data
+        else:
+            logger.warning("[PROFILE_BULK_UPLOAD_ERROR] Expected list or object with data list")
+            return Response({"detail": "Expected a list of JSON objects or an object containing a 'data' list."}, status=400)
 
         created_count = 0
         errors = []
         outputs = []
 
-        for idx, payload in enumerate(request.data):
+        for idx, payload in enumerate(items):
             serializer = ProfileRecordSerializer(data=payload)
             if serializer.is_valid():
                 instance = serializer.save()
                 user_info = instance.userInfo
-                if user_info.employeeId:
+                if user_info and user_info.employeeId:
                     emp_id = str(user_info.employeeId)
                     user, created = User.objects.get_or_create(
                         username=emp_id,
                         defaults={
-                            'email': f"{emp_id}@tcs.com",
+                            'email': user_info.email or f"{emp_id}@tcs.com",
                             'first_name': user_info.name.split()[0] if user_info.name else '',
                             'last_name': ' '.join(user_info.name.split()[1:]) if user_info.name and len(user_info.name.split()) > 1 else '',
                             'role': 'trainee',
@@ -886,6 +932,9 @@ class BulkUploadProfilesAPIView(APIView):
             else:
                 errors.append({"index": idx, "errors": serializer.errors})
 
+        logger.info(f"[PROFILE_BULK_UPLOAD] Bulk profile upload completed: total={len(items)}, created/updated={created_count}, failed={len(errors)}")
+        if errors:
+            logger.warning(f"[PROFILE_BULK_UPLOAD_WARNING] Some profile records had validation errors: {errors[:5]}")
         resp = {"created": created_count, "failed": len(errors), "errors": errors, "records": outputs}
         status_code = 201 if not errors else 207
         return Response(resp, status=status_code)
@@ -903,8 +952,11 @@ class UserInfoMappingUpdateAPIView(APIView):
                     job = get_job_by_maybe_id(job_id)
                     if job:
                         sync_job_filled(job)
-            audit_log(request.user, 'Candidate Mapping' if instance.isMapped else 'Candidate Unmapping', instance, previous=previous, new=UserInfoSerializer(instance).data)
+            action_name = 'Candidate Mapping' if instance.isMapped else 'Candidate Unmapping'
+            logger.info(f"[TRAINEE_MAPPING] {action_name}: userId='{userId}', name='{instance.name}', isMapped={instance.isMapped}, projectId='{instance.projectId}', project='{instance.projectName}', updated_by='{request.user}'")
+            audit_log(request.user, action_name, instance, previous=previous, new=UserInfoSerializer(instance).data)
             return Response(serializer.data)
+        logger.warning(f"[TRAINEE_MAPPING_ERROR] Failed to update mapping for userId='{userId}': {serializer.errors}")
         return Response(serializer.errors, status=400)
 
 class UserInfoDetailAPIView(APIView):
@@ -929,7 +981,9 @@ def recommendation_list_create(request):
     serializer = RecommendationSerializer(data=request.data)
     if serializer.is_valid():
         obj = serializer.save()
+        logger.info(f"[RECOMMENDATION_CREATE] Recommendation created: id={obj.id}, trainee_id='{obj.trainee_id}', job_id={obj.job_id}, status='{obj.status}'")
         return Response(RecommendationSerializer(obj).data, status=201)
+    logger.warning(f"[RECOMMENDATION_CREATE_ERROR] Validation failed: {serializer.errors}")
     return Response(serializer.errors, status=400)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
@@ -942,16 +996,19 @@ def recommendation_detail(request, pk):
         serializer = RecommendationSerializer(instance, data=request.data)
         if serializer.is_valid():
             obj = serializer.save()
+            logger.info(f"[RECOMMENDATION_UPDATE] Recommendation updated: id={obj.id}, status='{obj.status}'")
             return Response(RecommendationSerializer(obj).data)
         return Response(serializer.errors, status=400)
     elif request.method == 'PATCH':
         serializer = RecommendationSerializer(instance, data=request.data, partial=True)
         if serializer.is_valid():
             obj = serializer.save()
+            logger.info(f"[RECOMMENDATION_UPDATE] Recommendation patched: id={obj.id}, status='{obj.status}'")
             return Response(RecommendationSerializer(obj).data)
         return Response(serializer.errors, status=400)
     else:
         instance.delete()
+        logger.info(f"[RECOMMENDATION_DELETE] Recommendation deleted: id={pk}")
         return Response(status=204)
 
 # ---------- Matching Engine Trigger ----------
@@ -962,11 +1019,15 @@ class RunMatchingEngineView(APIView):
             try:
                 job_id = int(job_id)
             except (TypeError, ValueError):
+                logger.warning(f"[MATCHING_ENGINE_ERROR] Invalid job_id provided: {request.data.get('job_id')}")
                 return Response({"error": "Invalid job_id"}, status=400)
+        logger.info(f"[MATCHING_ENGINE_TRIGGER] Manual matching engine execution started for job_id={job_id or 'ALL'}")
         result = run_matching_logic(job_id=job_id)
         if result:
+            logger.info(f"[MATCHING_ENGINE_COMPLETE] Matching engine completed successfully for job_id={job_id or 'ALL'}")
             return Response({"message": "Matching run successfully."}, status=201)
         else:
+            logger.info(f"[MATCHING_ENGINE_SKIPPED] Matching engine finished (no updates needed) for job_id={job_id or 'ALL'}")
             return Response({"message": "Already updated"}, status=200)
 
 # ---------- Job Matches ----------
@@ -1116,11 +1177,13 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
             try:
                 assigned_to = User.objects.get(id=assigned_to_id)
             except User.DoesNotExist:
+                logger.warning(f"[INTERVIEW_LOCK_ERROR] Assigned user id={assigned_to_id} not found")
                 return Response({'error': 'Assigned user not found'}, status=400)
 
         try:
             job = Job.objects.get(id=job_id)
         except Job.DoesNotExist:
+            logger.warning(f"[INTERVIEW_LOCK_ERROR] Job id={job_id} not found")
             return Response({'error': 'Job not found'}, status=404)
 
         profiles = ProfileRecord.objects.filter(
@@ -1155,6 +1218,7 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
                         {'lock_id': lock.id, 'job_id': job.id},
                     )
 
+        logger.info(f"[INTERVIEW_LOCK_BULK] Created {len(locks)} interview locks for job_id={job_id} ('{job.project_name}') by user='{request.user}'")
         output_serializer = self.get_serializer(locks, many=True)
         return Response(output_serializer.data, status=201)
 
@@ -1196,14 +1260,17 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
                 lock.locked_by.username if lock.locked_by else '',
                 lock.created_at,
             ])
+        logger.info(f"[INTERVIEW_LOCK_REPORT] Exported interview locks CSV: count={locks.count()}")
         return response
 
     @action(detail=True, methods=['post'])
     def submit_feedback(self, request, pk=None):
         lock = self.get_object()
         if lock.status != 'locked':
+            logger.warning(f"[INTERVIEW_FEEDBACK_ERROR] Attempted feedback submission on non-locked lock_id={lock.id} (status='{lock.status}')")
             return Response({'error': 'Feedback can only be submitted for locked interviews.'}, status=400)
         if hasattr(lock, 'feedback'):
+            logger.warning(f"[INTERVIEW_FEEDBACK_ERROR] Feedback already exists for lock_id={lock.id}")
             return Response({'error': 'Feedback already exists for this interview.'}, status=400)
 
         feedback_serializer = InterviewFeedbackSerializer(data=request.data)
@@ -1218,6 +1285,8 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
             lock.status = 'rejected'
         lock.save()
         sync_job_filled(lock.job)
+        trainee_name = lock.trainee.userInfo.name if lock.trainee and lock.trainee.userInfo else 'Candidate'
+        logger.info(f"[INTERVIEW_FEEDBACK] Feedback submitted: lock_id={lock.id}, candidate='{trainee_name}', job_id={lock.job_id} ('{lock.job.project_name}'), result='{lock.status}', interviewer='{request.user}'")
         audit_log(request.user, 'Feedback Submission', lock, previous=previous, new={'status': lock.status})
         notify_type = 'candidate_selected' if lock.status == 'selected' else 'candidate_rejected'
         if lock.job.created_by:
@@ -1225,14 +1294,14 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
                 lock.job.created_by,
                 notify_type,
                 f"Candidate {lock.status}",
-                f"{lock.trainee.userInfo.name} was {lock.status} for {lock.job.project_name}.",
+                f"{trainee_name} was {lock.status} for {lock.job.project_name}.",
                 {'lock_id': lock.id, 'job_id': lock.job_id},
             )
         notify_user(
             request.user,
             'feedback_submitted',
             'Feedback submitted',
-            f"Feedback submitted for {lock.trainee.userInfo.name}.",
+            f"Feedback submitted for {trainee_name}.",
             {'lock_id': lock.id},
         )
         return Response(feedback_serializer.data, status=201)
@@ -1266,6 +1335,8 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
         if old_job.id != lock.job_id:
             sync_job_filled(lock.job)
 
+        trainee_name = lock.trainee.userInfo.name if lock.trainee and lock.trainee.userInfo else 'Candidate'
+        logger.info(f"[INTERVIEW_UNLOCK] Interview unlocked: lock_id={lock.id}, candidate='{trainee_name}', new_status='{lock.status}', unlocked_by='{request.user}'")
         audit_log(request.user, 'Interview Unlock', lock, previous=previous, new=InterviewLockSerializer(lock).data)
         return Response(InterviewLockSerializer(lock).data)
 
@@ -1340,17 +1411,23 @@ class MappedTraineesReportView(APIView):
 
     def get(self, request):
         batch = request.query_params.get('batch')
+        group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
         mapped = UserInfo.objects.filter(isMapped=True).select_related('profile')
         if batch:
             mapped = mapped.filter(profile__batch_name=batch)
+        if group:
+            mapped = mapped.filter(profile__group_name=group)
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="mapped_trainees.csv"'
         writer = csv.writer(response)
-        writer.writerow(['Name','Email','Location','Project ID','Project Name','Score'])
+        writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Project ID', 'Project Name', 'Score'])
         for info in mapped:
+            profile = getattr(info, 'profile', None)
             writer.writerow([
                 info.name,
                 info.employeeId or '',
+                profile.batch_name if profile else '',
+                profile.group_name if profile else '',
                 info.location or '',
                 info.projectId or '',
                 info.projectName or '',
@@ -1363,17 +1440,23 @@ class UnmappedTraineesReportView(APIView):
 
     def get(self, request):
         batch = request.query_params.get('batch')
+        group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
         unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
         if batch:
             unmapped = unmapped.filter(profile__batch_name=batch)
+        if group:
+            unmapped = unmapped.filter(profile__group_name=group)
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="unmapped_trainees.csv"'
         writer = csv.writer(response)
-        writer.writerow(['Name','Email','Location','Average Score'])
+        writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Average Score'])
         for info in unmapped:
+            profile = getattr(info, 'profile', None)
             writer.writerow([
                 info.name,
                 info.employeeId or '',
+                profile.batch_name if profile else '',
+                profile.group_name if profile else '',
                 info.location or '',
                 info.averageScore or '',
             ])
@@ -1385,20 +1468,26 @@ class OpenPoolReportView(APIView):
     def get(self, request):
         from django.db.models import Exists, OuterRef
         batch = request.query_params.get('batch')
-        unmapped = UserInfo.objects.filter(isMapped=False)
+        group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
+        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
         if batch:
             unmapped = unmapped.filter(profile__batch_name=batch)
+        if group:
+            unmapped = unmapped.filter(profile__group_name=group)
         has_match = Match.objects.filter(trainee_ref__userInfo=OuterRef('pk'))
         open_pool = unmapped.annotate(has_match=Exists(has_match)).filter(has_match=False)
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="open_pool_trainees.csv"'
         writer = csv.writer(response)
-        writer.writerow(['Name','Email','Location','Average Score'])
+        writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Average Score'])
         for info in open_pool:
+            profile = getattr(info, 'profile', None)
             writer.writerow([
                 info.name,
                 info.employeeId or '',
+                profile.batch_name if profile else '',
+                profile.group_name if profile else '',
                 info.location or '',
                 info.averageScore or '',
             ])
@@ -1473,13 +1562,14 @@ class DecoFetchTraineesView(APIView):
                     external_id = item.get('id')
                     upskillCourses = item.get('upskillCourses')
                     certificates = item.get('certificates')
-                    user_info_data = item.get('userInfo', {})
-                    strengths_data = item.get('strengths', [])
-                    weaknesses_data = item.get('weaknesses', [])
+                    user_info_data = item.get('userInfo') or {}
+                    strengths_data = item.get('strengths') or []
+                    weaknesses_data = item.get('weaknesses') or []
                     batchRank = item.get('batchRank')
                     groupRank = item.get('groupRank')
+                    group_name = item.get('groupName') or item.get('group_name')
                     dpi = item.get('dpi')
-                    batch_name = item.get('batchName')
+                    batch_name = item.get('batchName') or item.get('batch_name')
 
                     name = user_info_data.get('name')
                     location = user_info_data.get('location')
@@ -1488,26 +1578,27 @@ class DecoFetchTraineesView(APIView):
                     employee_id = user_info_data.get('employeeId')
                     isu = user_info_data.get('isu')
 
-                    if not employee_id or not user_id:
-                        errors.append({"item": user_id or employee_id or "unknown", "error": "Missing employeeId or userId"})
+                    if not user_id:
+                        errors.append({"item": item.get('id') or "unknown", "error": "Missing userId in userInfo"})
                         continue
 
-                    employee_id = str(employee_id)
                     user_id = str(user_id)
+                    emp_id_str = str(employee_id) if employee_id is not None and str(employee_id).strip() != '' else None
 
-                    user, created = User.objects.update_or_create(
-                        username=employee_id,
-                        defaults={
-                            'email': f"{employee_id}@tcs.com",
-                            'first_name': name.split()[0] if name else '',
-                            'last_name': ' '.join(name.split()[1:]) if name and len(name.split()) > 1 else '',
-                            'role': 'trainee',
-                            'is_active': True,
-                        }
-                    )
-                    if created:
-                        user.set_password('Tcs#12345')
-                        user.save()
+                    if emp_id_str:
+                        user, created = User.objects.update_or_create(
+                            username=emp_id_str,
+                            defaults={
+                                'email': f"{emp_id_str}@tcs.com",
+                                'first_name': name.split()[0] if name else '',
+                                'last_name': ' '.join(name.split()[1:]) if name and len(name.split()) > 1 else '',
+                                'role': 'trainee',
+                                'is_active': True,
+                            }
+                        )
+                        if created:
+                            user.set_password('Tcs#12345')
+                            user.save()
 
                     user_info, _ = UserInfo.objects.update_or_create(
                         userId=user_id,
@@ -1515,23 +1606,41 @@ class DecoFetchTraineesView(APIView):
                             'name': name or '',
                             'location': location,
                             'averageScore': avg_score,
-                            'employeeId': employee_id,
+                            'employeeId': emp_id_str,
                             'isu': isu,
                         }
                     )
 
-                    profile, _ = ProfileRecord.objects.update_or_create(
-                        external_id=external_id,
-                        defaults={
-                            'userInfo': user_info,
-                            'upskillCourses': upskillCourses,
-                            'certificates': certificates,
-                            'batchRank': batchRank,
-                            'groupRank': groupRank,
-                            'dpi': dpi,
-                            'batch_name': batch_name,
-                        }
-                    )
+                    profile = None
+                    if external_id is not None:
+                        profile = ProfileRecord.objects.filter(external_id=external_id).first()
+                    if not profile:
+                        profile = ProfileRecord.objects.filter(userInfo=user_info).first()
+
+                    if profile:
+                        if external_id is not None:
+                            profile.external_id = external_id
+                        profile.userInfo = user_info
+                        profile.upskillCourses = upskillCourses
+                        profile.certificates = certificates
+                        profile.batchRank = batchRank
+                        profile.groupRank = groupRank
+                        profile.dpi = dpi
+                        profile.batch_name = batch_name
+                        profile.group_name = group_name
+                        profile.save()
+                    else:
+                        profile = ProfileRecord.objects.create(
+                            external_id=external_id,
+                            userInfo=user_info,
+                            upskillCourses=upskillCourses,
+                            certificates=certificates,
+                            batchRank=batchRank,
+                            groupRank=groupRank,
+                            dpi=dpi,
+                            batch_name=batch_name,
+                            group_name=group_name,
+                        )
 
                     if strengths_data:
                         profile.strengths.all().delete()
@@ -2240,6 +2349,9 @@ class BulkStatusUpdateView(APIView):
             except Exception as e:
                 results['errors'].append(f"Row {detail['idx']+1}: {str(e)}")
 
+        logger.info(f"[BULK_STATUS_UPDATE] Status update completed: updated={results['updated']}, errors={len(results['errors'])}, requested_by='{request.user}'")
+        if results['errors']:
+            logger.warning(f"[BULK_STATUS_UPDATE_WARNING] Status update errors: {results['errors'][:5]}")
         return Response(results, status=200 if results['updated'] > 0 else 400)
 
 class DownloadBulkMappingTemplateView(APIView):
@@ -2261,10 +2373,12 @@ class BulkMappingView(APIView):
         file = request.FILES.get('file')
         batch = request.data.get('batch', '')
         if not file:
+            logger.warning("[BULK_MAPPING_ERROR] No file uploaded")
             return Response({"success": False, "error": "No file uploaded"}, status=400)
         try:
             df = pd.read_excel(file)
         except Exception as e:
+            logger.error(f"[BULK_MAPPING_ERROR] Invalid Excel file: {str(e)}")
             return Response({"success": False, "error": str(e)}, status=400)
 
         df.columns = [c.strip().lower() for c in df.columns]
@@ -2275,6 +2389,7 @@ class BulkMappingView(APIView):
             elif 'job' in col:
                 col_map['job'] = col
         if not all(k in col_map for k in ['trainee','job']):
+            logger.warning("[BULK_MAPPING_ERROR] Missing required columns (Trainee/Job)")
             return Response({"success": False, "error": "Missing required columns"}, status=400)
 
         job_mapping_counts = {}
@@ -2301,6 +2416,7 @@ class BulkMappingView(APIView):
             except Job.DoesNotExist:
                 openings_errors.append({'job': f"ID {job_id}", 'message': "Job not found"})
         if openings_errors:
+            logger.warning(f"[BULK_MAPPING_ERROR] Openings validation failed: {openings_errors}")
             return Response({"success": False, "error": "Openings validation failed", "details": openings_errors}, status=400)
 
         results = {'mapped': 0, 'errors': [], 'warnings': [], 'openings_remaining': {}, 'success': True}
@@ -2352,6 +2468,9 @@ class BulkMappingView(APIView):
                     lock.save()
             except Exception as e:
                 results['errors'].append({'row': req['idx']+2, 'trainee': trainee_id if 'trainee_id' in locals() else 'Unknown', 'message': str(e)})
+        logger.info(f"[BULK_MAPPING] Bulk mapping completed: mapped={results['mapped']}, errors={len(results['errors'])}, batch='{batch}'")
+        if results['errors']:
+            logger.warning(f"[BULK_MAPPING_WARNING] Bulk mapping errors: {results['errors'][:5]}")
         status_code = 200 if results['mapped'] > 0 else 400
         return Response(results, status=status_code)
 
@@ -2367,6 +2486,8 @@ class HRSummaryReportView(APIView):
             jobs = jobs.filter(batch_name=batch)
             trainees = trainees.filter(batch_name=batch)
             locks = locks.filter(job__batch_name=batch) | locks.filter(trainee__batch_name=batch)
+
+        logger.info(f"[HR_SUMMARY_REPORT] Generating HR Summary Excel: batch='{batch or 'all'}', user='{request.user}'")
 
         wb = Workbook()
         ws1 = wb.active
@@ -2395,9 +2516,9 @@ class HRSummaryReportView(APIView):
             ws2.append([job.project_name, job.demand_id or '', '', ', '.join(job.location) if job.location else '', job.openings, job.filled, job.status, job.batch_name or ''])
 
         ws3 = wb.create_sheet("Trainee Status")
-        ws3.append(['Name', 'Employee ID', 'Location', 'Batch', 'Mapped', 'Project'])
+        ws3.append(['Name', 'Employee ID', 'Location', 'Batch', 'Group', 'Mapped', 'Project'])
         for t in trainees:
-            ws3.append([t.userInfo.name if t.userInfo else '', t.userInfo.employeeId if t.userInfo else '', t.userInfo.location if t.userInfo else '', t.batch_name or '', 'Yes' if (t.userInfo and t.userInfo.isMapped) else 'No', t.userInfo.projectName if t.userInfo else ''])
+            ws3.append([t.userInfo.name if t.userInfo else '', t.userInfo.employeeId if t.userInfo else '', t.userInfo.location if t.userInfo else '', t.batch_name or '', t.group_name or '', 'Yes' if (t.userInfo and t.userInfo.isMapped) else 'No', t.userInfo.projectName if t.userInfo else ''])
 
         ws4 = wb.create_sheet("Interview Locks")
         ws4.append(['Trainee', 'Job', 'Status', 'Interview DateTime', 'Interviewer'])
@@ -2773,6 +2894,7 @@ class CancelCandidateSelectionView(APIView):
         try:
             lock = InterviewLock.objects.get(id=lock_id)
         except InterviewLock.DoesNotExist:
+            logger.warning(f"[CANCEL_SELECTION_ERROR] InterviewLock id={lock_id} not found")
             return Response({"error": "Lock not found"}, status=404)
         original_status = lock.status
         trainee = lock.trainee
@@ -2790,8 +2912,10 @@ class CancelCandidateSelectionView(APIView):
             job.save()
         lock.status = 'cancelled'
         lock.save()
+        trainee_name = user_info.name if user_info else 'Candidate'
+        logger.info(f"[CANCEL_SELECTION] Cancelled {original_status} for candidate='{trainee_name}', lock_id={lock_id}, job_id={job.id} ('{job.project_name}'), openings_remaining={job.openings - job.filled}, requested_by='{request.user}'")
         return Response({
-            "message": f"Cancelled {original_status} for {user_info.name}",
+            "message": f"Cancelled {original_status} for {trainee_name}",
             "job_restored": is_mapped and original_status == 'selected',
             "job_id": job.id,
             "job_openings_remaining": job.openings - job.filled
@@ -3865,6 +3989,9 @@ class ConsentSendView(APIView):
             except Exception as e:
                 errors.append(f"Error for {tid}: {str(e)}")
 
+        logger.info(f"[CONSENT_SENT] Sent consent requests: job_id={job.id} ('{job.project_name}'), total_sent={created_count + updated_count}, created={created_count}, updated={updated_count}, errors={len(errors)}, sent_by='{request.user}'")
+        if errors:
+            logger.warning(f"[CONSENT_SENT_WARNING] Errors in consent dispatch: {errors[:5]}")
         return Response({
             "message": f"Consent request sent to {created_count + updated_count} candidates.",
             "sent_count": created_count + updated_count,
@@ -3901,15 +4028,20 @@ class ConsentRespondView(APIView):
             consent = Consent.objects.filter(job_id=job_id, trainee=profile).first()
 
         if not consent:
+            logger.warning(f"[CONSENT_RESPOND_ERROR] Consent request not found: consent_id={consent_id}, job_id={job_id}")
             return Response({"error": "Consent request not found"}, status=404)
 
         if profile and consent.trainee_id != profile.id:
+            logger.warning(f"[CONSENT_RESPOND_ERROR] Unauthorized user '{request.user}' attempted response on consent_id={consent.id}")
             return Response({"error": "Unauthorized to respond to this consent"}, status=403)
 
         consent.status = status_val
         consent.remarks = remarks
         consent.responded_at = timezone.now()
         consent.save()
+
+        trainee_name = consent.trainee.userInfo.name if consent.trainee and consent.trainee.userInfo else 'Candidate'
+        logger.info(f"[CONSENT_RESPOND] Candidate consent response: candidate='{trainee_name}', job_id={consent.job_id} ('{consent.job.project_name}'), response='{status_val}', remarks='{remarks}'")
 
         # On ACCEPT: candidate gets locked to that job
         if status_val == 'ACCEPTED':
@@ -4062,6 +4194,9 @@ class ConsentOverrideView(APIView):
         consent.responded_at = timezone.now()
         consent.save()
 
+        trainee_name = consent.trainee.userInfo.name if consent.trainee and consent.trainee.userInfo else 'Candidate'
+        logger.info(f"[CONSENT_OVERRIDE] HR overridden consent: consent_id={consent_id}, candidate='{trainee_name}', job_id={consent.job_id} ('{consent.job.project_name}'), new_status='{new_status}', remarks='{remarks}', overridden_by='{request.user}'")
+
         if new_status == 'ACCEPTED':
             if consent.trainee.userInfo and consent.trainee.userInfo.projectId == str(consent.job.id):
                 u_info = consent.trainee.userInfo
@@ -4105,6 +4240,7 @@ class BulkConsentUploadView(APIView):
         try:
             df = pd.read_excel(file)
         except Exception as e:
+            logger.error(f"[CONSENT_BULK_UPLOAD_ERROR] Invalid Excel file: {str(e)}")
             return Response({"error": f"Invalid Excel: {str(e)}"}, status=400)
 
         df.columns = [str(c).strip().lower() for c in df.columns]
@@ -4112,6 +4248,7 @@ class BulkConsentUploadView(APIView):
         job_col = next((c for c in df.columns if 'job' in c or 'demand' in c or 'rgs' in c or 'project' in c), None)
 
         if not emp_col or not job_col:
+            logger.warning("[CONSENT_BULK_UPLOAD_ERROR] Missing required columns (Employee ID / Job ID)")
             return Response({"error": "Must contain 'Employee ID' and 'Job ID / Demand ID' columns"}, status=400)
 
         created = 0
@@ -4144,6 +4281,9 @@ class BulkConsentUploadView(APIView):
             except Exception as e:
                 errors.append(f"Row {idx+2}: {str(e)}")
 
+        logger.info(f"[CONSENT_BULK_UPLOAD] Bulk uploaded consent requests: created={created}, errors={len(errors)}, uploaded_by='{request.user}'")
+        if errors:
+            logger.warning(f"[CONSENT_BULK_UPLOAD_WARNING] Errors in bulk consent upload: {errors[:5]}")
         return Response({"message": f"Consent sent to {created} candidates", "created": created, "errors": errors}, status=200 if created > 0 else 400)
 
 
@@ -4295,6 +4435,7 @@ Job text:
         if parsed_data.get('openings') in (None, '', 0):
             parsed_data['openings'] = 1
 
+        logger.info(f"[JD_PARSED] Successfully parsed JD: project_name='{parsed_data.get('project_name')}', stream='{parsed_data.get('stream')}', openings={parsed_data.get('openings')}, shared_by='{parsed_data.get('shared_by')}', parsed_by='{request.user}'")
         return Response(parsed_data)
 
 
@@ -4310,13 +4451,16 @@ class TalentAlignmentExcelExportView(APIView):
 
     def get(self, request):
         if request.user.role not in ['hr', 'admin', 'manager', 'ta']:
+            logger.warning(f"[EXCEL_EXPORT_FORBIDDEN] User '{request.user}' (role='{getattr(request.user, 'role', '')}') denied access to Excel export")
             return Response({"error": "Permission denied"}, status=403)
 
         batch = request.query_params.get('batch', '')
+        logger.info(f"[EXCEL_EXPORT_START] Exporting Talent Alignment executive dashboard Excel: batch='{batch or 'all'}', user='{request.user}'")
         generator = TalentAlignmentExcelReportGenerator.from_database(batch_name=batch if batch else None)
         buffer = generator.export_to_bytes()
 
         filename = f"talent_alignment_executive_dashboard_{batch or 'all'}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        logger.info(f"[EXCEL_EXPORT_SUCCESS] Generated Talent Alignment Excel workbook: filename='{filename}', size_bytes={len(buffer.getvalue())}")
         response = HttpResponse(
             buffer.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4340,14 +4484,17 @@ class TalentAlignmentTransformExcelView(APIView):
 
         file = request.FILES.get('file') or request.FILES.get('excel_file')
         if not file:
+            logger.warning("[EXCEL_TRANSFORM_ERROR] No file uploaded for transformation")
             return Response({"error": "No file uploaded. Please provide 'file' or 'excel_file'."}, status=400)
 
         batch_name = request.data.get('batch_name', '')
+        logger.info(f"[EXCEL_TRANSFORM_START] Transforming raw file '{file.name}': batch='{batch_name}', user='{request.user}'")
         try:
             generator = TalentAlignmentExcelReportGenerator.from_file(file, batch_name=batch_name)
             buffer = generator.export_to_bytes()
 
             filename = f"talent_alignment_executive_dashboard_transformed_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            logger.info(f"[EXCEL_TRANSFORM_SUCCESS] Transformed Excel created: filename='{filename}', size_bytes={len(buffer.getvalue())}")
             response = HttpResponse(
                 buffer.getvalue(),
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4355,7 +4502,7 @@ class TalentAlignmentTransformExcelView(APIView):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
         except Exception as e:
-            logger.error(f"Error transforming talent alignment dataset: {e}")
+            logger.error(f"[EXCEL_TRANSFORM_ERROR] Error transforming talent alignment dataset: {e}", exc_info=True)
             return Response({"error": f"Failed to transform file: {str(e)}"}, status=400)
 
 
@@ -4371,8 +4518,10 @@ class GenerateReportView(APIView):
 
         batch = request.query_params.get('batch', '')
         report_type = request.query_params.get('type', 'full')
+        logger.info(f"[AI_REPORT_GENERATE] Generating AI report: type='{report_type}', batch='{batch or 'all'}', user='{request.user}'")
 
         generator = ReportGenerator(batch_name=batch if batch else None)
         report = generator.generate_full_report()
 
+        logger.info(f"[AI_REPORT_SUCCESS] Generated AI report: batch='{batch or 'all'}'")
         return Response(report)

@@ -394,7 +394,11 @@ export default function AssociateDashboard({ userData, onLogout }) {
                   </div>
                   <div>
                     <span style={{ color: '#64748b' }}>Batch:</span>
-                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{profile?.batch_name || 'Current Batch'}</div>
+                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{profile?.batch_name || 'Current Batch'} {profile?.batchRank ? `(${profile.batchRank})` : ''}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Group:</span>
+                    <div style={{ fontWeight: 600, color: '#4f46e5' }}>{profile?.group_name || profile?.groupName || '—'} {profile?.groupRank ? `(${profile.groupRank})` : ''}</div>
                   </div>
                   <div>
                     <span style={{ color: '#64748b' }}>Current Location:</span>

@@ -55,6 +55,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apis.middleware.RequestLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'talentalignbackend.urls'
@@ -160,3 +161,96 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+LOGS_DIR = BASE_DIR / 'logs'
+os.makedirs(LOGS_DIR, exist_ok=True)
+
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s [%(levelname)s] [%(name)s:%(lineno)d] [PID:%(process)d] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'request_format': {
+            'format': '%(asctime)s [%(levelname)s] %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'level': LOG_LEVEL,
+        },
+        'file_server': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'talentalign_server.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB per file
+            'backupCount': 10,
+            'formatter': 'verbose',
+            'level': LOG_LEVEL,
+            'encoding': 'utf-8',
+        },
+        'file_error': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'talentalign_error.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB per file
+            'backupCount': 10,
+            'formatter': 'verbose',
+            'level': 'ERROR',
+            'encoding': 'utf-8',
+        },
+        'file_requests': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOGS_DIR / 'talentalign_requests.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB per file
+            'backupCount': 10,
+            'formatter': 'request_format',
+            'level': 'INFO',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file_server', 'file_error'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file_server', 'file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console', 'file_server'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'apis': {
+            'handlers': ['console', 'file_server', 'file_error'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'talentalign.requests': {
+            'handlers': ['console', 'file_requests'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file_server', 'file_error'],
+        'level': LOG_LEVEL,
+    },
+}
+

@@ -412,6 +412,11 @@ function DashboardManager({ userData, onLogout }) {
         strengths: t.strengths || [],
         weaknesses: t.weaknesses || [],
         batch_name: t.batch_name,
+        group_name: t.group_name || t.groupName || "—",
+        groupName: t.group_name || t.groupName || "—",
+        groupRank: t.groupRank || t.group_rank || "—",
+        batchRank: t.batchRank || t.batch_rank || "—",
+        dpi: t.dpi ?? "—",
       };
     });
   }, [traineesList]);
@@ -934,6 +939,17 @@ function DashboardManager({ userData, onLogout }) {
         render: (t) => t.batch_name || '—',
       },
       {
+        key: 'group_name',
+        label: 'Group',
+        sortable: true,
+        filterable: true,
+        render: (t) => (
+          <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', fontWeight: 600 }}>
+            {t.group_name || t.groupName || '—'}
+          </span>
+        ),
+      },
+      {
         key: 'averageScore',
         label: 'Average Score',
         sortable: true,
@@ -1013,7 +1029,9 @@ function DashboardManager({ userData, onLogout }) {
               <div className="modal-body">
                 <p><strong>Employee ID:</strong> {selectedTraineeForView.employeeId}</p>
                 <p><strong>Location:</strong> {cap(selectedTraineeForView.location)}</p>
-                <p><strong>Batch:</strong> {selectedTraineeForView.batch_name || 'N/A'}</p>
+                <p><strong>Batch:</strong> {selectedTraineeForView.batch_name || 'N/A'} {selectedTraineeForView.batchRank ? `(Rank: ${selectedTraineeForView.batchRank})` : ''}</p>
+                <p><strong>Group:</strong> {selectedTraineeForView.group_name || selectedTraineeForView.groupName || 'N/A'} {selectedTraineeForView.groupRank ? `(Rank: ${selectedTraineeForView.groupRank})` : ''}</p>
+                {selectedTraineeForView.dpi !== undefined && selectedTraineeForView.dpi !== '—' && <p><strong>DPI:</strong> {selectedTraineeForView.dpi}</p>}
                 <p><strong>Average Score:</strong> {selectedTraineeForView.averageScore}%</p>
                 <p><strong>Status:</strong> {selectedTraineeForView.isMapped ? `Mapped to ${selectedTraineeForView.projectName}` : 'Unmapped'}</p>
                 <h4>Skills</h4>
@@ -1058,6 +1076,17 @@ function DashboardManager({ userData, onLogout }) {
         sortable: true,
         filterable: true,
         render: (t) => t.batch_name || '—',
+      },
+      {
+        key: 'group_name',
+        label: 'Group',
+        sortable: true,
+        filterable: true,
+        render: (t) => (
+          <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', fontWeight: 600 }}>
+            {t.group_name || t.groupName || '—'}
+          </span>
+        ),
       },
       {
         key: 'averageScore',

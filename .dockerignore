@@ -2,6 +2,7 @@
 .gitignore
 .DS_Store
 *.log
+logs/
 node_modules
 build
 staticfiles

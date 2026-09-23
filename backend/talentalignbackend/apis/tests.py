@@ -8,14 +8,15 @@ Comprehensive unit tests for Talent Align backend including:
 """
 
 import io
+import logging
 import pandas as pd
 import openpyxl
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from rest_framework.test import APITestCase
 from rest_framework import status
-
+from rest_framework.test import APITestCase
+from django.http import HttpResponse
 from .models import Job, UserInfo, ProfileRecord, Course, InterviewLock, Match, Strength
 from .stream_constants import (
     ALLOWED_STREAMS,
@@ -23,6 +24,7 @@ from .stream_constants import (
     is_valid_stream
 )
 from .excel_generator import TalentAlignmentExcelReportGenerator
+from .middleware import RequestLoggingMiddleware, get_client_ip
 
 User = get_user_model()
 
@@ -305,3 +307,293 @@ class APITalentAlignmentTests(APITestCase):
         self.assertIn('stream', res.data)
         self.assertEqual(res.data['stream'], 'SpringBoot')
         self.assertEqual(res.data['shared_by'], 'RMG')
+
+
+class DecoAndBulkUploadProfileTests(APITestCase):
+    """Tests for DECO & Bulk Profile Ingestion, Null Safety, Group Persistence, and Reports."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username='admin_profile_test',
+            email='admin_profile@example.com',
+            password='Password@123',
+            role='admin'
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        # Exact 3 sample records from user's DECO payload (some with employeeId=null, some with employeeId="12345")
+        self.sample_payload = {
+            "data": [
+                {
+                    "id": 101,
+                    "upskillCourses": None,
+                    "certificates": None,
+                    "userInfo": {
+                        "name": "Trainee One",
+                        "location": None,
+                        "userId": "11111111-3b33-4a9e-95c5-aeb07a7b4cc9",
+                        "averageScore": 100.0,
+                        "employeeId": None,
+                        "isu": None
+                    },
+                    "strengths": [
+                        {
+                            "courseName": "Java",
+                            "avgScore": 100.0
+                        }
+                    ],
+                    "weaknesses": [],
+                    "batchRank": "1/24",
+                    "groupRank": "1/8",
+                    "groupName": "A1",
+                    "dpi": 0.59,
+                    "batchName": "Batch 0"
+                },
+                {
+                    "id": 102,
+                    "upskillCourses": None,
+                    "certificates": None,
+                    "userInfo": {
+                        "name": "Trainee Two",
+                        "location": "Hyderabad",
+                        "userId": "22222222-e15c-405d-9cba-0d8e6fecc248",
+                        "averageScore": 80.0,
+                        "employeeId": "2962102",
+                        "isu": "Banking"
+                    },
+                    "strengths": [
+                        {
+                            "courseName": "Java",
+                            "avgScore": 80.0
+                        }
+                    ],
+                    "weaknesses": [],
+                    "batchRank": "6/24",
+                    "groupRank": "2/8",
+                    "groupName": "A1",
+                    "dpi": 0.44,
+                    "batchName": "Batch 0"
+                },
+                {
+                    "id": 103,
+                    "upskillCourses": None,
+                    "certificates": None,
+                    "userInfo": {
+                        "name": "Trainee Three",
+                        "location": "Pune",
+                        "userId": "33333333-f5c7-4348-ba78-b11d13db7987",
+                        "averageScore": 90.0,
+                        "employeeId": None,
+                        "isu": None
+                    },
+                    "strengths": [
+                        {
+                            "courseName": "Python",
+                            "avgScore": 90.0
+                        }
+                    ],
+                    "weaknesses": [],
+                    "batchRank": "3/24",
+                    "groupRank": "1/8",
+                    "groupName": "D1",
+                    "dpi": 0.75,
+                    "batchName": "Batch 0"
+                }
+            ]
+        }
+
+    def test_bulk_upload_data_object_format_with_nulls(self):
+        url = reverse('profiles-bulk-upload')
+        res = self.client.post(url, self.sample_payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['created'], 3)
+        self.assertEqual(res.data['failed'], 0)
+
+        # Verify database records
+        self.assertEqual(ProfileRecord.objects.count(), 3)
+        p1 = ProfileRecord.objects.get(external_id=101)
+        self.assertEqual(p1.group_name, 'A1')
+        self.assertEqual(p1.groupRank, '1/8')
+        self.assertEqual(p1.batchRank, '1/24')
+        self.assertEqual(p1.batch_name, 'Batch 0')
+        self.assertEqual(p1.userInfo.name, 'Trainee One')
+        self.assertIsNone(p1.userInfo.employeeId)
+
+        p2 = ProfileRecord.objects.get(external_id=102)
+        self.assertEqual(p2.group_name, 'A1')
+        self.assertEqual(p2.userInfo.employeeId, '2962102')
+        # User auth record created for 2962102
+        self.assertTrue(User.objects.filter(username='2962102').exists())
+
+        p3 = ProfileRecord.objects.get(external_id=103)
+        self.assertEqual(p3.group_name, 'D1')
+
+    def test_bulk_upload_list_format_and_upsert(self):
+        url = reverse('profiles-bulk-upload')
+        # Upload as a plain list
+        res = self.client.post(url, self.sample_payload['data'], format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['created'], 3)
+
+        # Re-upload the exact same payload (upsert check - should not crash or duplicate)
+        updated_payload = list(self.sample_payload['data'])
+        updated_payload[0]['userInfo']['averageScore'] = 99.0
+        res2 = self.client.post(url, updated_payload, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(ProfileRecord.objects.count(), 3)
+        p1 = ProfileRecord.objects.get(external_id=101)
+        self.assertEqual(p1.userInfo.averageScore, 99.0)
+
+    def test_profile_list_group_filtering(self):
+        # Ingest profiles
+        self.client.post(reverse('profiles-bulk-upload'), self.sample_payload, format='json')
+
+        # Test filtering by group=A1
+        url_a1 = f"{reverse('profiles-list-create')}?group=A1"
+        res_a1 = self.client.get(url_a1)
+        self.assertEqual(res_a1.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_a1.data), 2)
+        for item in res_a1.data:
+            self.assertEqual(item['group_name'], 'A1')
+            self.assertEqual(item['groupName'], 'A1')
+
+        # Test filtering by group_name=D1
+        url_d1 = f"{reverse('profiles-list-create')}?group_name=D1"
+        res_d1 = self.client.get(url_d1)
+        self.assertEqual(res_d1.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_d1.data), 1)
+        self.assertEqual(res_d1.data[0]['group_name'], 'D1')
+
+    def test_reports_include_group_column(self):
+        # Ingest profiles
+        self.client.post(reverse('profiles-bulk-upload'), self.sample_payload, format='json')
+
+        # Unmapped trainees report CSV
+        res_unmapped = self.client.get(reverse('report-unmapped'))
+        self.assertEqual(res_unmapped.status_code, status.HTTP_200_OK)
+        csv_content = res_unmapped.content.decode('utf-8')
+        self.assertIn('Group Name', csv_content)
+        self.assertIn('A1', csv_content)
+        self.assertIn('D1', csv_content)
+
+        # HR summary report Excel
+        res_hr = self.client.get(reverse('hr-summary-report'))
+        self.assertEqual(res_hr.status_code, status.HTTP_200_OK)
+        wb = openpyxl.load_workbook(io.BytesIO(res_hr.content))
+        self.assertIn('Trainee Status', wb.sheetnames)
+        ws_trainee = wb['Trainee Status']
+        headers = [ws_trainee.cell(row=1, column=c).value for c in range(1, 8)]
+        self.assertIn('Group', headers)
+
+    def test_profile_serialization_field_aliases(self):
+        # Upload profile with groupName and batchName
+        payload = [{
+            "id": 999,
+            "groupName": "C3",
+            "batchName": "Batch 2026",
+            "batchRank": "5/50",
+            "groupRank": "1/10",
+            "dpi": 0.88,
+            "userInfo": {
+                "name": "Alex Test",
+                "userId": "99999999-aaaa-bbbb-cccc-dddddddddddd",
+                "averageScore": 95.0
+            },
+            "strengths": [{"courseName": "Python", "avgScore": 95.0}],
+            "weaknesses": []
+        }]
+        res = self.client.post(reverse('profiles-bulk-upload'), payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        res_detail = self.client.get(reverse('profiles-detail', kwargs={'userId': '99999999-aaaa-bbbb-cccc-dddddddddddd'}))
+        self.assertEqual(res_detail.status_code, status.HTTP_200_OK)
+        data = res_detail.data
+        self.assertEqual(data['group_name'], 'C3')
+        self.assertEqual(data['groupName'], 'C3')
+        self.assertEqual(data['batch_name'], 'Batch 2026')
+        self.assertEqual(data['batchName'], 'Batch 2026')
+        self.assertEqual(data['batchRank'], '5/50')
+        self.assertEqual(data['groupRank'], '1/10')
+        self.assertEqual(data['dpi'], 0.88)
+
+
+class ServerLoggingAndMiddlewareTests(TestCase):
+    """Unit tests for production request logging middleware and log file handlers."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.middleware = RequestLoggingMiddleware(get_response=lambda req: HttpResponse("OK", status=200))
+
+    def test_client_ip_extraction(self):
+        # Test X-Forwarded-For with multiple IPs
+        req_xff = self.factory.get('/api/test/')
+        req_xff.META['HTTP_X_FORWARDED_FOR'] = '203.0.113.195, 70.41.3.18, 150.172.238.178'
+        self.assertEqual(get_client_ip(req_xff), '203.0.113.195')
+
+        # Test X-Real-IP
+        req_xrip = self.factory.get('/api/test/')
+        req_xrip.META['HTTP_X_REAL_IP'] = '198.51.100.4'
+        self.assertEqual(get_client_ip(req_xrip), '198.51.100.4')
+
+        # Test default REMOTE_ADDR
+        req_remote = self.factory.get('/api/test/')
+        req_remote.META['REMOTE_ADDR'] = '192.0.2.1'
+        self.assertEqual(get_client_ip(req_remote), '192.0.2.1')
+
+    def test_middleware_request_id_and_header(self):
+        req = self.factory.get('/api/test-route/')
+        response = self.middleware(req)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.has_header('X-Request-ID'))
+        self.assertGreater(len(response['X-Request-ID']), 0)
+
+    def test_middleware_status_level_logging(self):
+        import logging
+
+        # 200 OK -> INFO log
+        with self.assertLogs('talentalign.requests', level='INFO') as cm:
+            req_200 = self.factory.get('/api/jobs/')
+            self.middleware(req_200)
+            self.assertTrue(any("status=200" in msg for msg in cm.output))
+            self.assertTrue(any("method=GET" in msg for msg in cm.output))
+
+        # 404 Not Found -> WARNING log
+        with self.assertLogs('talentalign.requests', level='WARNING') as cm:
+            mw_404 = RequestLoggingMiddleware(get_response=lambda r: HttpResponse("Not Found", status=404))
+            req_404 = self.factory.get('/api/nonexistent/')
+            mw_404(req_404)
+            self.assertTrue(any("status=404" in msg for msg in cm.output))
+
+        # 500 Error -> ERROR log
+        with self.assertLogs('talentalign.requests', level='ERROR') as cm:
+            mw_500 = RequestLoggingMiddleware(get_response=lambda r: HttpResponse("Error", status=500))
+            req_500 = self.factory.post('/api/faulty/')
+            mw_500(req_500)
+            self.assertTrue(any("status=500" in msg for msg in cm.output))
+
+    def test_middleware_process_exception_logging(self):
+        req = self.factory.get('/api/error-route/')
+        self.middleware.process_request(req)
+        test_exc = ValueError("Simulated database failure")
+
+        with self.assertLogs('apis', level='ERROR') as cm:
+            self.middleware.process_exception(req, test_exc)
+            self.assertTrue(any("Simulated database failure" in msg for msg in cm.output))
+
+    def test_log_files_directory_and_handlers(self):
+        from django.conf import settings
+        import os
+
+        # Verify logs directory exists
+        self.assertTrue(os.path.exists(settings.LOGS_DIR))
+
+        # Test logger writes
+        app_logger = logging.getLogger('apis')
+        app_logger.info("Test server log entry")
+        app_logger.error("Test error log entry")
+
+        server_log_file = settings.LOGS_DIR / 'talentalign_server.log'
+        error_log_file = settings.LOGS_DIR / 'talentalign_error.log'
+
+        self.assertTrue(os.path.exists(server_log_file))
+        self.assertTrue(os.path.exists(error_log_file))

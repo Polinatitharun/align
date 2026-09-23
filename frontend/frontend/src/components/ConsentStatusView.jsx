@@ -314,6 +314,7 @@ export default function ConsentStatusView({ currentBatch, jobs = [] }) {
                 <th style={{ padding: '12px 16px' }}>Candidate</th>
                 <th style={{ padding: '12px 16px' }}>Emp ID</th>
                 <th style={{ padding: '12px 16px' }}>Batch</th>
+                <th style={{ padding: '12px 16px' }}>Group</th>
                 <th style={{ padding: '12px 16px' }}>Project Requirement</th>
                 <th style={{ padding: '12px 16px' }}>RGS ID</th>
                 <th style={{ padding: '12px 16px' }}>Status</th>
@@ -325,14 +326,14 @@ export default function ConsentStatusView({ currentBatch, jobs = [] }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: '36px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={10} style={{ padding: '36px', textAlign: 'center', color: '#64748b' }}>
                     <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', display: 'block' }} />
                     Loading consent tracking records...
                   </td>
                 </tr>
               ) : filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={10} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
                     No consent records found matching criteria.
                   </td>
                 </tr>
@@ -351,6 +352,11 @@ export default function ConsentStatusView({ currentBatch, jobs = [] }) {
                     </td>
                     <td style={{ padding: '12px 16px', color: '#475569' }}>
                       {r.batch_name || '-'}
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#475569' }}>
+                      <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#4f46e5', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>
+                        {r.group_name || r.groupName || '-'}
+                      </span>
                     </td>
                     <td style={{ padding: '12px 16px', color: '#1e293b', fontWeight: 500 }}>
                       {r.job_title}

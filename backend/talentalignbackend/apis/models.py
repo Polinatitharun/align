@@ -142,6 +142,7 @@ class ProfileRecord(models.Model):
     groupRank = models.CharField(max_length=32, null=True, blank=True)
     dpi = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0.0)])
     batch_name = models.CharField(max_length=100, null=True, blank=True)
+    group_name = models.CharField(max_length=100, null=True, blank=True, help_text="Group Name (e.g. A1, D1)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

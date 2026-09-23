@@ -88,42 +88,89 @@ class WeaknessSerializer(serializers.ModelSerializer):
 
 class UserInfoSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
+    name = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
+    userId = serializers.CharField(required=True, validators=[])
+    location = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    employeeId = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    isu = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    averageScore = serializers.FloatField(required=False, allow_null=True)
 
     class Meta:
         model = UserInfo
         fields = '__all__'
+        extra_kwargs = {
+            'userId': {'validators': []}
+        }
 
 
 class ProfileRecordSerializer(serializers.ModelSerializer):
-    userInfo = UserInfoSerializer()
+    userInfo = UserInfoSerializer(required=False, allow_null=True)
     strengths = StrengthSerializer(many=True, required=False)
     weaknesses = WeaknessSerializer(many=True, required=False)
+    external_id = serializers.IntegerField(required=False, allow_null=True, validators=[])
+    groupName = serializers.CharField(source='group_name', required=False, allow_null=True, allow_blank=True)
+    batchName = serializers.CharField(source='batch_name', required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = ProfileRecord
         fields = ['id', 'external_id', 'upskillCourses', 'certificates', 'userInfo',
-                  'batchRank', 'groupRank', 'dpi', 'batch_name', 'strengths', 'weaknesses',
+                  'batchRank', 'groupRank', 'dpi', 'batch_name', 'group_name',
+                  'groupName', 'batchName', 'strengths', 'weaknesses',
                   'created_at', 'updated_at']
+        extra_kwargs = {
+            'external_id': {'validators': []}
+        }
+
+    def to_internal_value(self, data):
+        data_copy = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'id' in data_copy and 'external_id' not in data_copy:
+            data_copy['external_id'] = data_copy.get('id')
+        if 'groupName' in data_copy and 'group_name' not in data_copy:
+            data_copy['group_name'] = data_copy.get('groupName')
+        if 'batchName' in data_copy and 'batch_name' not in data_copy:
+            data_copy['batch_name'] = data_copy.get('batchName')
+        return super().to_internal_value(data_copy)
 
     def create(self, validated_data):
-        user_info_data = validated_data.pop('userInfo')
+        user_info_data = validated_data.pop('userInfo', None)
         strengths_data = validated_data.pop('strengths', [])
         weaknesses_data = validated_data.pop('weaknesses', [])
+        external_id = validated_data.get('external_id')
 
-        user_id = user_info_data.get('userId')
-        if user_id:
-            user_info, _ = UserInfo.objects.update_or_create(
-                userId=user_id, defaults=user_info_data
-            )
+        user_info = None
+        if user_info_data:
+            user_id = user_info_data.get('userId')
+            if user_id:
+                user_info, _ = UserInfo.objects.update_or_create(
+                    userId=user_id, defaults=user_info_data
+                )
+            else:
+                user_info = UserInfo.objects.create(**user_info_data)
+
+        profile = None
+        if external_id is not None:
+            profile = ProfileRecord.objects.filter(external_id=external_id).first()
+        if not profile and user_info:
+            profile = ProfileRecord.objects.filter(userInfo=user_info).first()
+
+        if profile:
+            for attr, val in validated_data.items():
+                setattr(profile, attr, val)
+            if user_info:
+                profile.userInfo = user_info
+            profile.save()
         else:
-            user_info = UserInfo.objects.create(**user_info_data)
+            profile = ProfileRecord.objects.create(userInfo=user_info, **validated_data)
 
-        profile = ProfileRecord.objects.create(userInfo=user_info, **validated_data)
+        if strengths_data is not None:
+            profile.strengths.all().delete()
+            for s in strengths_data:
+                Strength.objects.create(profile=profile, **s)
 
-        for s in strengths_data:
-            Strength.objects.create(profile=profile, **s)
-        for w in weaknesses_data:
-            Weakness.objects.create(profile=profile, **w)
+        if weaknesses_data is not None:
+            profile.weaknesses.all().delete()
+            for w in weaknesses_data:
+                Weakness.objects.create(profile=profile, **w)
 
         return profile
 
@@ -132,10 +179,16 @@ class ProfileRecordSerializer(serializers.ModelSerializer):
         strengths_data = validated_data.pop('strengths', None)
         weaknesses_data = validated_data.pop('weaknesses', None)
 
-        if user_info_data and instance.userInfo:
-            for attr, val in user_info_data.items():
-                setattr(instance.userInfo, attr, val)
-            instance.userInfo.save()
+        if user_info_data:
+            if instance.userInfo:
+                for attr, val in user_info_data.items():
+                    setattr(instance.userInfo, attr, val)
+                instance.userInfo.save()
+            else:
+                user_id = user_info_data.get('userId')
+                if user_id:
+                    user_info, _ = UserInfo.objects.update_or_create(userId=user_id, defaults=user_info_data)
+                    instance.userInfo = user_info
 
         if strengths_data is not None:
             instance.strengths.all().delete()
@@ -188,6 +241,8 @@ class MatchListSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     preferred_locations = serializers.SerializerMethodField()
     consent_status = serializers.SerializerMethodField()
+    group_name = serializers.SerializerMethodField()
+    groupName = serializers.SerializerMethodField()
 
     class Meta:
         model = Match
@@ -195,6 +250,12 @@ class MatchListSerializer(serializers.ModelSerializer):
 
     def get_dpi(self, obj):
         return getattr(obj.trainee_ref, 'dpi', None) if obj.trainee_ref else None
+
+    def get_group_name(self, obj):
+        return getattr(obj.trainee_ref, 'group_name', '') if obj.trainee_ref else ''
+
+    def get_groupName(self, obj):
+        return getattr(obj.trainee_ref, 'group_name', '') if obj.trainee_ref else ''
 
     def get_employee_id(self, obj):
         if obj.trainee_ref and obj.trainee_ref.userInfo:
@@ -226,6 +287,9 @@ class MatchListSerializer(serializers.ModelSerializer):
 class ConsentSerializer(serializers.ModelSerializer):
     trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
     employee_id = serializers.CharField(source='trainee.userInfo.employeeId', read_only=True)
+    batch_name = serializers.CharField(source='trainee.batch_name', read_only=True, default='')
+    group_name = serializers.CharField(source='trainee.group_name', read_only=True, default='')
+    groupName = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     job_title = serializers.CharField(source='job.project_name', read_only=True)
     demand_id = serializers.CharField(source='job.demand_id', read_only=True)
     rgs_id = serializers.CharField(source='job.rgs_id', read_only=True)
@@ -254,9 +318,11 @@ class AuditLogSerializer(serializers.ModelSerializer):
 class RecommendationSerializer(serializers.ModelSerializer):
     trainee_name = serializers.SerializerMethodField()
     job_title = serializers.SerializerMethodField()
-    demand_id = serializers.SerializerMethodField()          # ← new
-    trainee_employee_id = serializers.SerializerMethodField()# ← new
-    trainee_email = serializers.SerializerMethodField()      # ← new
+    demand_id = serializers.SerializerMethodField()
+    trainee_employee_id = serializers.SerializerMethodField()
+    trainee_email = serializers.SerializerMethodField()
+    group_name = serializers.SerializerMethodField()
+    groupName = serializers.SerializerMethodField()
 
     class Meta:
         model = Recommendation
@@ -293,12 +359,22 @@ class RecommendationSerializer(serializers.ModelSerializer):
     def get_trainee_email(self, obj):
         try:
             user_info = UserInfo.objects.get(userId=obj.trainee_id)
-            # Construct email like employeeId@tcs.com if missing, else use what's stored
             if user_info.employeeId and not user_info.email:
                 return f"{user_info.employeeId}@tcs.com"
             return user_info.email
         except UserInfo.DoesNotExist:
             return None
+
+    def get_group_name(self, obj):
+        try:
+            profile = ProfileRecord.objects.get(userInfo__userId=obj.trainee_id)
+            return profile.group_name or ''
+        except (ProfileRecord.DoesNotExist, ProfileRecord.MultipleObjectsReturned):
+            return ''
+
+    def get_groupName(self, obj):
+        return self.get_group_name(obj)
+
 
 # ---------- Interview Lock Serializers ----------
 class InterviewLockSerializer(serializers.ModelSerializer):
@@ -306,6 +382,9 @@ class InterviewLockSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source='job.project_name', read_only=True)
     locked_by_name = serializers.CharField(source='locked_by.username', read_only=True)
     assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
+    batch_name = serializers.CharField(source='trainee.batch_name', read_only=True, default='')
+    group_name = serializers.CharField(source='trainee.group_name', read_only=True, default='')
+    groupName = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     feedback = serializers.SerializerMethodField()
 
     class Meta:

@@ -43,11 +43,18 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-root}
       - DB_HOST=db
       - DB_PORT=5432
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - OLLAMA_URL=http://ollama:11434/api/generate
     ports:
       - "8000:8000"
     volumes:
       - static_volume:/app/staticfiles
+      - backend_logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       db:
         condition: service_healthy
@@ -67,6 +74,13 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    volumes:
+      - nginx_logs:/var/log/nginx
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     depends_on:
       - backend
     networks:
@@ -83,6 +97,11 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     networks:
       - talentalign-network
 
@@ -91,9 +110,14 @@ volumes:
     driver: local
   static_volume:
     driver: local
+  backend_logs:
+    driver: local
+  nginx_logs:
+    driver: local
   ollama_data:
     driver: local
 
 networks:
   talentalign-network:
     driver: bridge
+
