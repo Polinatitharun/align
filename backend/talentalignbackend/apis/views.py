@@ -1,3 +1,4 @@
+from django.http import Http404
 import pandas as pd
 import threading
 import json
@@ -32,12 +33,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from .models import (
-    User, Course, Job, UserInfo, ProfileRecord, Strength, Weakness,
+    User, Course, Batch, Job, UserInfo, ProfileRecord, Strength, Weakness,
     Recommendation, Match, InterviewLock, InterviewFeedback, Notification, AuditLog, Consent
 )
 from .serializers import (
     UserSerializer, AddUserSerializer, EditUserSerializer, ResetPasswordSerializer,
-    CourseSerializer, NotificationSerializer, AuditLogSerializer, InterviewUnlockSerializer,
+    CourseSerializer, BatchSerializer, NotificationSerializer, AuditLogSerializer, InterviewUnlockSerializer,
     JobSerializer, ProfileRecordSerializer, UserInfoSerializer, UserInfoMappingSerializer,
     RecommendationSerializer, MatchListSerializer, InterviewLockSerializer,
     InterviewLockCreateSerializer, InterviewFeedbackSerializer,
@@ -52,9 +53,69 @@ from .excel_generator import TalentAlignmentExcelReportGenerator
 logger = logging.getLogger(__name__)
 
 BACKUP_MODELS = [
-    Course, User, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
+    Course, Batch, User, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
     Recommendation, InterviewLock, InterviewFeedback, Notification, AuditLog
 ]
+
+
+def resolve_or_create_batch(batch_val, batch_uuid=None):
+    """
+    Resolves Batch model instance from either an integer ID, string UUID, or string name.
+    If name/uuid is provided and doesn't exist, auto-creates a Batch entry.
+    """
+    if not batch_val and not batch_uuid:
+        return None
+    if isinstance(batch_val, Batch):
+        return batch_val
+    if isinstance(batch_val, dict):
+        batch_uuid = batch_val.get('batch_uuid') or batch_val.get('batchUuid') or batch_uuid
+        batch_val = batch_val.get('batch_name') or batch_val.get('batchName') or batch_val.get('name') or batch_val.get('id')
+
+    if batch_uuid:
+        uuid_str = str(batch_uuid).strip()
+        b = Batch.objects.filter(batch_uuid=uuid_str).first()
+        if b:
+            return b
+        name_str = str(batch_val).strip() if batch_val else uuid_str
+        return Batch.objects.create(batch_uuid=uuid_str, batch_name=name_str)
+
+    batch_str = str(batch_val).strip()
+    if not batch_str or batch_str.lower() in ('none', 'null', 'undefined', 'all'):
+        return None
+    b = Batch.objects.filter(batch_uuid=batch_str).first()
+    if b:
+        return b
+    if batch_str.isdigit():
+        b = Batch.objects.filter(id=int(batch_str)).first()
+        if b:
+            return b
+    b = Batch.objects.filter(batch_name__iexact=batch_str).first()
+    if b:
+        return b
+    return Batch.objects.create(batch_name=batch_str)
+
+
+def get_batch_filter_q(prefix='', batch_param=None):
+    """
+    Generates a Django Q object to filter by batch (supporting either Batch ID or Batch name).
+    Works across prefixes like 'job__', 'trainee__', 'profile__', 'job_ref__', or ''.
+    """
+    if not batch_param:
+        return Q()
+    batch_str = str(batch_param).strip()
+    if not batch_str or batch_str.lower() in ('none', 'null', 'undefined', 'all'):
+        return Q()
+
+    q = Q()
+    if batch_str.isdigit():
+        q |= Q(**{f"{prefix}batch_id": int(batch_str)})
+
+    q |= (
+        Q(**{f"{prefix}batch__batch_name__iexact": batch_str}) |
+        Q(**{f"{prefix}batch__batch_name": batch_str}) |
+        Q(**{f"{prefix}batch__batch_uuid": batch_str})
+    )
+    return q
 
 
 def audit_log(user, action, instance=None, previous=None, new=None):
@@ -339,6 +400,117 @@ class CourseDetailView(APIView):
         return Response(status=204)
 
 
+# ---------- Batch Management (NEW) ----------
+class BatchListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Batch.objects.all()
+        search = request.query_params.get('search')
+        batch_uuid = request.query_params.get('batch_uuid') or request.query_params.get('uuid')
+        if batch_uuid:
+            qs = qs.filter(batch_uuid=batch_uuid)
+        if search:
+            qs = qs.filter(Q(batch_name__icontains=search) | Q(batch_uuid__icontains=search))
+        serializer = BatchSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if request.user.role not in ['admin', 'hr', 'ta', 'course_owner']:
+            return Response({"error": "Permission denied"}, status=403)
+
+        data = request.data
+        if isinstance(data, list):
+            results = []
+            for item in data:
+                b_uuid = item.get('batch_uuid') or item.get('batchUuid')
+                b_name = item.get('batch_name') or item.get('batchName') or ''
+                start_date = item.get('start_date') or item.get('startDate')
+                end_date = item.get('end_date') or item.get('endDate')
+
+                if not b_name and not b_uuid:
+                    continue
+
+                if b_uuid:
+                    batch, created = Batch.objects.update_or_create(
+                        batch_uuid=str(b_uuid).strip(),
+                        defaults={
+                            'batch_name': b_name or str(b_uuid).strip(),
+                            'start_date': start_date,
+                            'end_date': end_date,
+                        }
+                    )
+                else:
+                    batch, created = Batch.objects.get_or_create(
+                        batch_name=b_name,
+                        defaults={
+                            'start_date': start_date,
+                            'end_date': end_date,
+                        }
+                    )
+                results.append(BatchSerializer(batch).data)
+            return Response(results, status=201)
+
+        b_uuid = data.get('batch_uuid') or data.get('batchUuid')
+        if b_uuid:
+            existing = Batch.objects.filter(batch_uuid=str(b_uuid).strip()).first()
+            if existing:
+                serializer = BatchSerializer(existing, data=data, partial=True)
+                if serializer.is_valid():
+                    batch = serializer.save()
+                    audit_log(request.user, 'Batch Update', batch, new=serializer.data)
+                    return Response(BatchSerializer(batch).data, status=200)
+                return Response(serializer.errors, status=400)
+
+        serializer = BatchSerializer(data=data)
+        if serializer.is_valid():
+            batch = serializer.save()
+            audit_log(request.user, 'Batch Creation', batch, new=serializer.data)
+            return Response(BatchSerializer(batch).data, status=201)
+        return Response(serializer.errors, status=400)
+
+
+class BatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        pk_str = str(pk).strip()
+        if pk_str.isdigit():
+            obj = Batch.objects.filter(id=int(pk_str)).first()
+            if obj:
+                return obj
+        obj = Batch.objects.filter(batch_uuid=pk_str).first()
+        if obj:
+            return obj
+        obj = Batch.objects.filter(batch_name__iexact=pk_str).first()
+        if obj:
+            return obj
+        raise Http404("Batch not found")
+
+    def get(self, request, pk):
+        batch = self.get_object(pk)
+        serializer = BatchSerializer(batch)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        batch = self.get_object(pk)
+        if request.user.role not in ['admin', 'hr', 'ta', 'course_owner']:
+            return Response({"error": "Permission denied"}, status=403)
+        serializer = BatchSerializer(batch, data=request.data, partial=True)
+        if serializer.is_valid():
+            batch = serializer.save()
+            audit_log(request.user, 'Batch Update', batch, previous=BatchSerializer(batch).data, new=serializer.data)
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+    def delete(self, request, pk):
+        batch = self.get_object(pk)
+        if request.user.role not in ['admin', 'hr']:
+            return Response({"error": "Only admin can delete batches"}, status=403)
+        batch.delete()
+        return Response(status=204)
+
+
 # ---------- Notifications & Audit ----------
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -380,9 +552,14 @@ class DashboardAnalyticsView(APIView):
         location = request.query_params.get('location')
         recruiter = request.query_params.get('recruiter')
         job_status = request.query_params.get('status')
-        batch = request.query_params.get('batch')
+        batch = (
+            request.query_params.get('batch') or
+            request.query_params.get('batch_id') or
+            request.query_params.get('batch_uuid') or
+            request.query_params.get('batchUuid')
+        )
 
-        jobs = Job.objects.select_related('course', 'created_by').all()
+        jobs = Job.objects.select_related('course', 'batch', 'created_by').all()
         if start:
             jobs = jobs.filter(created_at__date__gte=start)
         if end:
@@ -398,11 +575,23 @@ class DashboardAnalyticsView(APIView):
         if job_status:
             jobs = jobs.filter(status=job_status)
         if batch:
-            jobs = jobs.filter(batch_name=batch)
+            batch_q = get_batch_filter_q(batch_param=batch)
+            if Job.objects.filter(batch_q).exists():
+                jobs = jobs.filter(batch_q)
 
         job_ids = list(jobs.values_list('id', flat=True))
-        locks = InterviewLock.objects.filter(job_id__in=job_ids).select_related('assigned_to', 'job', 'trainee__userInfo')
-        matches = Match.objects.filter(job_ref_id__in=job_ids)
+
+        locks = InterviewLock.objects.all().select_related('assigned_to', 'job', 'trainee__userInfo')
+        if batch:
+            locks = locks.filter(get_batch_filter_q('job__', batch) | get_batch_filter_q('trainee__', batch))
+        else:
+            locks = locks.filter(job_id__in=job_ids)
+
+        matches = Match.objects.all()
+        if batch:
+            matches = matches.filter(get_batch_filter_q('job_ref__', batch) | get_batch_filter_q('trainee_ref__', batch))
+        else:
+            matches = matches.filter(job_ref_id__in=job_ids)
 
         skill_counts = {}
         course_counts = {}
@@ -431,9 +620,13 @@ class DashboardAnalyticsView(APIView):
             'perfect_match': matches.filter(bucket='PERFECT_MATCH').count(),
             'skill_only': matches.filter(bucket='SKILLS_ONLY').count(),
             'location_only': matches.filter(bucket='LOCATION_ONLY').count(),
-            'nearby': matches.filter(bucket='NEARBY').count(),  # ADD
-            'no_match': matches.filter(bucket='NO_MATCH').count(),  # optional
+            'nearby': matches.filter(bucket='NEARBY').count(),
+            'no_match': matches.filter(bucket='NO_MATCH').count(),
         }
+
+        user_info_qs = UserInfo.objects.filter(isMapped=True)
+        if batch:
+            user_info_qs = user_info_qs.filter(get_batch_filter_q(batch_param=batch))
 
         return Response({
             'summary': {
@@ -442,7 +635,7 @@ class DashboardAnalyticsView(APIView):
                 'filled_jobs': jobs.filter(status='filled').count(),
                 'open_positions': sum(job.available_openings for job in jobs),
                 'rate_lock_count': locks.filter(status='locked').count(),
-                'map_rate_count': UserInfo.objects.filter(isMapped=True).count(),
+                'map_rate_count': user_info_qs.count(),
                 'interview_success_ratio': success_ratio,
             },
             'candidate_status_distribution': [{'name': k, 'value': v} for k, v in candidate_status.items()],
@@ -496,15 +689,34 @@ class SystemRestoreView(APIView):
 # ---------- Job Management (updated with course owner notification) ----------
 class JobListView(APIView):
     def get(self, request):
-        jobs = Job.objects.all()
-        batch = request.query_params.get('batch')
+        jobs = Job.objects.select_related('batch', 'course').all()
+        batch = (
+            request.query_params.get('batch') or
+            request.query_params.get('batch_id') or
+            request.query_params.get('batch_uuid') or
+            request.query_params.get('batchUuid')
+        )
         if batch:
-            jobs = jobs.filter(batch_name=batch)
+            jobs = jobs.filter(get_batch_filter_q(batch_param=batch))
         serializer = JobSerializer(jobs, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = JobSerializer(data=request.data)
+        data_copy = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        batch_val = (
+            data_copy.get('batch_uuid') or
+            data_copy.get('batchUuid') or
+            data_copy.get('batch') or
+            data_copy.get('batch_id') or
+            data_copy.get('batch_name') or
+            data_copy.get('batchName')
+        )
+        if batch_val:
+            batch_obj = resolve_or_create_batch(batch_val)
+            if batch_obj:
+                data_copy['batch'] = batch_obj.id
+
+        serializer = JobSerializer(data=data_copy)
         if serializer.is_valid():
             job = serializer.save(created_by=request.user if request.user.is_authenticated else None)
             logger.info(f"[JOB_CREATE] Job created: id={job.id}, project_name='{job.project_name}', stream='{job.stream}', openings={job.openings}, rgs_id='{job.rgs_id}', created_by='{request.user}'")
@@ -519,7 +731,7 @@ class JobListView(APIView):
                         {'job_id': job.id, 'course_id': job.course_id},
                     )
             threading.Thread(target=run_matching_logic, args=(job.id,), daemon=True).start()
-            return Response(serializer.data, status=201)
+            return Response(JobSerializer(job).data, status=201)
         logger.warning(f"[JOB_CREATE_ERROR] Failed to create job: {serializer.errors}")
         return Response(serializer.errors, status=400)
 
@@ -541,7 +753,21 @@ class JobDetailView(APIView):
     def put(self, request, pk):
         job = self.get_object(pk)
         if job:
-            serializer = JobSerializer(job, data=request.data)
+            data_copy = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+            batch_val = (
+                data_copy.get('batch_uuid') or
+                data_copy.get('batchUuid') or
+                data_copy.get('batch') or
+                data_copy.get('batch_id') or
+                data_copy.get('batch_name') or
+                data_copy.get('batchName')
+            )
+            if batch_val:
+                batch_obj = resolve_or_create_batch(batch_val)
+                if batch_obj:
+                    data_copy['batch'] = batch_obj.id
+
+            serializer = JobSerializer(job, data=data_copy)
             if serializer.is_valid():
                 before = JobSerializer(job).data
                 saved = serializer.save()
@@ -576,11 +802,19 @@ class ToggleJobStatusView(APIView):
 class UploadExcelView(APIView):
     def post(self, request):
         file = request.FILES.get('excel_file')
-        batch_name = request.data.get('batch_name')
+        batch_name = (
+            request.data.get('batch_uuid') or
+            request.data.get('batchUuid') or
+            request.data.get('batch_name') or
+            request.data.get('batch') or
+            request.data.get('batch_id')
+        )
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
         if not file.name.lower().endswith(('.xlsx', '.xls', '.csv')):
             return Response({"error": "Invalid file type"}, status=400)
+
+        batch_obj = resolve_or_create_batch(batch_name) if batch_name else None
 
         try:
             if file.name.lower().endswith('.csv'):
@@ -691,7 +925,7 @@ class UploadExcelView(APIView):
                         'filled': 0,
                         'matches': 0,
                         'postedDate': datetime.now().strftime('%Y-%m-%d'),
-                        'batch_name': batch_name,
+                        'batch': batch_obj.id if batch_obj else None,
                     }
                     serializer = JobSerializer(data=job_data)
                     if serializer.is_valid():
@@ -718,15 +952,17 @@ class UploadWordView(APIView):
 
     def post(self, request):
         file = request.FILES.get('wordFile')
-        batch_name = request.data.get('batch_name')
+        batch_name = request.data.get('batch_name') or request.data.get('batch') or request.data.get('batch_id')
         if not file:
             return Response({"error": "No file uploaded"}, status=400)
+        batch_obj = resolve_or_create_batch(batch_name) if batch_name else None
         try:
             doc = Document(file)
             content = '\n'.join([para.text for para in doc.paragraphs])
             job_data = self.parse_word_content(content)
             if job_data:
-                job_data['batch_name'] = batch_name
+                if batch_obj:
+                    job_data['batch'] = batch_obj.id
                 serializer = JobSerializer(data=job_data)
                 if serializer.is_valid():
                     job = serializer.save()
@@ -826,10 +1062,15 @@ class DownloadWordTemplateView(APIView):
 # ---------- Profile Management (unchanged) ----------
 class ProfileListCreateAPIView(APIView):
     def get(self, request):
-        qs = ProfileRecord.objects.select_related('userInfo').prefetch_related('strengths','weaknesses').all()
-        batch = request.query_params.get('batch')
+        qs = ProfileRecord.objects.select_related('userInfo', 'batch').prefetch_related('strengths','weaknesses').all()
+        batch = (
+            request.query_params.get('batch') or
+            request.query_params.get('batch_id') or
+            request.query_params.get('batch_uuid') or
+            request.query_params.get('batchUuid')
+        )
         if batch:
-            qs = qs.filter(batch_name=batch)
+            qs = qs.filter(get_batch_filter_q(batch_param=batch))
         group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
         if group:
             qs = qs.filter(group_name=group)
@@ -1034,18 +1275,27 @@ class RunMatchingEngineView(APIView):
 class JobMatchListView(APIView):
     def get(self, request, job_id):
         job = get_object_or_404(Job, id=job_id)
-        batch = request.query_params.get('batch')
-        if batch and job.batch_name != batch:
-            return Response({
-                "job_title": job.project_name,
-                "job_id": job.id,
-                "total_matches": 0,
-                "perfect_match": [],
-                "skills_only": [],
-                "location_only": [],
-                "nearby": [],
-                "no_match": []
-            })
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
+        if batch:
+            batch_obj = resolve_or_create_batch(batch)
+            is_match = False
+            if batch_obj and job.batch_id == batch_obj.id:
+                is_match = True
+            elif str(batch).isdigit() and job.batch_id == int(batch):
+                is_match = True
+            elif job.batch_name and str(batch).lower() == job.batch_name.lower():
+                is_match = True
+            if not is_match:
+                return Response({
+                    "job_title": job.project_name,
+                    "job_id": job.id,
+                    "total_matches": 0,
+                    "perfect_match": [],
+                    "skills_only": [],
+                    "location_only": [],
+                    "nearby": [],
+                    "no_match": []
+                })
 
         global_excluded = InterviewLock.objects.filter(status__in=['locked','selected']).values_list('trainee_id', flat=True).distinct()
         globally_mapped = ProfileRecord.objects.filter(userInfo__isMapped=True).values_list('id', flat=True)
@@ -1097,10 +1347,10 @@ def normalize_matched_skills(value):
 class TraineeMatchListView(APIView):
     def get(self, request, trainee_id):
         trainee = get_object_or_404(ProfileRecord, id=trainee_id)
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         matches = Match.objects.filter(trainee_ref=trainee)
         if batch:
-            matches = matches.filter(job_ref__batch_name=batch)
+            matches = matches.filter(get_batch_filter_q('job_ref__', batch))
 
         response = {
             "trainee_name": trainee.userInfo.name if trainee.userInfo else "Unknown",
@@ -1147,9 +1397,9 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        batch = self.request.query_params.get('batch')
+        batch = self.request.query_params.get('batch') or self.request.query_params.get('batch_id')
         if batch:
-            qs = qs.filter(job__batch_name=batch) | qs.filter(trainee__batch_name=batch)
+            qs = qs.filter(get_batch_filter_q('job__', batch) | get_batch_filter_q('trainee__', batch))
         job_id = self.request.query_params.get('job')
         trainee_id = self.request.query_params.get('trainee')
         status_filter = self.request.query_params.get('status')
@@ -1224,10 +1474,10 @@ class InterviewLockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         qs = InterviewLock.objects.all()
         if batch:
-            qs = qs.filter(job__batch_name=batch) | qs.filter(trainee__batch_name=batch)
+            qs = qs.filter(get_batch_filter_q('job__', batch) | get_batch_filter_q('trainee__', batch))
         total_locked = qs.filter(status='locked').count()
         total_selected = qs.filter(status='selected').count()
         total_rejected = qs.filter(status='rejected').count()
@@ -1410,11 +1660,11 @@ class MappedTraineesReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
-        mapped = UserInfo.objects.filter(isMapped=True).select_related('profile')
+        mapped = UserInfo.objects.filter(isMapped=True).select_related('profile', 'profile__batch', 'batch')
         if batch:
-            mapped = mapped.filter(profile__batch_name=batch)
+            mapped = mapped.filter(get_batch_filter_q('profile__', batch) | get_batch_filter_q('', batch))
         if group:
             mapped = mapped.filter(profile__group_name=group)
         response = HttpResponse(content_type='text/csv')
@@ -1423,10 +1673,11 @@ class MappedTraineesReportView(APIView):
         writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Project ID', 'Project Name', 'Score'])
         for info in mapped:
             profile = getattr(info, 'profile', None)
+            b_name = profile.batch_name if (profile and profile.batch_name) else (info.batch_name if info.batch_name else '')
             writer.writerow([
                 info.name,
                 info.employeeId or '',
-                profile.batch_name if profile else '',
+                b_name,
                 profile.group_name if profile else '',
                 info.location or '',
                 info.projectId or '',
@@ -1439,11 +1690,11 @@ class UnmappedTraineesReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
-        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
+        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile', 'profile__batch', 'batch')
         if batch:
-            unmapped = unmapped.filter(profile__batch_name=batch)
+            unmapped = unmapped.filter(get_batch_filter_q('profile__', batch) | get_batch_filter_q('', batch))
         if group:
             unmapped = unmapped.filter(profile__group_name=group)
         response = HttpResponse(content_type='text/csv')
@@ -1452,10 +1703,11 @@ class UnmappedTraineesReportView(APIView):
         writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Average Score'])
         for info in unmapped:
             profile = getattr(info, 'profile', None)
+            b_name = profile.batch_name if (profile and profile.batch_name) else (info.batch_name if info.batch_name else '')
             writer.writerow([
                 info.name,
                 info.employeeId or '',
-                profile.batch_name if profile else '',
+                b_name,
                 profile.group_name if profile else '',
                 info.location or '',
                 info.averageScore or '',
@@ -1467,11 +1719,11 @@ class OpenPoolReportView(APIView):
 
     def get(self, request):
         from django.db.models import Exists, OuterRef
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         group = request.query_params.get('group') or request.query_params.get('group_name') or request.query_params.get('groupName')
-        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile')
+        unmapped = UserInfo.objects.filter(isMapped=False).select_related('profile', 'profile__batch', 'batch')
         if batch:
-            unmapped = unmapped.filter(profile__batch_name=batch)
+            unmapped = unmapped.filter(get_batch_filter_q('profile__', batch) | get_batch_filter_q('', batch))
         if group:
             unmapped = unmapped.filter(profile__group_name=group)
         has_match = Match.objects.filter(trainee_ref__userInfo=OuterRef('pk'))
@@ -1483,10 +1735,11 @@ class OpenPoolReportView(APIView):
         writer.writerow(['Name', 'Email', 'Batch', 'Group Name', 'Location', 'Average Score'])
         for info in open_pool:
             profile = getattr(info, 'profile', None)
+            b_name = profile.batch_name if (profile and profile.batch_name) else (info.batch_name if info.batch_name else '')
             writer.writerow([
                 info.name,
                 info.employeeId or '',
-                profile.batch_name if profile else '',
+                b_name,
                 profile.group_name if profile else '',
                 info.location or '',
                 info.averageScore or '',
@@ -1569,7 +1822,8 @@ class DecoFetchTraineesView(APIView):
                     groupRank = item.get('groupRank')
                     group_name = item.get('groupName') or item.get('group_name')
                     dpi = item.get('dpi')
-                    batch_name = item.get('batchName') or item.get('batch_name')
+                    batch_name = item.get('batchName') or item.get('batch_name') or batch
+                    batch_obj = resolve_or_create_batch(batch_name) if batch_name else None
 
                     name = user_info_data.get('name')
                     location = user_info_data.get('location')
@@ -1608,6 +1862,7 @@ class DecoFetchTraineesView(APIView):
                             'averageScore': avg_score,
                             'employeeId': emp_id_str,
                             'isu': isu,
+                            'batch': batch_obj,
                         }
                     )
 
@@ -1626,7 +1881,7 @@ class DecoFetchTraineesView(APIView):
                         profile.batchRank = batchRank
                         profile.groupRank = groupRank
                         profile.dpi = dpi
-                        profile.batch_name = batch_name
+                        profile.batch = batch_obj
                         profile.group_name = group_name
                         profile.save()
                     else:
@@ -1638,7 +1893,7 @@ class DecoFetchTraineesView(APIView):
                             batchRank=batchRank,
                             groupRank=groupRank,
                             dpi=dpi,
-                            batch_name=batch_name,
+                            batch=batch_obj,
                             group_name=group_name,
                         )
 
@@ -1934,23 +2189,28 @@ class PeerComparisonView(APIView):
         if not profile:
             return Response({"error": "Profile not found"}, status=404)
 
-        if not profile.batch_name:
+        batch_val = profile.batch_id or profile.batch_name
+        if not batch_val:
             return Response({"message": "Batch information not available"})
 
-        same_batch = ProfileRecord.objects.filter(batch_name=profile.batch_name).exclude(id=profile.id)
+        batch_q = get_batch_filter_q(batch_param=batch_val)
+        same_batch = ProfileRecord.objects.filter(batch_q).exclude(id=profile.id)
         total = same_batch.count()
         if total == 0:
             return Response({"message": "No peers in same batch"})
 
-        my_score = profile.userInfo.averageScore
-        higher_count = ProfileRecord.objects.filter(
-            batch_name=profile.batch_name,
-            userInfo__averageScore__gt=my_score
-        ).count()
-        rank = higher_count + 1
+        my_score = profile.userInfo.averageScore if profile.userInfo else None
+        if my_score is not None:
+            higher_count = ProfileRecord.objects.filter(
+                batch_q,
+                userInfo__averageScore__gt=my_score
+            ).count()
+            rank = higher_count + 1
+        else:
+            rank = 1
 
         return Response({
-            'batch': profile.batch_name,
+            'batch': profile.batch_name or str(batch_val),
             'total_in_batch': total,
             'your_rank': rank,
             'top_percentile': round((rank / total) * 100, 1) if total else 0
@@ -2085,21 +2345,19 @@ def resolve_job_identifier(value, batch=None):
     identifier = str(value).strip()
     if not identifier:
         return None
-    filters = {}
-    if batch:
-        filters['batch_name'] = batch
+    batch_q = get_batch_filter_q(batch_param=batch) if batch else Q()
     try:
-        return Job.objects.get(id=int(identifier), **filters)
+        return Job.objects.filter(batch_q).get(id=int(identifier))
     except (ValueError, Job.DoesNotExist):
         pass
     try:
-        return Job.objects.get(demand_id=identifier, **filters)
-    except Job.DoesNotExist:
+        return Job.objects.filter(batch_q).get(demand_id=identifier)
+    except (Job.DoesNotExist, Job.MultipleObjectsReturned):
         pass
     # Also try RGS ID
     try:
-        return Job.objects.get(rgs_id=identifier, **filters)
-    except Job.DoesNotExist:
+        return Job.objects.filter(batch_q).get(rgs_id=identifier)
+    except (Job.DoesNotExist, Job.MultipleObjectsReturned):
         return None
 
 class BulkInterviewLockView(APIView):
@@ -2371,7 +2629,7 @@ class DownloadBulkMappingTemplateView(APIView):
 class BulkMappingView(APIView):
     def post(self, request):
         file = request.FILES.get('file')
-        batch = request.data.get('batch', '')
+        batch = request.data.get('batch', '') or request.data.get('batch_id', '') or request.data.get('batch_name', '')
         if not file:
             logger.warning("[BULK_MAPPING_ERROR] No file uploaded")
             return Response({"success": False, "error": "No file uploaded"}, status=400)
@@ -2407,9 +2665,18 @@ class BulkMappingView(APIView):
         for job_id, requested_count in job_mapping_counts.items():
             try:
                 job = Job.objects.get(id=job_id)
-                if batch and job.batch_name != batch:
-                    openings_errors.append({'job': job.project_name, 'message': f"Job not in batch '{batch}'"})
-                    continue
+                if batch:
+                    batch_obj = resolve_or_create_batch(batch)
+                    is_in_batch = False
+                    if batch_obj and job.batch_id == batch_obj.id:
+                        is_in_batch = True
+                    elif str(batch).isdigit() and job.batch_id == int(batch):
+                        is_in_batch = True
+                    elif job.batch_name and str(batch).lower() == job.batch_name.lower():
+                        is_in_batch = True
+                    if not is_in_batch:
+                        openings_errors.append({'job': job.project_name, 'message': f"Job not in batch '{batch}'"})
+                        continue
                 remaining_openings = job.openings - job.filled
                 if requested_count > remaining_openings:
                     openings_errors.append({'job': job.project_name, 'openings_left': remaining_openings, 'requested': requested_count, 'message': f"Only {remaining_openings} opening(s) left."})
@@ -2478,14 +2745,14 @@ class HRSummaryReportView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        batch = request.query_params.get('batch', '')
+        batch = request.query_params.get('batch', '') or request.query_params.get('batch_id', '')
         jobs = Job.objects.all()
-        trainees = ProfileRecord.objects.select_related('userInfo').all()
+        trainees = ProfileRecord.objects.select_related('userInfo', 'batch').all()
         locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
         if batch:
-            jobs = jobs.filter(batch_name=batch)
-            trainees = trainees.filter(batch_name=batch)
-            locks = locks.filter(job__batch_name=batch) | locks.filter(trainee__batch_name=batch)
+            jobs = jobs.filter(get_batch_filter_q(batch_param=batch))
+            trainees = trainees.filter(get_batch_filter_q(batch_param=batch))
+            locks = locks.filter(get_batch_filter_q('job__', batch) | get_batch_filter_q('trainee__', batch))
 
         logger.info(f"[HR_SUMMARY_REPORT] Generating HR Summary Excel: batch='{batch or 'all'}', user='{request.user}'")
 
@@ -2561,10 +2828,10 @@ from .serializers import ManagerChatSessionSerializer, ManagerChatMessageSeriali
 
 def build_manager_chat_context(batch=None, selected_job=None):
     jobs = Job.objects.filter(status='active')
-    trainees = ProfileRecord.objects.select_related('userInfo')
+    trainees = ProfileRecord.objects.select_related('userInfo', 'batch')
     if batch:
-        jobs = jobs.filter(batch_name=batch)
-        trainees = trainees.filter(batch_name=batch)
+        jobs = jobs.filter(get_batch_filter_q(batch_param=batch))
+        trainees = trainees.filter(get_batch_filter_q(batch_param=batch))
 
     total_trainees = trainees.count()
     mapped = trainees.filter(userInfo__isMapped=True).count()
@@ -2731,160 +2998,6 @@ class ManagerChatSessionViewSet(viewsets.ModelViewSet):
             'user_message': ManagerChatMessageSerializer(user_msg_obj).data,
             'bot_reply': ManagerChatMessageSerializer(bot_msg_obj).data
         })
-
-# ---------- HR Summary PDF Report (unchanged) ----------
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.ticker import MaxNLocator, PercentFormatter
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak, KeepTogether)
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from collections import Counter
-
-class HRSummaryPDFView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        batch = request.query_params.get('batch', '')
-        jobs = Job.objects.all()
-        trainees = ProfileRecord.objects.select_related('userInfo').all()
-        locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
-        matches = Match.objects.select_related('job_ref', 'trainee_ref__userInfo').all()
-        if batch:
-            jobs = jobs.filter(batch_name=batch)
-            trainees = trainees.filter(batch_name=batch)
-            locks = locks.filter(Q(job__batch_name=batch) | Q(trainee__batch_name=batch))
-            matches = matches.filter(Q(job_ref__batch_name=batch) | Q(trainee_ref__batch_name=batch))
-
-        total_trainees = trainees.count()
-        mapped_trainees = trainees.filter(userInfo__isMapped=True).count()
-        unmapped_trainees = total_trainees - mapped_trainees
-        total_jobs = jobs.count()
-        active_jobs = jobs.filter(status='active').count()
-        filled_jobs = jobs.filter(status='filled').count()
-        inactive_jobs = jobs.filter(status='inactive').count()
-        locked_count = locks.filter(status='locked').count()
-        selected_count = locks.filter(status='selected').count()
-        rejected_count = locks.filter(status='rejected').count()
-        cancelled_count = locks.filter(status='cancelled').count()
-        total_matches = matches.count()
-        perfect_matches = matches.filter(bucket='PERFECT_MATCH').count()
-        skills_only_matches = matches.filter(bucket='SKILLS_ONLY').count()
-        location_only_matches = matches.filter(bucket='LOCATION_ONLY').count()
-        nearby_matches = matches.filter(bucket='NEARBY').count()
-        no_matches = matches.filter(bucket='NO_MATCH').count()
-        avg_match_percentage = matches.aggregate(Avg('total_percentage'))['total_percentage__avg'] or 0
-
-        job_stats = []
-        for job in jobs:
-            job_matches = matches.filter(job_ref=job)
-            job_locks = locks.filter(job=job)
-            job_stats.append({
-                'name': job.project_name,
-                'batch': job.batch_name or 'N/A',
-                'openings': job.openings,
-                'filled': job.filled,
-                'remaining': job.openings - job.filled,
-                'fill_rate': (job.filled / job.openings * 100) if job.openings > 0 else 0,
-                'total_matches': job_matches.count(),
-                'perfect_matches': job_matches.filter(bucket='PERFECT_MATCH').count(),
-                'selected': job_locks.filter(status='selected').count(),
-                'rejected': job_locks.filter(status='rejected').count(),
-                'status': job.status
-            })
-
-        batch_names = trainees.values_list('batch_name', flat=True).distinct()
-        if batch:
-            batch_names = [batch]
-        else:
-            batch_names = [b for b in batch_names if b]
-        batch_stats = []
-        for batch_name in batch_names:
-            if not batch_name:
-                continue
-            batch_trainees = trainees.filter(batch_name=batch_name)
-            batch_jobs = jobs.filter(batch_name=batch_name)
-            batch_matches = matches.filter(Q(job_ref__batch_name=batch_name) | Q(trainee_ref__batch_name=batch_name))
-            batch_locks = locks.filter(Q(job__batch_name=batch_name) | Q(trainee__batch_name=batch_name))
-            batch_stats.append({
-                'name': batch_name,
-                'trainee_count': batch_trainees.count(),
-                'mapped_count': batch_trainees.filter(userInfo__isMapped=True).count(),
-                'mapping_rate': (batch_trainees.filter(userInfo__isMapped=True).count() / batch_trainees.count() * 100) if batch_trainees.count() > 0 else 0,
-                'job_count': batch_jobs.count(),
-                'total_matches': batch_matches.count(),
-                'selected_count': batch_locks.filter(status='selected').count(),
-                'rejection_rate': (batch_locks.filter(status='rejected').count() / batch_locks.count() * 100) if batch_locks.count() > 0 else 0
-            })
-
-        skill_counter = Counter()
-        for job in jobs:
-            skills_list = [skill.strip() for skill in (job.skills or '').split(',') if skill.strip()]
-            for skill in skills_list:
-                skill_counter[skill] += 1
-        top_skills = skill_counter.most_common(15)
-
-        trainee_skills = Counter()
-        for trainee in trainees:
-            for strength in trainee.strengths.all():
-                trainee_skills[strength.courseName] += 1
-        skill_gaps = []
-        for skill, demand_count in skill_counter.items():
-            supply_count = trainee_skills.get(skill, 0)
-            gap = demand_count - supply_count
-            if gap > 0:
-                skill_gaps.append({
-                    'skill': skill,
-                    'demand': demand_count,
-                    'supply': supply_count,
-                    'gap': gap,
-                    'gap_percentage': (gap / demand_count * 100) if demand_count > 0 else 0
-                })
-        skill_gaps.sort(key=lambda x: x['gap'], reverse=True)
-        top_skill_gaps = skill_gaps[:10]
-
-        location_counts = Counter()
-        for trainee in trainees:
-            if trainee.userInfo and trainee.userInfo.location:
-                location_counts[trainee.userInfo.location.title()] += 1
-        job_locations = Counter()
-        for job in jobs:
-            if job.location:
-                if isinstance(job.location, list):
-                    for loc in job.location:
-                        job_locations[loc.title()] += 1
-                else:
-                    job_locations[job.location.title()] += 1
-
-        today = datetime.now().date()
-        six_months_ago = today - timedelta(days=180)
-        monthly_locks = []
-        monthly_matches = []
-        monthly_mappings = []
-        for i in range(6):
-            month_start = (today.replace(day=1) - timedelta(days=30*i)).replace(day=1)
-            month_end = (month_start + timedelta(days=32)).replace(day=1)
-            month_locks = locks.filter(created_at__date__gte=month_start, created_at__date__lt=month_end).count()
-            month_matches = matches.filter(created_at__date__gte=month_start, created_at__date__lt=month_end).count()
-            month_mappings = locks.filter(status='selected', created_at__date__gte=month_start, created_at__date__lt=month_end).count()
-            monthly_locks.append(month_locks)
-            monthly_matches.append(month_matches)
-            monthly_mappings.append(month_mappings)
-        months_labels = [(today - timedelta(days=30*i)).strftime('%b %Y') for i in range(5, -1, -1)]
-
-        chart_images = []
-        # (All chart creation code is unchanged...)
-        # We'll skip repeating the entire PDF chart generation for brevity, as it's identical to the original.
-        # The complete method is already in your provided code.
-
-        # Instead of repeating the massive PDF generation, I'll note that the method continues exactly as previously provided.
-        # Return a placeholder for now.
-        return Response({"message": "PDF report generation preserved; too long to fully restate here."}, status=501)
 
 # ---------- Cancel Candidate Selection ----------
 class CancelCandidateSelectionView(APIView):
@@ -3068,7 +3181,7 @@ class HRJobRecommendationsView(APIView):
 
         job_id = request.query_params.get('job_id')
         status_filter = request.query_params.get('status')
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
 
         recommendations = Recommendation.objects.all()
         if job_id:
@@ -3076,7 +3189,7 @@ class HRJobRecommendationsView(APIView):
         if status_filter:
             recommendations = recommendations.filter(status=status_filter)
         if batch:
-            recommendations = recommendations.filter(job_id__in=Job.objects.filter(batch_name=batch).values_list('id', flat=True))
+            recommendations = recommendations.filter(job_id__in=Job.objects.filter(get_batch_filter_q(batch_param=batch)).values_list('id', flat=True))
 
         serializer = RecommendationSerializer(recommendations, many=True)
         return Response(serializer.data)
@@ -3107,21 +3220,21 @@ class HRSummaryPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        batch = request.query_params.get('batch', '')
+        batch = request.query_params.get('batch', '') or request.query_params.get('batch_id', '')
         
         # ==================== DATA COLLECTION ====================
         
         # Get all data with filters
-        jobs = Job.objects.all()
-        trainees = ProfileRecord.objects.select_related('userInfo').all()
+        jobs = Job.objects.select_related('batch').all()
+        trainees = ProfileRecord.objects.select_related('userInfo', 'batch').all()
         locks = InterviewLock.objects.select_related('trainee__userInfo', 'job').all()
         matches = Match.objects.select_related('job_ref', 'trainee_ref__userInfo').all()
         
         if batch:
-            jobs = jobs.filter(batch_name=batch)
-            trainees = trainees.filter(batch_name=batch)
-            locks = locks.filter(Q(job__batch_name=batch) | Q(trainee__batch_name=batch))
-            matches = matches.filter(Q(job_ref__batch_name=batch) | Q(trainee_ref__batch_name=batch))
+            jobs = jobs.filter(get_batch_filter_q(batch_param=batch))
+            trainees = trainees.filter(get_batch_filter_q(batch_param=batch))
+            locks = locks.filter(get_batch_filter_q('job__', batch) | get_batch_filter_q('trainee__', batch))
+            matches = matches.filter(get_batch_filter_q('job_ref__', batch) | get_batch_filter_q('trainee_ref__', batch))
         
         # Basic Statistics
         total_trainees = trainees.count()
@@ -3169,21 +3282,19 @@ class HRSummaryPDFView(APIView):
             })
         
         # Batch-wise Statistics
-        batch_names = trainees.values_list('batch_name', flat=True).distinct()
+        batch_names = [b for b in trainees.values_list('batch__batch_name', flat=True).distinct() if b]
         if batch:
             batch_names = [batch]
-        else:
-            batch_names = [b for b in batch_names if b]
         
         batch_stats = []
         for batch_name in batch_names:
             if not batch_name:
                 continue
                 
-            batch_trainees = trainees.filter(batch_name=batch_name)
-            batch_jobs = jobs.filter(batch_name=batch_name)
-            batch_matches = matches.filter(Q(job_ref__batch_name=batch_name) | Q(trainee_ref__batch_name=batch_name))
-            batch_locks = locks.filter(Q(job__batch_name=batch_name) | Q(trainee__batch_name=batch_name))
+            batch_trainees = trainees.filter(get_batch_filter_q(batch_param=batch_name))
+            batch_jobs = jobs.filter(get_batch_filter_q(batch_param=batch_name))
+            batch_matches = matches.filter(get_batch_filter_q('job_ref__', batch_name) | get_batch_filter_q('trainee_ref__', batch_name))
+            batch_locks = locks.filter(get_batch_filter_q('job__', batch_name) | get_batch_filter_q('trainee__', batch_name))
             
             batch_stats.append({
                 'name': batch_name,
@@ -4097,14 +4208,14 @@ class ConsentListView(APIView):
             return Response({"error": "Permission denied"}, status=403)
 
         job_id = request.query_params.get('job_id')
-        batch = request.query_params.get('batch')
+        batch = request.query_params.get('batch') or request.query_params.get('batch_id')
         status_filter = request.query_params.get('status')
 
-        qs = Consent.objects.select_related('trainee', 'trainee__userInfo', 'job', 'sent_by').all()
+        qs = Consent.objects.select_related('trainee', 'trainee__userInfo', 'trainee__batch', 'job', 'sent_by').all()
         if job_id:
             qs = qs.filter(job_id=job_id)
         if batch:
-            qs = qs.filter(trainee__batch_name=batch)
+            qs = qs.filter(get_batch_filter_q('trainee__', batch))
         if status_filter:
             qs = qs.filter(status=status_filter.upper())
 

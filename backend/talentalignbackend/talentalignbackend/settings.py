@@ -96,7 +96,7 @@ AUTH_USER_MODEL = 'apis.User'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DB_ENGINE = os.environ.get('DB_ENGINE', 'django.db.backends.postgresql')
-DB_NAME = os.environ.get('DB_NAME', 'tharunsalign')
+DB_NAME = os.environ.get('DB_NAME', 'newchangedone')
 DB_USER = os.environ.get('DB_USER', 'postgres')
 DB_PASSWORD = os.environ.get('DB_PASSWORD', 'root')
 DB_HOST = os.environ.get('DB_HOST', 'localhost')

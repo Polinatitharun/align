@@ -521,10 +521,22 @@ Trainees are concentrated in the top locations. For jobs elsewhere, consider rel
         recs_qs = Recommendation.objects.all()
         
         if self.batch_name:
-            trainees_qs = trainees_qs.filter(batch_name=self.batch_name)
-            jobs_qs = jobs_qs.filter(batch_name=self.batch_name)
-            locks_qs = locks_qs.filter(Q(job__batch_name=self.batch_name) | Q(trainee__batch_name=self.batch_name))
-            matches_qs = matches_qs.filter(Q(job_ref__batch_name=self.batch_name) | Q(trainee_ref__batch_name=self.batch_name))
+            batch_str = str(self.batch_name).strip()
+            batch_id = int(batch_str) if batch_str.isdigit() else -1
+            q_trainee = Q(batch__batch_name__iexact=batch_str) | Q(batch_id=batch_id)
+            q_job = Q(batch__batch_name__iexact=batch_str) | Q(batch_id=batch_id)
+            q_lock = (
+                Q(job__batch__batch_name__iexact=batch_str) | Q(job__batch_id=batch_id) |
+                Q(trainee__batch__batch_name__iexact=batch_str) | Q(trainee__batch_id=batch_id)
+            )
+            q_match = (
+                Q(job_ref__batch__batch_name__iexact=batch_str) | Q(job_ref__batch_id=batch_id) |
+                Q(trainee_ref__batch__batch_name__iexact=batch_str) | Q(trainee_ref__batch_id=batch_id)
+            )
+            trainees_qs = trainees_qs.filter(q_trainee)
+            jobs_qs = jobs_qs.filter(q_job)
+            locks_qs = locks_qs.filter(q_lock)
+            matches_qs = matches_qs.filter(q_match)
         
         total_trainees = trainees_qs.count()
         total_jobs = jobs_qs.count()
@@ -566,12 +578,12 @@ Trainees are concentrated in the top locations. For jobs elsewhere, consider rel
         accepted_recs = recs_qs.filter(status='Accepted').count()
         rejected_recs = recs_qs.filter(status='Rejected').count()
         
-        batches = trainees_qs.values_list('batch_name', flat=True).distinct()
+        batches = [b for b in trainees_qs.values_list('batch__batch_name', flat=True).distinct() if b]
         batch_stats = []
         for batch in batches:
             if not batch:
                 continue
-            batch_trainees = trainees_qs.filter(batch_name=batch)
+            batch_trainees = trainees_qs.filter(batch__batch_name=batch)
             batch_mapped = batch_trainees.filter(userInfo__isMapped=True).count()
             batch_stats.append({
                 'name': batch,

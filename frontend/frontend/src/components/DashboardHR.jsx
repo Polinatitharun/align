@@ -265,6 +265,28 @@ const [workbookFilter, setWorkbookFilter] = useState('');
 
   const fetchCoursesList = async () => { try { const res = await api.get('/courses/'); setCoursesList(res.data); } catch (err) { console.error('Failed to fetch courses', err); } };
 
+  const fetchAvailableBatches = async () => {
+    let foundBatches = [];
+    try {
+      const res = await api.get('/batches/');
+      const payload = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+      foundBatches = payload.map((b) => b.batch_name || b.name).filter(Boolean);
+    } catch (e) {
+      // fallback
+    }
+    try {
+      const pRes = await api.get('/api/profiles/');
+      const pData = Array.isArray(pRes.data) ? pRes.data : [];
+      const pBatches = pData.map((t) => t.batch_name || t.batchName).filter(Boolean);
+      foundBatches = [...new Set([...foundBatches, ...pBatches])];
+    } catch (e) {
+      // fallback
+    }
+    if (foundBatches.length > 0) {
+      setAvailableBatches(foundBatches);
+    }
+  };
+
   // Fetch trainees
   const fetchTrainees = async () => {
     setLoading(true);
@@ -276,11 +298,6 @@ const [workbookFilter, setWorkbookFilter] = useState('');
       const transformed = payload.map((trainee) => normalizeTraineeRecord(trainee));
       setTrainees(transformed);
       setAllTrainees(transformed);
-      if (!selectedBatch) {
-        setUnfilteredTrainees(transformed);
-        const batches = [...new Set(transformed.map(t => t.batch_name).filter(Boolean))];
-        setAvailableBatches(batches);
-      }
     } catch (err) {
       setError('Failed to fetch trainees.');
       setTrainees([]);
@@ -2021,31 +2038,113 @@ const renderWorkbook = () => {
   const restoreBackup = async () => { if (!restoreFile) return; if (!window.confirm('Restore backup? This may overwrite existing data.')) return; const fd = new FormData(); fd.append('file', restoreFile); try { setLoading(true); await api.post('/restore/', fd); toast.success('Restore completed'); setRestoreFile(null); await refreshCurrentView(); } catch { toast.error('Restore failed'); } finally { setLoading(false); } };
 
   // ==================== Effects ====================
-  useEffect(() => { fetchFullTraineeListForBatches(); fetchCoursesList(); fetchCourses(); fetchNotifications(); }, []);
-  useEffect(() => { if (['dashboard', 'trainees', 'mapped', 'unmapped', 'openPool', 'interviewLocks'].includes(activeTab)) fetchTrainees(); }, [activeTab, selectedBatch]);
-  useEffect(() => { if (['dashboard', 'jobs', 'createJob', 'talentSearch'].includes(activeTab)) fetchJobs(); }, [activeTab, selectedBatch]);
-  useEffect(() => { if (allTrainees.length && activeTab === 'openPool') checkTraineesForOpenPool(); }, [allTrainees, activeTab, selectedBatch]);
-  useEffect(() => { setSkillTrends(computeSkillTrends(jobs)); }, [jobs]);
-  useEffect(() => { if (activeTab === 'dashboard') { fetchLockStats(); fetchDashboardAnalytics(); } }, [activeTab, jobs, selectedBatch]);
-  useEffect(() => { if (activeTab === 'feedback') fetchFeedbackRecords(); if (activeTab === 'audit') fetchAuditLogs(); }, [activeTab, feedbackSearch]);
-  useEffect(() => { let f = [...allTrainees]; if (searchQuery) f = f.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.email.toLowerCase().includes(searchQuery.toLowerCase()) || (t.group_name && t.group_name.toLowerCase().includes(searchQuery.toLowerCase())) || t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))); if (locationFilter) f = f.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase())); if (groupFilter) f = f.filter(t => (t.group_name || t.groupName || '').toLowerCase() === groupFilter.toLowerCase()); if (activeTab === 'mapped') f = f.filter(t => t.isMapped); else if (activeTab === 'unmapped') f = f.filter(t => !t.isMapped); else if (activeTab === 'openPool') { const ids = traineesWithNoMatches.map(t => t.id || t.trainee_id); f = f.filter(t => !t.isMapped && ids.includes(t.id)); } setTrainees(f); }, [searchQuery, locationFilter, groupFilter, activeTab, allTrainees, traineesWithNoMatches]);
-  useEffect(() => { if (activeTab === 'interviewLocks') { fetchInterviewLocks(); fetchLockStats(); } }, [activeTab, lockFilter, selectedBatch]);
-  useEffect(() => { if (activeTab === 'selected') fetchSelectedCandidates(); if (activeTab === 'rejected') fetchRejectedLocks(); }, [activeTab, allTrainees, selectedBatch]);
-  useEffect(() => { if (activeTab === 'recommendations') fetchRecommendations(); }, [activeTab, selectedRecJobId, recStatusFilter, selectedBatch]);
-  useEffect(() => { if (activeTab === 'demandSupply') fetchDemandSupplyAnalysis(); }, [activeTab, dsFilter, selectedBatch]);
-  useEffect(() => { let interval; if (autoRefresh && activeTab === 'talentSearch' && selectedJobForSearch) interval = setInterval(() => handleJobSelectForSearch(selectedJobForSearch.id), 30000); return () => { if (interval) clearInterval(interval); }; }, [autoRefresh, activeTab, selectedJobForSearch, selectedBatch]);
   useEffect(() => {
-    if (activeTab !== 'dashboard') return;
+    fetchAvailableBatches();
+    fetchCoursesList();
+    fetchCourses();
+    fetchNotifications();
+  }, []);
 
-    fetchJobs?.();
-    fetchTrainees?.();
-    fetchInterviewLocks?.();
-    fetchLockStats?.();
-    fetchDashboardAnalytics?.();
-    fetchDemandSupplyAnalysis?.();
-    // optional / heavier — throttle if needed:
-    // fetchRecommendations?.();
+  // Main coordinated loader for active tab & batch
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      fetchJobs();
+      fetchTrainees();
+      fetchInterviewLocks();
+      fetchLockStats();
+      fetchDashboardAnalytics();
+      fetchDemandSupplyAnalysis();
+    } else if (['trainees', 'mapped', 'unmapped'].includes(activeTab)) {
+      fetchTrainees();
+    } else if (activeTab === 'openPool') {
+      fetchTrainees();
+    } else if (['jobs', 'createJob'].includes(activeTab)) {
+      fetchJobs();
+    } else if (activeTab === 'talentSearch') {
+      fetchJobs();
+      if (selectedJobForSearch) handleJobSelectForSearch(selectedJobForSearch.id);
+    } else if (activeTab === 'interviewLocks') {
+      fetchInterviewLocks();
+      fetchLockStats();
+    } else if (activeTab === 'selected') {
+      fetchSelectedCandidates();
+    } else if (activeTab === 'rejected') {
+      fetchRejectedLocks();
+    } else if (activeTab === 'recommendations') {
+      fetchRecommendations();
+    } else if (activeTab === 'demandSupply') {
+      fetchDemandSupplyAnalysis();
+    }
   }, [activeTab, selectedBatch]);
+
+  useEffect(() => {
+    if (allTrainees.length && activeTab === 'openPool') {
+      checkTraineesForOpenPool();
+    }
+  }, [allTrainees, activeTab]);
+
+  useEffect(() => {
+    setSkillTrends(computeSkillTrends(jobs));
+  }, [jobs]);
+
+  useEffect(() => {
+    if (activeTab === 'feedback') fetchFeedbackRecords();
+    if (activeTab === 'audit') fetchAuditLogs();
+  }, [activeTab, feedbackSearch]);
+
+  useEffect(() => {
+    let f = [...allTrainees];
+    if (searchQuery) {
+      f = f.filter(t =>
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (t.group_name && t.group_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    if (locationFilter) {
+      f = f.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
+    }
+    if (groupFilter) {
+      f = f.filter(t => (t.group_name || t.groupName || '').toLowerCase() === groupFilter.toLowerCase());
+    }
+    if (activeTab === 'mapped') f = f.filter(t => t.isMapped);
+    else if (activeTab === 'unmapped') f = f.filter(t => !t.isMapped);
+    else if (activeTab === 'openPool') {
+      const ids = traineesWithNoMatches.map(t => t.id || t.trainee_id);
+      f = f.filter(t => !t.isMapped && ids.includes(t.id));
+    }
+    setTrainees(f);
+  }, [searchQuery, locationFilter, groupFilter, activeTab, allTrainees, traineesWithNoMatches]);
+
+  useEffect(() => {
+    if (activeTab === 'interviewLocks') {
+      fetchInterviewLocks();
+      fetchLockStats();
+    }
+  }, [lockFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'recommendations') {
+      fetchRecommendations();
+    }
+  }, [selectedRecJobId, recStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'demandSupply') {
+      fetchDemandSupplyAnalysis();
+    }
+  }, [dsFilter]);
+
+  useEffect(() => {
+    let interval;
+    if (autoRefresh && activeTab === 'talentSearch' && selectedJobForSearch) {
+      interval = setInterval(() => handleJobSelectForSearch(selectedJobForSearch.id), 30000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh, activeTab, selectedJobForSearch, selectedBatch]);
   const computeSkillTrends = (jobs) => {
     const techMap = new Map(), softMap = new Map();
     for (const job of jobs || []) {

@@ -6,6 +6,8 @@ from .views import (
     CancelCandidateSelectionView,
     CourseListCreateView,
     CourseDetailView,
+    BatchListCreateView,
+    BatchDetailView,
     CourseOwnerAddRecommendationsView,
     CourseOwnerAvailableTraineesView,
     NotificationListView,
@@ -98,9 +100,11 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # User Management
+    # Course & Batch Management
     path('courses/', CourseListCreateView.as_view(), name='course-list-create'),
     path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
+    path('batches/', BatchListCreateView.as_view(), name='batch-list-create'),
+    path('batches/<str:pk>/', BatchDetailView.as_view(), name='batch-detail'),
     path('notifications/', NotificationListView.as_view(), name='notifications'),
     path('audit-logs/', AuditLogListView.as_view(), name='audit-logs'),
     path('dashboard/analytics/', DashboardAnalyticsView.as_view(), name='dashboard-analytics'),

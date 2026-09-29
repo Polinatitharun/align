@@ -18,6 +18,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule
 
+from django.db.models import Q
 from .stream_constants import (
     ALLOWED_STREAMS,
     normalize_to_standard_stream,
@@ -128,9 +129,13 @@ class TalentAlignmentExcelReportGenerator:
         """
         from .models import Job, UserInfo, ProfileRecord, InterviewLock, Match
 
-        jobs_qs = Job.objects.all().select_related('course')
+        jobs_qs = Job.objects.all().select_related('course', 'batch')
         if batch_name:
-            jobs_qs = jobs_qs.filter(batch_name=batch_name)
+            batch_str = str(batch_name).strip()
+            batch_id = int(batch_str) if batch_str.isdigit() else -1
+            jobs_qs = jobs_qs.filter(
+                Q(batch__batch_name__iexact=batch_str) | Q(batch_id=batch_id)
+            )
 
         records = []
         cross_mappings = []
@@ -138,10 +143,14 @@ class TalentAlignmentExcelReportGenerator:
         # Find all mapped trainees across the database
         mapped_locks = InterviewLock.objects.filter(
             status__in=['mapped', 'selected', 'joined', 'offered']
-        ).select_related('trainee__userInfo', 'job')
+        ).select_related('trainee__userInfo', 'job', 'job__batch')
 
         if batch_name:
-            mapped_locks = mapped_locks.filter(job__batch_name=batch_name)
+            batch_str = str(batch_name).strip()
+            batch_id = int(batch_str) if batch_str.isdigit() else -1
+            mapped_locks = mapped_locks.filter(
+                Q(job__batch__batch_name__iexact=batch_str) | Q(job__batch_id=batch_id)
+            )
 
         # Build mapping cache: job_id -> list of mapped trainees with their streams
         job_mappings: Dict[int, List[Dict[str, Any]]] = {}

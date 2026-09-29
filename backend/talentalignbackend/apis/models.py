@@ -25,6 +25,19 @@ class Course(models.Model):
         return self.name
 
 
+
+class Batch(models.Model):
+    batch_uuid = models.CharField(max_length=100, unique=True, default=uuid.uuid4)
+    batch_name = models.CharField(max_length=100)
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.batch_name
+
+
+
 class User(AbstractUser):
     ROLE_CHOICES = (
         ('trainee', 'Trainee'),
@@ -39,6 +52,39 @@ class User(AbstractUser):
     course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     access_start = models.DateTimeField(null=True, blank=True)
     access_end = models.DateTimeField(null=True, blank=True)
+
+
+def _resolve_batch_for_model(value):
+    if not value:
+        return None
+    if isinstance(value, Batch):
+        return value
+    if isinstance(value, dict):
+        uuid_val = value.get('batch_uuid') or value.get('batchUuid')
+        name_val = value.get('batch_name') or value.get('batchName') or value.get('name') or value.get('id')
+        if uuid_val:
+            b = Batch.objects.filter(batch_uuid=str(uuid_val).strip()).first()
+            if b:
+                return b
+            if name_val:
+                return Batch.objects.create(batch_uuid=str(uuid_val).strip(), batch_name=str(name_val).strip())
+            return Batch.objects.create(batch_uuid=str(uuid_val).strip(), batch_name=str(uuid_val).strip())
+        value = name_val
+
+    val_str = str(value).strip()
+    if not val_str or val_str.lower() in ('none', 'null', 'undefined', 'all'):
+        return None
+    b = Batch.objects.filter(batch_uuid=val_str).first()
+    if b:
+        return b
+    if val_str.isdigit():
+        b = Batch.objects.filter(id=int(val_str)).first()
+        if b:
+            return b
+    b = Batch.objects.filter(batch_name__iexact=val_str).first()
+    if b:
+        return b
+    return Batch.objects.create(batch_name=val_str)
 
 
 class Job(models.Model):
@@ -84,13 +130,29 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_public = models.BooleanField(default=True, help_text="Public jobs are visible to associates")
-    batch_name = models.CharField(max_length=100, null=True, blank=True)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="jobs")
 
     def __str__(self):
-        return f"{self.project_name} - {self.demand_id} (Batch: {self.batch_name or 'N/A'})"
+        return f"{self.project_name} - {self.demand_id} (Batch: {self.batch.batch_name if self.batch else 'N/A'})"
 
     class Meta:
         ordering = ['-created_at']
+
+    @property
+    def batch_name(self):
+        return self.batch.batch_name if self.batch else ''
+
+    @batch_name.setter
+    def batch_name(self, value):
+        self.batch = _resolve_batch_for_model(value)
+
+    @property
+    def batch_uuid(self):
+        return self.batch.batch_uuid if self.batch else ''
+
+    @batch_uuid.setter
+    def batch_uuid(self, value):
+        self.batch = _resolve_batch_for_model(value)
 
     @property
     def is_active(self):
@@ -126,11 +188,29 @@ class UserInfo(models.Model):
     projectName = models.CharField(max_length=255, null=True, blank=True, default=None)
     email = models.EmailField(null=True, blank=True)
     course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='trainee_infos')
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='trainee_infos')
     preferred_location_1 = models.CharField(max_length=255, null=True, blank=True)
     preferred_location_2 = models.CharField(max_length=255, null=True, blank=True)
     preferred_location_3 = models.CharField(max_length=255, null=True, blank=True)
     preferred_state = models.CharField(max_length=255, null=True, blank=True)
     preferred_city = models.CharField(max_length=255, null=True, blank=True)
+
+    @property
+    def batch_name(self):
+        return self.batch.batch_name if self.batch else ''
+
+    @batch_name.setter
+    def batch_name(self, value):
+        self.batch = _resolve_batch_for_model(value)
+
+    @property
+    def batch_uuid(self):
+        return self.batch.batch_uuid if self.batch else ''
+
+    @batch_uuid.setter
+    def batch_uuid(self, value):
+        self.batch = _resolve_batch_for_model(value)
+
 
 class ProfileRecord(models.Model):
     id = models.BigAutoField(primary_key=True)
@@ -141,10 +221,26 @@ class ProfileRecord(models.Model):
     batchRank = models.CharField(max_length=32, null=True, blank=True)
     groupRank = models.CharField(max_length=32, null=True, blank=True)
     dpi = models.FloatField(null=True, blank=True, validators=[MinValueValidator(0.0)])
-    batch_name = models.CharField(max_length=100, null=True, blank=True)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="profiles")
     group_name = models.CharField(max_length=100, null=True, blank=True, help_text="Group Name (e.g. A1, D1)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def batch_name(self):
+        return self.batch.batch_name if self.batch else ''
+
+    @batch_name.setter
+    def batch_name(self, value):
+        self.batch = _resolve_batch_for_model(value)
+
+    @property
+    def batch_uuid(self):
+        return self.batch.batch_uuid if self.batch else ''
+
+    @batch_uuid.setter
+    def batch_uuid(self, value):
+        self.batch = _resolve_batch_for_model(value)
 
 
 class Strength(models.Model):
@@ -262,6 +358,19 @@ class InterviewFeedback(models.Model):
 
     def __str__(self):
         return f"Feedback for {self.lock.trainee.userInfo.name} - {self.recommendation}"
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class ManagerChatSession(models.Model):

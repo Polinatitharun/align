@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    User, Course, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
+    User, Course, Batch, UserInfo, ProfileRecord, Strength, Weakness, Job, Match,
     Recommendation, InterviewLock, InterviewFeedback,
     ManagerChatSession, ManagerChatMessage, TraineeSelfAssessment,
     Notification, AuditLog, Consent
@@ -33,13 +33,48 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
-# ---------- User Serializers ----------
+# ---------- Batch & Course Serializers ----------
 class CourseSerializer(serializers.ModelSerializer):
     owners = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role='course_owner'), many=True)
 
     class Meta:
         model = Course
         fields = '__all__'
+
+
+class BatchSerializer(serializers.ModelSerializer):
+    batch_uuid = serializers.CharField(required=False, validators=[])
+    batchUuid = serializers.CharField(source='batch_uuid', read_only=True)
+    batchName = serializers.CharField(source='batch_name', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    course_id = serializers.IntegerField(source='course.id', read_only=True)
+    trainees_count = serializers.SerializerMethodField()
+    jobs_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Batch
+        fields = '__all__'
+        extra_kwargs = {
+            'batch_uuid': {'validators': []}
+        }
+
+    def to_internal_value(self, data):
+        data_copy = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'batchUuid' in data_copy and 'batch_uuid' not in data_copy:
+            data_copy['batch_uuid'] = data_copy.get('batchUuid')
+        if 'batchName' in data_copy and 'batch_name' not in data_copy:
+            data_copy['batch_name'] = data_copy.get('batchName')
+        if 'startDate' in data_copy and 'start_date' not in data_copy:
+            data_copy['start_date'] = data_copy.get('startDate')
+        if 'endDate' in data_copy and 'end_date' not in data_copy:
+            data_copy['end_date'] = data_copy.get('endDate')
+        return super().to_internal_value(data_copy)
+
+    def get_trainees_count(self, obj):
+        return obj.profiles.count() if hasattr(obj, 'profiles') else 0
+
+    def get_jobs_count(self, obj):
+        return obj.jobs.count() if hasattr(obj, 'jobs') else 0
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -88,6 +123,10 @@ class WeaknessSerializer(serializers.ModelSerializer):
 
 class UserInfoSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
+    batch_name = serializers.CharField(source='batch.batch_name', read_only=True)
+    batch_uuid = serializers.CharField(source='batch.batch_uuid', read_only=True)
+    batchUuid = serializers.CharField(source='batch.batch_uuid', read_only=True)
+    batch_id = serializers.IntegerField(source='batch.id', read_only=True)
     name = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='')
     userId = serializers.CharField(required=True, validators=[])
     location = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -109,12 +148,16 @@ class ProfileRecordSerializer(serializers.ModelSerializer):
     weaknesses = WeaknessSerializer(many=True, required=False)
     external_id = serializers.IntegerField(required=False, allow_null=True, validators=[])
     groupName = serializers.CharField(source='group_name', required=False, allow_null=True, allow_blank=True)
-    batchName = serializers.CharField(source='batch_name', required=False, allow_null=True, allow_blank=True)
+    batchName = serializers.CharField(source='batch_name', read_only=True)
+    batch_name = serializers.CharField(read_only=True)
+    batch_uuid = serializers.CharField(read_only=True)
+    batchUuid = serializers.CharField(source='batch_uuid', read_only=True)
+    batch_id = serializers.IntegerField(source='batch.id', read_only=True)
 
     class Meta:
         model = ProfileRecord
         fields = ['id', 'external_id', 'upskillCourses', 'certificates', 'userInfo',
-                  'batchRank', 'groupRank', 'dpi', 'batch_name', 'group_name',
+                  'batchRank', 'groupRank', 'dpi', 'batch', 'batch_id', 'batch_name', 'batch_uuid', 'batchUuid', 'group_name',
                   'groupName', 'batchName', 'strengths', 'weaknesses',
                   'created_at', 'updated_at']
         extra_kwargs = {
@@ -123,22 +166,47 @@ class ProfileRecordSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         data_copy = data.copy() if hasattr(data, 'copy') else dict(data)
-        if 'id' in data_copy and 'external_id' not in data_copy:
-            data_copy['external_id'] = data_copy.get('id')
+        if 'external_id' not in data_copy and 'externalId' in data_copy:
+            data_copy['external_id'] = data_copy.get('externalId')
         if 'groupName' in data_copy and 'group_name' not in data_copy:
             data_copy['group_name'] = data_copy.get('groupName')
-        if 'batchName' in data_copy and 'batch_name' not in data_copy:
-            data_copy['batch_name'] = data_copy.get('batchName')
+        if 'batch' not in data_copy or not data_copy.get('batch'):
+            raw_uuid = data_copy.get('batch_uuid') or data_copy.get('batchUuid')
+            raw_batch = data_copy.get('batchName') or data_copy.get('batch_name') or data_copy.get('batch_id') or raw_uuid
+            if raw_batch or raw_uuid:
+                from .models import Batch
+                b = None
+                if raw_uuid:
+                    b = Batch.objects.filter(batch_uuid=str(raw_uuid).strip()).first()
+                if not b and raw_batch:
+                    raw_str = str(raw_batch).strip()
+                    if raw_str and raw_str.lower() not in ('none', 'null', 'undefined', 'all'):
+                        b = Batch.objects.filter(batch_uuid=raw_str).first()
+                        if not b and raw_str.isdigit():
+                            b = Batch.objects.filter(id=int(raw_str)).first()
+                        if not b:
+                            b = Batch.objects.filter(batch_name__iexact=raw_str).first()
+                        if not b:
+                            name_to_use = str(raw_batch).strip() if raw_batch else str(raw_uuid).strip()
+                            if raw_uuid:
+                                b = Batch.objects.create(batch_uuid=str(raw_uuid).strip(), batch_name=name_to_use)
+                            else:
+                                b = Batch.objects.create(batch_name=name_to_use)
+                if b:
+                    data_copy['batch'] = b.id
         return super().to_internal_value(data_copy)
 
     def create(self, validated_data):
         user_info_data = validated_data.pop('userInfo', None)
         strengths_data = validated_data.pop('strengths', [])
         weaknesses_data = validated_data.pop('weaknesses', [])
-        external_id = validated_data.get('external_id')
+        external_id = validated_data.pop('external_id', None)
+        batch = validated_data.get('batch')
 
         user_info = None
         if user_info_data:
+            if batch and 'batch' not in user_info_data:
+                user_info_data['batch'] = batch
             user_id = user_info_data.get('userId')
             if user_id:
                 user_info, _ = UserInfo.objects.update_or_create(
@@ -147,11 +215,16 @@ class ProfileRecordSerializer(serializers.ModelSerializer):
             else:
                 user_info = UserInfo.objects.create(**user_info_data)
 
+        # Profile is uniquely owned by its UserInfo
         profile = None
-        if external_id is not None:
-            profile = ProfileRecord.objects.filter(external_id=external_id).first()
-        if not profile and user_info:
+        if user_info:
             profile = ProfileRecord.objects.filter(userInfo=user_info).first()
+
+        # Handle external_id safely without colliding across users
+        if external_id is not None:
+            existing_with_ext = ProfileRecord.objects.filter(external_id=external_id).first()
+            if not existing_with_ext or (profile and existing_with_ext.id == profile.id):
+                validated_data['external_id'] = external_id
 
         if profile:
             for attr, val in validated_data.items():
@@ -215,10 +288,42 @@ class JobSerializer(serializers.ModelSerializer):
     remaining_count = serializers.IntegerField(read_only=True)
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_id = serializers.IntegerField(source='course.id', read_only=True)
+    batch_name = serializers.CharField(source='batch.batch_name', read_only=True)
+    batch_uuid = serializers.CharField(source='batch.batch_uuid', read_only=True)
+    batchUuid = serializers.CharField(source='batch.batch_uuid', read_only=True)
+    batch_id = serializers.IntegerField(source='batch.id', read_only=True)
 
     class Meta:
         model = Job
         fields = '__all__'
+
+    def to_internal_value(self, data):
+        data_copy = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'batch' not in data_copy or not data_copy.get('batch'):
+            raw_uuid = data_copy.get('batch_uuid') or data_copy.get('batchUuid')
+            raw_batch = data_copy.get('batchName') or data_copy.get('batch_name') or data_copy.get('batch_id') or raw_uuid
+            if raw_batch or raw_uuid:
+                from .models import Batch
+                b = None
+                if raw_uuid:
+                    b = Batch.objects.filter(batch_uuid=str(raw_uuid).strip()).first()
+                if not b and raw_batch:
+                    raw_str = str(raw_batch).strip()
+                    if raw_str and raw_str.lower() not in ('none', 'null', 'undefined', 'all'):
+                        b = Batch.objects.filter(batch_uuid=raw_str).first()
+                        if not b and raw_str.isdigit():
+                            b = Batch.objects.filter(id=int(raw_str)).first()
+                        if not b:
+                            b = Batch.objects.filter(batch_name__iexact=raw_str).first()
+                        if not b:
+                            name_to_use = str(raw_batch).strip() if raw_batch else str(raw_uuid).strip()
+                            if raw_uuid:
+                                b = Batch.objects.create(batch_uuid=str(raw_uuid).strip(), batch_name=name_to_use)
+                            else:
+                                b = Batch.objects.create(batch_name=name_to_use)
+                if b:
+                    data_copy['batch'] = b.id
+        return super().to_internal_value(data_copy)
 
     def validate_stream(self, value):
         if value:
@@ -288,6 +393,8 @@ class ConsentSerializer(serializers.ModelSerializer):
     trainee_name = serializers.CharField(source='trainee.userInfo.name', read_only=True)
     employee_id = serializers.CharField(source='trainee.userInfo.employeeId', read_only=True)
     batch_name = serializers.CharField(source='trainee.batch_name', read_only=True, default='')
+    batch_uuid = serializers.CharField(source='trainee.batch_uuid', read_only=True, default='')
+    batchUuid = serializers.CharField(source='trainee.batch_uuid', read_only=True, default='')
     group_name = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     groupName = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     job_title = serializers.CharField(source='job.project_name', read_only=True)
@@ -383,6 +490,8 @@ class InterviewLockSerializer(serializers.ModelSerializer):
     locked_by_name = serializers.CharField(source='locked_by.username', read_only=True)
     assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True, allow_null=True)
     batch_name = serializers.CharField(source='trainee.batch_name', read_only=True, default='')
+    batch_uuid = serializers.CharField(source='trainee.batch_uuid', read_only=True, default='')
+    batchUuid = serializers.CharField(source='trainee.batch_uuid', read_only=True, default='')
     group_name = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     groupName = serializers.CharField(source='trainee.group_name', read_only=True, default='')
     feedback = serializers.SerializerMethodField()
