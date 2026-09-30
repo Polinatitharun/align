@@ -3,21 +3,31 @@ import { CheckCircle, XCircle, X, AlertCircle, Users, Check, Loader2 } from 'luc
 import api from '../api/axios';
 import { toast } from 'sonner';
 
-export default function BulkStatusModal({ isOpen, onClose, selectedItems = [], onSuccess }) {
+export default function BulkStatusModal({ isOpen, onClose, selectedItems = [], selectedLocks = [], onSuccess }) {
   const [status, setStatus] = useState('selected');
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
+  const items = (selectedItems && selectedItems.length > 0) ? selectedItems : (selectedLocks || []);
+
   const handleSubmit = async () => {
-    if (!selectedItems || selectedItems.length === 0) {
+    if (!items || items.length === 0) {
       toast.error('No candidates selected.');
       return;
     }
 
     setSubmitting(true);
     try {
-      const lockIds = selectedItems.map(item => item.id || item.lock_id || item.trainee_id);
+      const lockIds = items.map(item => {
+        if (item.lockId) return item.lockId;
+        if (typeof item.id === 'string' && item.id.startsWith('lock-')) {
+          const parsed = parseInt(item.id.replace('lock-', ''), 10);
+          return isNaN(parsed) ? item.id : parsed;
+        }
+        return item.lock_id || item.id || item.trainee_id || item.traineeId;
+      });
+
       const res = await api.post('/jobs/bulk-status/', {
         locks: lockIds,
         status: status
@@ -146,7 +156,7 @@ export default function BulkStatusModal({ isOpen, onClose, selectedItems = [], o
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
               <Users size={16} color="#6366f1" />
-              <span>Selected Candidates ({selectedItems.length})</span>
+              <span>Selected Candidates ({items.length})</span>
             </div>
             <div style={{
               maxHeight: '140px',
@@ -155,18 +165,18 @@ export default function BulkStatusModal({ isOpen, onClose, selectedItems = [], o
               borderRadius: '8px',
               background: '#f8fafc'
             }}>
-              {selectedItems.map((item, i) => (
+              {items.map((item, i) => (
                 <div key={i} style={{
                   padding: '8px 12px',
-                  borderBottom: i === selectedItems.length - 1 ? 'none' : '1px solid #e2e8f0',
+                  borderBottom: i === items.length - 1 ? 'none' : '1px solid #e2e8f0',
                   fontSize: '0.85rem',
                   display: 'flex',
                   justifyContent: 'space-between'
                 }}>
                   <strong style={{ color: '#1e293b' }}>
-                    {item.trainee_name || item.name || `Trainee #${item.id || item.trainee_id}`}
+                    {item.trainee_name || item.name || `Trainee #${item.id || item.trainee_id || item.traineeId}`}
                   </strong>
-                  <span style={{ color: '#64748b' }}>{item.job_title || item.projectName || ''}</span>
+                  <span style={{ color: '#64748b' }}>{item.job_title || item.jobTitle || item.projectName || ''}</span>
                 </div>
               ))}
             </div>
@@ -224,7 +234,7 @@ export default function BulkStatusModal({ isOpen, onClose, selectedItems = [], o
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting || selectedItems.length === 0}
+            disabled={submitting || items.length === 0}
             style={{
               padding: '9px 22px',
               borderRadius: '8px',

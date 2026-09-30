@@ -141,10 +141,11 @@ function AdminDashboard({ userData, onLogout, onBack }) {
     try {
       setLoading(true);
       const response = await api.get("/users/");
-      const usersWithFormattedData = response.data.map((user) => ({
+      const payload = Array.isArray(response.data) ? response.data : (response.data?.results || []);
+      const usersWithFormattedData = payload.map((user) => ({
         ...user,
         status: user.is_active ? "active" : "inactive",
-        joinDate: user.date_joined ? user.date_joined.split("T")[0] : "N/A",
+        joinDate: user.date_joined ? String(user.date_joined).split("T")[0] : "N/A",
       }));
       setUsers(usersWithFormattedData);
 
@@ -537,13 +538,16 @@ function AdminDashboard({ userData, onLogout, onBack }) {
   };
 
   // Filtered users
-  const filteredUsers = users.filter(
-    (user) =>
-      user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter((user) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase().trim();
+    return (
+      (user.username || '').toLowerCase().includes(term) ||
+      (user.name || '').toLowerCase().includes(term) ||
+      (user.email || '').toLowerCase().includes(term) ||
+      (user.role || '').toLowerCase().includes(term)
+    );
+  });
 
   // --- Render Tabs ---
   const renderUsersTab = () => {
@@ -726,7 +730,7 @@ function AdminDashboard({ userData, onLogout, onBack }) {
             <span className="badge-outline">By Access Role</span>
           </div>
           <div className="adm-distribution-list">
-            {stats.roles.map((role) => (
+            {Array.isArray(stats?.roles) && stats.roles.map((role) => (
               <div key={role.value} className="adm-dist-row">
                 <div className="adm-dist-info">
                   <span className={`role-badge role-${role.value}`}>{role.icon} {role.label}</span>

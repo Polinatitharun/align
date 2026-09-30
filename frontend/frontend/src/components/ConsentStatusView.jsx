@@ -90,13 +90,13 @@ export default function ConsentStatusView({ currentBatch, jobs = [] }) {
 
   const filteredRecords = consents.filter(r => {
     if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.toLowerCase().trim();
     return (
-      r.trainee_name?.toLowerCase().includes(term) ||
-      r.employee_id?.toLowerCase().includes(term) ||
-      r.job_title?.toLowerCase().includes(term) ||
-      r.rgs_id?.toLowerCase().includes(term) ||
-      r.demand_id?.toLowerCase().includes(term)
+      (r.trainee_name || '').toLowerCase().includes(term) ||
+      (r.employee_id || '').toLowerCase().includes(term) ||
+      (r.job_title || '').toLowerCase().includes(term) ||
+      (r.rgs_id || '').toLowerCase().includes(term) ||
+      (r.demand_id || '').toLowerCase().includes(term)
     );
   });
 

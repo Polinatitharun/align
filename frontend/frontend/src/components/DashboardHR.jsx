@@ -1572,9 +1572,12 @@ const renderWorkbook = () => {
     const allMatches = [...(searchJobMatches.perfect_match || []), ...(searchJobMatches.skills_only || []), ...(searchJobMatches.location_only || []), ...(searchJobMatches.nearby || []), ...(searchJobMatches.no_match || [])];
     return allMatches.filter(m => {
       if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
-      if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
-      if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
-      if (searchFilters.skillKeyword) { const skills = normalizeMatchedSkills(m.matched_skills); if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false; }
+      if (searchFilters.location && !(m.trainee_location || '').toLowerCase().includes(searchFilters.location.toLowerCase().trim())) return false;
+      if (searchFilters.minTotal > 0 && (m.total_percentage || 0) < searchFilters.minTotal) return false;
+      if (searchFilters.skillKeyword) {
+        const skills = normalizeMatchedSkills(m.matched_skills);
+        if (!skills.some(s => String(s || '').toLowerCase().includes(searchFilters.skillKeyword.toLowerCase().trim()))) return false;
+      }
       return true;
     });
   };
@@ -2054,8 +2057,9 @@ const renderWorkbook = () => {
       fetchLockStats();
       fetchDashboardAnalytics();
       fetchDemandSupplyAnalysis();
-    } else if (['trainees', 'mapped', 'unmapped'].includes(activeTab)) {
+    } else if (['candidates', 'trainees', 'mapped', 'unmapped'].includes(activeTab)) {
       fetchTrainees();
+      fetchJobs();
     } else if (activeTab === 'openPool') {
       fetchTrainees();
     } else if (['jobs', 'createJob'].includes(activeTab)) {
@@ -2074,6 +2078,8 @@ const renderWorkbook = () => {
       fetchRecommendations();
     } else if (activeTab === 'demandSupply') {
       fetchDemandSupplyAnalysis();
+    } else if (activeTab === 'consents') {
+      fetchJobs();
     }
   }, [activeTab, selectedBatch]);
 
@@ -2095,18 +2101,19 @@ const renderWorkbook = () => {
   useEffect(() => {
     let f = [...allTrainees];
     if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
       f = f.filter(t =>
-        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.group_name && t.group_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        t.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.email || '').toLowerCase().includes(q) ||
+        (t.group_name || t.groupName || '').toLowerCase().includes(q) ||
+        (Array.isArray(t.skills) ? t.skills : []).some(s => String(s || '').toLowerCase().includes(q))
       );
     }
     if (locationFilter) {
-      f = f.filter(t => t.location.toLowerCase().includes(locationFilter.toLowerCase()));
+      f = f.filter(t => (t.location || '').toLowerCase().includes(locationFilter.toLowerCase().trim()));
     }
     if (groupFilter) {
-      f = f.filter(t => (t.group_name || t.groupName || '').toLowerCase() === groupFilter.toLowerCase());
+      f = f.filter(t => (t.group_name || t.groupName || '').toLowerCase() === groupFilter.toLowerCase().trim());
     }
     if (activeTab === 'mapped') f = f.filter(t => t.isMapped);
     else if (activeTab === 'unmapped') f = f.filter(t => !t.isMapped);
@@ -2128,7 +2135,7 @@ const renderWorkbook = () => {
     if (activeTab === 'recommendations') {
       fetchRecommendations();
     }
-  }, [selectedRecJobId, recStatusFilter]);
+  }, [selectedRecJobId, recStatusFilter, selectedBatch]);
 
   useEffect(() => {
     if (activeTab === 'demandSupply') {

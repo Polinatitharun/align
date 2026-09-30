@@ -437,11 +437,15 @@ function DashboardManager({ userData, onLogout }) {
   const filteredTrainees = useMemo(() => {
     return normalizedTrainees.filter(t => {
       if (traineeSearchTerm.trim()) {
-        const search = traineeSearchTerm.toLowerCase();
-        if (!t.name.toLowerCase().includes(search) && !t.employeeId.toLowerCase().includes(search) && !t.location.includes(search))
+        const search = traineeSearchTerm.toLowerCase().trim();
+        if (
+          !(t.name || '').toLowerCase().includes(search) &&
+          !String(t.employeeId || '').toLowerCase().includes(search) &&
+          !(t.location || '').toLowerCase().includes(search)
+        )
           return false;
       }
-      if (traineeLocationFilter !== "all" && t.location !== traineeLocationFilter) return false;
+      if (traineeLocationFilter !== "all" && (t.location || '').toLowerCase() !== traineeLocationFilter.toLowerCase()) return false;
       if (traineeMappingFilter !== "all") {
         if (traineeMappingFilter === "mapped" && !t.isMapped) return false;
         if (traineeMappingFilter === "unmapped" && t.isMapped) return false;
@@ -513,11 +517,11 @@ function DashboardManager({ userData, onLogout }) {
     ];
     return allMatches.filter(m => {
       if (searchFilters.bucket && m.bucket !== searchFilters.bucket) return false;
-      if (searchFilters.location && !m.trainee_location?.toLowerCase().includes(searchFilters.location.toLowerCase())) return false;
-      if (searchFilters.minTotal > 0 && m.total_percentage < searchFilters.minTotal) return false;
+      if (searchFilters.location && !(m.trainee_location || '').toLowerCase().includes(searchFilters.location.toLowerCase().trim())) return false;
+      if (searchFilters.minTotal > 0 && (m.total_percentage || 0) < searchFilters.minTotal) return false;
       if (searchFilters.skillKeyword) {
-        const skills = m.matched_skills || [];
-        if (!skills.some(s => s.toLowerCase().includes(searchFilters.skillKeyword.toLowerCase()))) return false;
+        const skills = Array.isArray(m.matched_skills) ? m.matched_skills : m.matched_skills ? [m.matched_skills] : [];
+        if (!skills.some(s => String(s || '').toLowerCase().includes(searchFilters.skillKeyword.toLowerCase().trim()))) return false;
       }
       return true;
     });
@@ -1141,8 +1145,8 @@ function DashboardManager({ userData, onLogout }) {
   const renderTalentSearch = () => {
     const baseFiltered = filteredSearchMatches();
     const filtered = baseFiltered.filter(m => {
-      const trainee = normalizedTrainees.find(t => t.userId === m.trainee_id);
-      return !(trainee?.isMapped && trainee.projectId === selectedJobForSearch?.id?.toString());
+      const trainee = normalizedTrainees.find(t => String(t.userId || t.id) === String(m.trainee_id));
+      return !(trainee?.isMapped && String(trainee.projectId) === String(selectedJobForSearch?.id));
     });
     return (
       <div className="talent-search">

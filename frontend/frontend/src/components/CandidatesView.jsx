@@ -63,22 +63,66 @@ const CandidatesView = ({
     const records = [];
     const processedUserIds = new Set();
 
+    // Helper to find matched job object across ID, demand_id, rgs_id, or project_name
+    const findJob = (jobRef, demandRef, titleRef) => {
+      const cleanJobRef = jobRef != null && typeof jobRef !== 'object' ? String(jobRef).trim() : '';
+      const cleanDemandRef = demandRef ? String(demandRef).trim().toLowerCase() : '';
+      const cleanTitleRef = titleRef ? String(titleRef).trim().toLowerCase() : '';
+
+      return (jobs || []).find(j => {
+        const jId = String(j.id || j.pk || '').trim();
+        const jDemand = String(j.demand_id || j.demandId || '').trim().toLowerCase();
+        const jRgs = String(j.rgs_id || '').trim().toLowerCase();
+        const jName = String(j.project_name || j.projectName || '').trim().toLowerCase();
+
+        if (cleanJobRef && (jId === cleanJobRef || jDemand === cleanJobRef.toLowerCase() || jName === cleanJobRef.toLowerCase())) return true;
+        if (cleanDemandRef && (jDemand === cleanDemandRef || jRgs === cleanDemandRef)) return true;
+        if (cleanTitleRef && jName === cleanTitleRef) return true;
+        return false;
+      });
+    };
+
     // 1. Process Interview Locks
     (locks || []).forEach(lock => {
-      const traineeId = String(lock.trainee_id || lock.profile_id || lock.trainee?.id || lock.trainee?.pk || (typeof lock.trainee === 'number' || typeof lock.trainee === 'string' ? lock.trainee : '') || '');
-      processedUserIds.add(traineeId);
+      const traineeId = String(
+        lock.trainee_id || 
+        lock.profile_id || 
+        lock.trainee?.id || 
+        lock.trainee?.pk || 
+        (typeof lock.trainee === 'number' || typeof lock.trainee === 'string' ? lock.trainee : '') || 
+        ''
+      );
       
-      const traineeObj = (allTrainees || []).find(t => String(t.userId || t.id) === traineeId);
-      
+      const traineeObj = (allTrainees || []).find(t => 
+        (traineeId && (String(t.userId || '') === traineeId || String(t.id || '') === traineeId || (t.employeeId && String(t.employeeId) === traineeId)))
+      );
+
+      if (traineeId) processedUserIds.add(traineeId);
+      if (traineeObj?.id) processedUserIds.add(String(traineeObj.id));
+      if (traineeObj?.userId) processedUserIds.add(String(traineeObj.userId));
+      if (traineeObj?.employeeId) processedUserIds.add(String(traineeObj.employeeId));
+
+      const rawJobId = lock.job_id || (typeof lock.job === 'object' ? (lock.job?.id || lock.job?.pk) : lock.job) || '';
+      const lockJobTitle = lock.job_title || (typeof lock.job === 'object' ? (lock.job?.project_name || lock.job?.projectName) : '') || '';
+      const lockDemandId = lock.demand_id || (typeof lock.job === 'object' ? lock.job?.demand_id : '') || '';
+
+      const matchedJob = findJob(rawJobId, lockDemandId, lockJobTitle) || findJob(traineeObj?.projectId, '', traineeObj?.projectName);
+
+      const finalJobId = matchedJob ? String(matchedJob.id) : (rawJobId ? String(rawJobId) : '');
+      const finalJobTitle = matchedJob?.project_name || lockJobTitle || traineeObj?.projectName || '—';
+      const finalDemandId = matchedJob?.demand_id || lockDemandId || '';
+
       records.push({
         id: `lock-${lock.id}`,
         lockId: lock.id,
-        traineeId: traineeId,
+        traineeId: traineeId || traineeObj?.userId || traineeObj?.id || '',
         name: lock.trainee_name || traineeObj?.name || 'Unknown Candidate',
-        email: traineeObj?.email || `${traineeId}@tcs.com`,
-        jobId: String(lock.job_id || lock.job || ''),
-        jobTitle: lock.job_title || traineeObj?.projectName || '—',
-        status: lock.status || 'locked', // locked | selected | rejected
+        email: traineeObj?.email || (traineeId ? `${traineeId}@tcs.com` : '—'),
+        jobId: finalJobId,
+        demandId: finalDemandId,
+        jobTitle: finalJobTitle,
+        rawJob: matchedJob || null,
+        status: lock.status || 'locked', // locked | selected | rejected | cancelled
         source: 'Interview',
         interviewer: lock.assigned_to_name || 'Not Assigned',
         interviewDate: lock.interview_datetime,
@@ -90,7 +134,7 @@ const CandidatesView = ({
         groupRank: traineeObj?.groupRank || lock.groupRank || traineeObj?.group_rank || '—',
         batchRank: traineeObj?.batchRank || lock.batchRank || traineeObj?.batch_rank || '—',
         dpi: traineeObj?.dpi ?? lock.dpi ?? '—',
-        isMapped: traineeObj?.isMapped ?? false,
+        isMapped: traineeObj?.isMapped ?? (lock.status === 'selected' || lock.status === 'mapped'),
         rawLock: lock,
         rawTrainee: traineeObj,
       });
@@ -99,15 +143,33 @@ const CandidatesView = ({
     // 2. Process Direct Mapped Trainees not in interview locks
     (allTrainees || []).forEach(trainee => {
       const traineeId = String(trainee.userId || trainee.id || '');
-      if (!processedUserIds.has(traineeId) && trainee.isMapped) {
+      const tEmpId = trainee.employeeId ? String(trainee.employeeId) : '';
+      const tProfileId = trainee.id ? String(trainee.id) : '';
+
+      const isAlreadyProcessed = 
+        processedUserIds.has(traineeId) || 
+        (tEmpId && processedUserIds.has(tEmpId)) || 
+        (tProfileId && processedUserIds.has(tProfileId));
+
+      if (!isAlreadyProcessed && trainee.isMapped) {
+        const rawProjectId = trainee.projectId || '';
+        const rawProjectName = trainee.projectName || '';
+        const matchedJob = findJob(rawProjectId, '', rawProjectName);
+
+        const finalJobId = matchedJob ? String(matchedJob.id) : (rawProjectId ? String(rawProjectId) : '');
+        const finalJobTitle = matchedJob?.project_name || rawProjectName || 'Direct Mapped';
+        const finalDemandId = matchedJob?.demand_id || '';
+
         records.push({
           id: `trainee-${traineeId}`,
           lockId: null,
           traineeId: traineeId,
           name: trainee.name || 'Unknown Candidate',
           email: trainee.email || `${traineeId}@tcs.com`,
-          jobId: String(trainee.projectId || ''),
-          jobTitle: trainee.projectName || 'Direct Mapped',
+          jobId: finalJobId,
+          demandId: finalDemandId,
+          jobTitle: finalJobTitle,
+          rawJob: matchedJob || null,
           status: 'selected',
           source: 'Direct Mapping',
           interviewer: 'HR Direct',
@@ -124,7 +186,7 @@ const CandidatesView = ({
           rawLock: null,
           rawTrainee: trainee,
         });
-      } else if (!processedUserIds.has(traineeId) && !trainee.isMapped) {
+      } else if (!isAlreadyProcessed && !trainee.isMapped) {
         // 3. Unassigned Trainees
         records.push({
           id: `unassigned-${traineeId}`,
@@ -133,7 +195,9 @@ const CandidatesView = ({
           name: trainee.name || 'Unknown Candidate',
           email: trainee.email || `${traineeId}@tcs.com`,
           jobId: '',
+          demandId: '',
           jobTitle: 'Not Assigned',
+          rawJob: null,
           status: 'unassigned',
           source: 'Pool',
           interviewer: '—',
@@ -154,10 +218,12 @@ const CandidatesView = ({
     });
 
     return records;
-  }, [locks, allTrainees, selectedBatch]);
+  }, [locks, allTrainees, jobs, selectedBatch]);
 
   // Filtered by Status & Job
   const filteredData = useMemo(() => {
+    const selectedJobObj = jobFilter ? (jobs || []).find(j => String(j.id) === String(jobFilter)) : null;
+
     return unifiedCandidates.filter(item => {
       // Status Filter
       if (statusFilter === 'selected' && item.status !== 'selected') return false;
@@ -166,11 +232,30 @@ const CandidatesView = ({
       if (statusFilter === 'unassigned' && item.status !== 'unassigned') return false;
 
       // Job Filter
-      if (jobFilter && String(item.jobId) !== String(jobFilter)) return false;
+      if (jobFilter) {
+        const itemJobId = String(item.jobId || '').trim();
+        const itemDemandId = String(item.demandId || '').trim().toLowerCase();
+        const itemJobTitle = String(item.jobTitle || '').trim().toLowerCase();
+        const filterStr = String(jobFilter).trim();
+
+        const matchDirectId = itemJobId && itemJobId === filterStr;
+        const matchRawJob = item.rawJob && String(item.rawJob.id) === filterStr;
+        const matchDemand = selectedJobObj?.demand_id && (
+          itemDemandId === String(selectedJobObj.demand_id).toLowerCase() ||
+          itemJobId.toLowerCase() === String(selectedJobObj.demand_id).toLowerCase()
+        );
+        const matchTitle = selectedJobObj?.project_name && (
+          itemJobTitle && itemJobTitle === String(selectedJobObj.project_name).trim().toLowerCase()
+        );
+
+        if (!matchDirectId && !matchRawJob && !matchDemand && !matchTitle) {
+          return false;
+        }
+      }
 
       return true;
     });
-  }, [unifiedCandidates, statusFilter, jobFilter]);
+  }, [unifiedCandidates, statusFilter, jobFilter, jobs]);
 
   // Selected locks for bulk status modal
   const selectedCandidatesForBulk = useMemo(() => {
@@ -236,9 +321,16 @@ const CandidatesView = ({
       sortable: true,
       filterable: true,
       render: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Briefcase size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-          <span style={{ fontWeight: 500 }}>{row.jobTitle}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Briefcase size={13} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+            <span style={{ fontWeight: 500 }}>{row.jobTitle}</span>
+          </div>
+          {row.demandId && (
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', paddingLeft: '1.15rem' }}>
+              Demand: {row.demandId}
+            </span>
+          )}
         </div>
       ),
     },
@@ -266,6 +358,9 @@ const CandidatesView = ({
         } else if (row.status === 'rejected') {
           badgeClass = 'status-rejected';
           label = 'Rejected';
+        } else if (row.status === 'cancelled') {
+          badgeClass = 'status-rejected';
+          label = 'Cancelled';
         }
 
         return (
@@ -301,14 +396,18 @@ const CandidatesView = ({
       key: 'interviewDate',
       label: 'Interview Schedule',
       sortable: true,
-      render: (row) => row.interviewDate ? new Date(row.interviewDate).toLocaleString() : '—',
+      render: (row) => {
+        if (!row.interviewDate) return '—';
+        const d = new Date(row.interviewDate);
+        return isNaN(d.getTime()) ? row.interviewDate : d.toLocaleString();
+      },
     },
     {
       key: 'location',
       label: 'Location',
       sortable: true,
       filterable: true,
-      render: (row) => row.location || '—',
+      render: (row) => (row.location && row.location !== 'unknown' ? (row.location.charAt(0).toUpperCase() + row.location.slice(1)) : '—'),
     },
     {
       key: 'group',
@@ -542,12 +641,12 @@ const CandidatesView = ({
           className="form-control" 
           value={jobFilter} 
           onChange={(e) => setJobFilter(e.target.value)}
-          style={{ maxWidth: '320px', padding: '0.35rem 0.65rem', fontSize: '0.82rem' }}
+          style={{ maxWidth: '380px', padding: '0.35rem 0.65rem', fontSize: '0.82rem' }}
         >
           <option value="">All Jobs & Projects ({jobs.length})</option>
           {jobs.map(job => (
             <option key={job.id} value={job.id}>
-              {job.project_name} ({job.department || 'General'})
+              {job.project_name || job.projectName || `Job #${job.id}`} {job.demand_id ? `(${job.demand_id})` : ''} {job.department || job.stream ? `— ${job.department || job.stream}` : ''}
             </option>
           ))}
         </select>
