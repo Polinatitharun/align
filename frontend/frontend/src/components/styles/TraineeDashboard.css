@@ -1,0 +1,210 @@
+/* ============================================================
+   TraineeDashboard.css — extends dashboard-base.css
+   (Used by DashboardTrainee.jsx)
+   ============================================================ */
+@import './dashboard-base.css';
+
+/* Same as AssociateDashboard but for the trainee role */
+.trainee-welcome-banner {
+  background: linear-gradient(135deg, #0b1437 55%, #0070C0 100%);
+  border-radius: 16px;
+  padding: 2.5rem;
+  color: #fff;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.trainee-welcome-banner::after {
+  content: '';
+  position: absolute;
+  right: -30px;
+  bottom: -30px;
+  width: 180px;
+  height: 180px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 50%;
+}
+
+.trainee-welcome-banner h2 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
+}
+
+.trainee-welcome-banner p {
+  font-size: 0.95rem;
+  opacity: 0.75;
+}
+
+.trainee-overview-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Score Ring */
+.score-ring-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.score-ring {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: conic-gradient(#0070C0 calc(var(--pct, 0) * 1%), #f0f4f8 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.score-ring::after {
+  content: '';
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.score-ring-value {
+  position: relative;
+  z-index: 1;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0070C0;
+}
+
+.score-ring-meta h4 {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 0.4rem;
+}
+
+.score-ring-meta p {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+/* Upskill Courses */
+.upskill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.upskill-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #333;
+}
+
+.upskill-item-icon {
+  color: #0070C0;
+  flex-shrink: 0;
+}
+
+/* Match cards */
+.match-cards-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.match-card-item {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e0e6ed;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: box-shadow 0.2s;
+}
+
+.match-card-item:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.07); }
+
+.match-pct-badge {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0070C0;
+  min-width: 56px;
+  text-align: right;
+}
+
+.match-card-info h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.match-card-info p {
+  font-size: 0.78rem;
+  color: #888;
+  margin-top: 0.15rem;
+}
+
+/* Strengths / Weaknesses */
+.skill-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.skill-section-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 1.5rem;
+}
+
+.skill-section-card h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.skill-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.skill-pill {
+  padding: 0.3rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.skill-pill.strength {
+  background: rgba(40,167,69,0.1);
+  color: #28a745;
+}
+
+.skill-pill.weakness {
+  background: rgba(220,53,69,0.08);
+  color: #dc3545;
+}
+
+@media (max-width: 1024px) {
+  .trainee-overview-grid { grid-template-columns: 1fr; }
+  .skill-columns { grid-template-columns: 1fr; }
+}

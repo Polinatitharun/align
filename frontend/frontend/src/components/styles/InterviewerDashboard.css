@@ -1,0 +1,270 @@
+/* ============================================================
+   InterviewerDashboard.css — extends dashboard-base.css
+   ============================================================ */
+@import './dashboard-base.css';
+
+/* ── Interview schedule cards ── */
+.interview-schedule-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.interview-slot-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 1.5rem;
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  transition: box-shadow 0.2s;
+}
+
+.interview-slot-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+}
+
+.interview-slot-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(0,112,192,0.07);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  min-width: 90px;
+  text-align: center;
+}
+
+.interview-slot-date {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0070C0;
+  line-height: 1;
+}
+
+.interview-slot-month {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  margin-top: 0.25rem;
+}
+
+.interview-slot-hour {
+  font-size: 0.8rem;
+  color: #0070C0;
+  font-weight: 600;
+  margin-top: 0.4rem;
+}
+
+.interview-slot-info {
+  flex: 1;
+}
+
+.interview-candidate-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 0.25rem;
+}
+
+.interview-job-title {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 0.75rem;
+}
+
+.interview-slot-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.interview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f4f7fa;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  color: #555;
+}
+
+.interview-slot-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ── Feedback Form ── */
+.feedback-form-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e6ed;
+  padding: 2rem;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.feedback-section-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0070C0;
+  font-weight: 700;
+  margin: 1.5rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid rgba(0,112,192,0.1);
+}
+
+/* ── Star Rating Input ── */
+.star-rating-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.star-btn {
+  font-size: 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #e0e6ed;
+  transition: color 0.15s, transform 0.1s;
+  padding: 0;
+}
+
+.star-btn:hover,
+.star-btn.selected {
+  color: #ffc107;
+  transform: scale(1.15);
+}
+
+/* ── Technical Skills Checkboxes ── */
+.skill-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.skill-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #f4f7fa;
+  border: 1.5px solid #e0e6ed;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: all 0.15s;
+}
+
+.skill-checkbox-label input { display: none; }
+
+.skill-checkbox-label.checked {
+  background: rgba(0,112,192,0.08);
+  border-color: #0070C0;
+  color: #0070C0;
+  font-weight: 600;
+}
+
+/* ── Recommendation buttons ── */
+.recommendation-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.rec-btn {
+  flex: 1;
+  padding: 1rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.rec-btn-select {
+  background: rgba(40,167,69,0.08);
+  border-color: #28a745;
+  color: #28a745;
+}
+
+.rec-btn-select:hover,
+.rec-btn-select.selected {
+  background: #28a745;
+  color: #fff;
+}
+
+.rec-btn-reject {
+  background: rgba(220,53,69,0.08);
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.rec-btn-reject:hover,
+.rec-btn-reject.selected {
+  background: #dc3545;
+  color: #fff;
+}
+
+/* ── Dashboard Summary ── */
+.interviewer-summary {
+  background: linear-gradient(135deg, #0b1437, #0070C0);
+  border-radius: 16px;
+  padding: 2rem;
+  color: #fff;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.interviewer-summary h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.interviewer-summary p {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.summary-stat-chips {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.summary-stat-chip {
+  text-align: center;
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+}
+
+.summary-stat-chip .val {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.summary-stat-chip .lbl {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 0.25rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .interview-slot-card { flex-direction: column; }
+  .interviewer-summary { flex-direction: column; }
+  .recommendation-buttons { flex-direction: column; }
+}
